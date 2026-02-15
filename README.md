@@ -1,12 +1,12 @@
 # ClipSave
 
-> ホットキー一発でクリップボード内容をファイル保存できる Windows 常駐アプリ
-
 [![PR Check](https://github.com/tnagata012/ClipSave/actions/workflows/pr-check.yml/badge.svg)](https://github.com/tnagata012/ClipSave/actions/workflows/pr-check.yml)
 [![Dev Build](https://github.com/tnagata012/ClipSave/actions/workflows/dev-build.yml/badge.svg?branch=main)](https://github.com/tnagata012/ClipSave/actions/workflows/dev-build.yml)
 [![Release Build](https://github.com/tnagata012/ClipSave/actions/workflows/release-build.yml/badge.svg)](https://github.com/tnagata012/ClipSave/actions/workflows/release-build.yml)
 [![GitHub release](https://img.shields.io/github/v/release/tnagata012/ClipSave)](https://github.com/tnagata012/ClipSave/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> ホットキー一発でクリップボード内容をファイル保存できる Windows 常駐アプリ
 
 ClipSave は、コピーした内容を `Ctrl+Shift+V` で即保存する軽量ツールです。コンテンツをファイルとして保存します。ネットワーク通信やテレメトリはありません。
 

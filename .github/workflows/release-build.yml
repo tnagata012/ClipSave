@@ -1,0 +1,111 @@
+name: Release Build
+
+on:
+  push:
+    branches: ['release/*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SOLUTION_FILE: ClipSave.slnx
+  APP_PROJECT: src/ClipSave/ClipSave.csproj
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
+        restore-keys: ${{ runner.os }}-nuget-
+
+    - name: Guard release branch
+      shell: pwsh
+      run: |
+        $branch = "${{ github.ref_name }}"
+        if ($branch -notmatch '^release/\d+\.\d+\.x$') {
+          Write-Error "Release Build can run only on release/X.Y.x branches. Current ref: $branch"
+          exit 1
+        }
+
+    - name: Get version
+      id: version
+      shell: pwsh
+      run: |
+        [xml]$props = Get-Content Directory.Build.props
+        $version = $props.Project.PropertyGroup.Version
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "Version: $version"
+
+    - name: Validate version
+      shell: pwsh
+      run: ./scripts/validate-version.ps1 -BranchName "${{ github.ref_name }}"
+
+    - name: Restore
+      run: dotnet restore ${{ env.SOLUTION_FILE }}
+
+    - name: Security checks
+      shell: pwsh
+      run: ./scripts/run-security-checks.ps1 -Configuration Release -NoRestore
+
+    - name: Build app
+      run: dotnet build ${{ env.APP_PROJECT }} --configuration Release --no-restore
+
+    - name: Test
+      shell: pwsh
+      run: ./scripts/run-tests.ps1 -Configuration Release -Verbosity normal
+
+    - name: Build MSIX
+      shell: pwsh
+      run: |
+        msbuild src/ClipSave.Package/ClipSave.Package.wapproj `
+          /p:Configuration=Release /p:Platform=AnyCPU `
+          /p:AppxPackageDir="${{ github.workspace }}/output/" `
+          /p:AppxPackageSigningEnabled=false
+
+    - name: Extract release notes
+      id: notes
+      shell: pwsh
+      run: |
+        $content = Get-Content RELEASE_NOTES.md -Raw
+        $version = "${{ steps.version.outputs.VERSION }}"
+        $escapedVersion = [regex]::Escape($version)
+        $pattern = "(?s)## v$escapedVersion.*?(?=## v|\z)"
+        if ($content -match $pattern) {
+          $notes = $matches[0].Trim()
+        } else {
+          $notes = "No release notes found for version $version"
+        }
+        "NOTES<<EOF" >> $env:GITHUB_OUTPUT
+        $notes >> $env:GITHUB_OUTPUT
+        "EOF" >> $env:GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+      with:
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        name: v${{ steps.version.outputs.VERSION }}
+        body: ${{ steps.notes.outputs.NOTES }}
+        files: output/**/*.msix
+        prerelease: false
+        make_latest: true

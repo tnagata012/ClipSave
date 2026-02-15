@@ -1,0 +1,72 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main, 'release/*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SOLUTION_FILE: ClipSave.slnx
+  APP_PROJECT: src/ClipSave/ClipSave.csproj
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
+        restore-keys: ${{ runner.os }}-nuget-
+
+    - name: Restore
+      run: dotnet restore ${{ env.SOLUTION_FILE }}
+
+    - name: Security checks
+      shell: pwsh
+      run: ./scripts/run-security-checks.ps1 -Configuration Debug -NoRestore
+
+    - name: Build app
+      run: dotnet build ${{ env.APP_PROJECT }} --configuration Debug --no-restore
+
+    - name: Localization resource guard
+      run: dotnet test tests/ClipSave.UnitTests/ClipSave.UnitTests.csproj --configuration Debug --filter "FullyQualifiedName~LocalizationResourceCompletenessTests"
+
+    - name: Test
+      shell: pwsh
+      run: ./scripts/run-tests.ps1 -Configuration Debug -Verbosity normal -EmitTrx -ResultsDirectory "${{ github.workspace }}/TestResults"
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pr-test-results
+        path: TestResults/**/*.trx
+        if-no-files-found: warn
+        retention-days: 14
+
+    - name: SPEC traceability guard
+      shell: pwsh
+      run: ./scripts/check-spec-coverage.ps1
+
+    - name: Validate version
+      shell: pwsh
+      run: ./scripts/validate-version.ps1 -BranchName "${{ github.base_ref }}"

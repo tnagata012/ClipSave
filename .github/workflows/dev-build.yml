@@ -1,0 +1,120 @@
+name: Dev Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-build
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SOLUTION_FILE: ClipSave.slnx
+  APP_PROJECT: src/ClipSave/ClipSave.csproj
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
+        restore-keys: ${{ runner.os }}-nuget-
+
+    - name: Guard main branch
+      shell: pwsh
+      run: |
+        $branch = "${{ github.ref_name }}"
+        if ($branch -ne "main") {
+          Write-Error "Dev Build can run only on 'main'. Current ref: $branch"
+          exit 1
+        }
+
+    - name: Validate branch version
+      shell: pwsh
+      run: ./scripts/validate-version.ps1 -BranchName "${{ github.ref_name }}"
+
+    - name: Resolve dev package version
+      id: version
+      shell: pwsh
+      run: |
+        [xml]$props = Get-Content Directory.Build.props
+        $version = $props.Project.PropertyGroup.Version
+        $match = [regex]::Match($version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$')
+        if (-not $match.Success) {
+          Write-Error "Invalid version format in Directory.Build.props (expected X.Y.Z): $version"
+          exit 1
+        }
+
+        $coreVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
+        $msixVersion = "$coreVersion.${{ github.run_number }}"
+
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "MSIX_VERSION=$msixVersion" >> $env:GITHUB_OUTPUT
+        echo "Version: $version"
+        echo "MSIX version: $msixVersion (Build: ${{ github.run_number }})"
+
+    - name: Restore
+      run: dotnet restore ${{ env.SOLUTION_FILE }}
+
+    - name: Security checks
+      shell: pwsh
+      run: ./scripts/run-security-checks.ps1 -Configuration Release -NoRestore
+
+    - name: Build app
+      run: dotnet build ${{ env.APP_PROJECT }} --configuration Release --no-restore
+
+    - name: Test
+      shell: pwsh
+      run: ./scripts/run-tests.ps1 -Configuration Release -Verbosity normal
+
+    - name: Build MSIX
+      shell: pwsh
+      run: |
+        msbuild src/ClipSave.Package/ClipSave.Package.wapproj `
+          /p:Configuration=Release /p:Platform=AnyCPU `
+          /p:AppxPackageDir="${{ github.workspace }}/output/" `
+          /p:AppxPackageVersion=${{ steps.version.outputs.MSIX_VERSION }} `
+          /p:AppxPackageSigningEnabled=false
+
+    - name: Create Dev Release
+      uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+      with:
+        tag_name: dev-latest
+        name: Dev (Latest)
+        body: |
+          ## Dev Build
+
+          | Item | Value |
+          |------|-------|
+          | **Version** | `${{ steps.version.outputs.VERSION }}` |
+          | **Package Version** | `${{ steps.version.outputs.MSIX_VERSION }}` |
+          | **Commit** | [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
+          | **Build** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+          | **Date** | ${{ github.event.head_commit.timestamp }} |
+
+          > ⚠️ **Development build** - use for testing only
+        files: output/**/*.msix
+        prerelease: true
+        make_latest: false

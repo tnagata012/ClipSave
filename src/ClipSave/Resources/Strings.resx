@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Common_Confirmation" xml:space="preserve"><value>Confirm</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Common_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common_Unknown" xml:space="preserve"><value>Unknown</value></data>
+
+  <data name="SettingsWindow_Title" xml:space="preserve"><value>ClipSave Settings</value></data>
+  <data name="SettingsWindow_Tab_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="SettingsWindow_Tab_Hotkey" xml:space="preserve"><value>Hotkey</value></data>
+  <data name="SettingsWindow_Tab_Notification" xml:space="preserve"><value>Notifications</value></data>
+  <data name="SettingsWindow_Tab_Language" xml:space="preserve"><value>Language</value></data>
+  <data name="SettingsWindow_Tab_Advanced" xml:space="preserve"><value>Advanced</value></data>
+
+  <data name="SettingsWindow_Save_ContentTypesTitle" xml:space="preserve"><value>Content types to save</value></data>
+  <data name="SettingsWindow_Save_ContentTypesHint" xml:space="preserve"><value>Unchecked content types will not be saved.</value></data>
+  <data name="SettingsWindow_Save_ImageCheckbox" xml:space="preserve"><value>Images (screenshots, etc.)</value></data>
+  <data name="SettingsWindow_Save_ImageFormatLabel" xml:space="preserve"><value>Image format</value></data>
+  <data name="SettingsWindow_Save_JpegQualityLabel" xml:space="preserve"><value>JPG quality</value></data>
+  <data name="SettingsWindow_Save_TextCheckbox" xml:space="preserve"><value>Text (plain text)</value></data>
+  <data name="SettingsWindow_Save_MarkdownCheckbox" xml:space="preserve"><value>Markdown (text with headings/lists)</value></data>
+  <data name="SettingsWindow_Save_JsonCheckbox" xml:space="preserve"><value>JSON (structured data)</value></data>
+  <data name="SettingsWindow_Save_CsvCheckbox" xml:space="preserve"><value>CSV (table data, convert tab-delimited input)</value></data>
+  <data name="SettingsWindow_Save_ContentTypesWarning" xml:space="preserve"><value>All content types are disabled. Enable at least one content type to save.</value></data>
+
+  <data name="SettingsWindow_Save_FileNameTitle" xml:space="preserve"><value>Saved file name</value></data>
+  <data name="SettingsWindow_Save_FileNameHint" xml:space="preserve"><value>Configure the file name used when saving.</value></data>
+  <data name="SettingsWindow_Save_FileNameDuplicateHint" xml:space="preserve"><value>When a file name already exists, sequential suffixes like _1, _2, ... are appended.</value></data>
+  <data name="SettingsWindow_Save_PrefixLabel" xml:space="preserve"><value>Prefix</value></data>
+  <data name="SettingsWindow_Save_TimestampLabel" xml:space="preserve"><value>Timestamp</value></data>
+  <data name="SettingsWindow_Save_IncludeTimestampCheckbox" xml:space="preserve"><value>Include</value></data>
+  <data name="SettingsWindow_Save_PreviewLabel" xml:space="preserve"><value>Preview</value></data>
+
+  <data name="SettingsWindow_Hotkey_CurrentCombinationLabel" xml:space="preserve"><value>Current combination</value></data>
+  <data name="SettingsWindow_Hotkey_ModifierLabel" xml:space="preserve"><value>Modifier keys</value></data>
+  <data name="SettingsWindow_Hotkey_KeyLabel" xml:space="preserve"><value>Key</value></data>
+  <data name="SettingsWindow_Hotkey_ModifierRequiredHint" xml:space="preserve"><value>At least one modifier key is required.</value></data>
+  <data name="SettingsWindow_Hotkey_NoModifierWarning" xml:space="preserve"><value>No modifier key is selected. Enable Ctrl, Shift, or Alt to save.</value></data>
+
+  <data name="SettingsWindow_Notification_GlobalHint" xml:space="preserve"><value>Use Windows "Settings &gt; System &gt; Notifications" to control global notification on/off.</value></data>
+  <data name="SettingsWindow_Notification_PerTypeHint" xml:space="preserve"><value>This screen lets you toggle each notification type.</value></data>
+  <data name="SettingsWindow_Notification_OnSuccess" xml:space="preserve"><value>Notify on successful save</value></data>
+  <data name="SettingsWindow_Notification_OnNoContent" xml:space="preserve"><value>Notify when no content is available</value></data>
+  <data name="SettingsWindow_Notification_OnError" xml:space="preserve"><value>Notify on errors</value></data>
+
+  <data name="SettingsWindow_Language_SelectionLabel" xml:space="preserve"><value>Display language</value></data>
+  <data name="SettingsWindow_Language_ApplyHint" xml:space="preserve"><value>Applied after clicking Save. No restart required.</value></data>
+  <data name="SettingsWindow_Advanced_LoggingCheckbox" xml:space="preserve"><value>Enable logging</value></data>
+  <data name="SettingsWindow_Advanced_LoggingHint" xml:space="preserve"><value>* Logging changes are applied on next startup.</value></data>
+  <data name="SettingsWindow_Button_ResetToDefaults" xml:space="preserve"><value>Reset to defaults</value></data>
+  <data name="SettingsWindow_Status_UnsavedChanges" xml:space="preserve"><value>You have unsaved changes.</value></data>
+  <data name="SettingsWindow_Tooltip_CloseShortcuts" xml:space="preserve"><value>Esc / Ctrl+W</value></data>
+  <data name="SettingsWindow_Tooltip_SaveShortcuts" xml:space="preserve"><value>Ctrl+S</value></data>
+  <data name="SettingsWindow_CloseConfirmMessage" xml:space="preserve"><value>Changes are not saved. Close without saving?</value></data>
+
+  <data name="SettingsViewModel_SaveFailed" xml:space="preserve"><value>Failed to save settings: {0}</value></data>
+  <data name="SettingsViewModel_InvalidFormat" xml:space="preserve"><value>The save format is invalid.</value></data>
+  <data name="SettingsViewModel_InvalidJpegQuality" xml:space="preserve"><value>JPG quality must be between 1 and 100.</value></data>
+  <data name="SettingsViewModel_NoContentType" xml:space="preserve"><value>Enable at least one content type to save.</value></data>
+  <data name="SettingsViewModel_NoModifier" xml:space="preserve"><value>At least one hotkey modifier key is required.</value></data>
+  <data name="SettingsViewModel_NoHotkeyKey" xml:space="preserve"><value>Select a hotkey key.</value></data>
+  <data name="SettingsViewModel_HotkeyNotSet" xml:space="preserve"><value>Not set</value></data>
+  <data name="SettingsViewModel_Language_English" xml:space="preserve"><value>English</value></data>
+  <data name="SettingsViewModel_Language_Japanese" xml:space="preserve"><value>Japanese</value></data>
+
+  <data name="AboutWindow_Title" xml:space="preserve"><value>About ClipSave</value></data>
+  <data name="AboutWindow_VersionPrefix" xml:space="preserve"><value>Version: </value></data>
+  <data name="AboutWindow_SystemInfoTitle" xml:space="preserve"><value>System Information</value></data>
+  <data name="AboutWindow_DotNetRuntimeLabel" xml:space="preserve"><value>.NET Runtime:</value></data>
+  <data name="AboutWindow_OsLabel" xml:space="preserve"><value>OS:</value></data>
+  <data name="AboutWindow_BuildDateLabel" xml:space="preserve"><value>Build date:</value></data>
+
+  <data name="Tray_Menu_Settings" xml:space="preserve"><value>Settings(&amp;S)</value></data>
+  <data name="Tray_Menu_StartupSettings" xml:space="preserve"><value>Open Startup Settings(&amp;T)</value></data>
+  <data name="Tray_Menu_NotificationSettings" xml:space="preserve"><value>Open Notification Settings(&amp;N)</value></data>
+  <data name="Tray_Menu_About" xml:space="preserve"><value>About(&amp;A)</value></data>
+  <data name="Tray_Menu_Exit" xml:space="preserve"><value>Exit(&amp;X)</value></data>
+
+  <data name="Notification_SaveCompleted" xml:space="preserve"><value>Saved: {0}</value></data>
+  <data name="Notification_NoContent" xml:space="preserve"><value>No saveable clipboard content found.</value></data>
+  <data name="Notification_ErrorPrefix" xml:space="preserve"><value>Error: {0}</value></data>
+  <data name="Notification_MissingFilePath" xml:space="preserve"><value>The saved file path was not available in the result.</value></data>
+  <data name="Notification_UnknownError" xml:space="preserve"><value>An unknown error occurred.</value></data>
+
+  <data name="App_StartupErrorMessage" xml:space="preserve"><value>An error occurred during startup:
+{0}</value></data>
+  <data name="App_StartupErrorTitle" xml:space="preserve"><value>Error</value></data>
+  <data name="App_OpenStartupSettingsFailed" xml:space="preserve"><value>Could not open Windows startup settings.</value></data>
+  <data name="App_OpenNotificationSettingsFailed" xml:space="preserve"><value>Could not open Windows notification settings.</value></data>
+  <data name="App_SettingsCorruption" xml:space="preserve"><value>The settings file was corrupted and has been reset to defaults.</value></data>
+  <data name="App_SettingsCorruptionWithBackup" xml:space="preserve"><value>The settings file was corrupted and has been reset to defaults.
+
+Backup: {0}</value></data>
+  <data name="App_HotkeyRegisterFailed" xml:space="preserve"><value>Failed to register the hotkey.</value></data>
+  <data name="App_HotkeyRegisterFailedRestored" xml:space="preserve"><value>Failed to register the hotkey. Restored the previous setting.</value></data>
+  <data name="App_HotkeyRegisterFailedRestoreFailed" xml:space="preserve"><value>Failed to register the hotkey and could not restore the previous setting.</value></data>
+  <data name="App_StartupGuidance" xml:space="preserve"><value>Startup is enabled. Right-click the tray icon and open Startup Settings to change it.</value></data>
+  <data name="App_CrashDialogMessage" xml:space="preserve"><value>An unexpected error occurred.
+
+Dump file:
+{0}</value></data>
+  <data name="App_CrashDialogTitle" xml:space="preserve"><value>ClipSave - Error</value></data>
+
+  <data name="SavePipeline_GenericFailure" xml:space="preserve"><value>Failed to save content.</value></data>
+  <data name="SavePipeline_DiskSpaceInsufficient" xml:space="preserve"><value>Insufficient disk space.</value></data>
+</root>

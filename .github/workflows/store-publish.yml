@@ -1,0 +1,141 @@
+name: Store Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SOLUTION_FILE: ClipSave.slnx
+  APP_PROJECT: src/ClipSave/ClipSave.csproj
+
+jobs:
+  build-store-package:
+    runs-on: windows-latest
+
+    steps:
+    - name: Resolve release branch
+      id: release
+      shell: pwsh
+      run: |
+        $version = "${{ inputs.version }}"
+        if ($version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
+          Write-Error "Invalid version format: $version (expected X.Y.Z)"
+          exit 1
+        }
+        $branch = "release/$($matches['major']).$($matches['minor']).x"
+        echo "BRANCH=$branch" >> $env:GITHUB_OUTPUT
+        echo "Resolved branch: $branch"
+
+    - name: Verify branch exists
+      shell: pwsh
+      run: |
+        $branch = "${{ steps.release.outputs.BRANCH }}"
+        $result = gh api "repos/${{ github.repository }}/branches/$branch" 2>$null
+        if (-not $result) {
+          Write-Error "Branch '$branch' does not exist. Create a release branch first."
+          exit 1
+        }
+        echo "✅ Branch verified: $branch"
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ steps.release.outputs.BRANCH }}
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
+        restore-keys: ${{ runner.os }}-nuget-
+
+    - name: Verify version
+      shell: pwsh
+      run: |
+        [xml]$props = Get-Content Directory.Build.props
+        $version = $props.Project.PropertyGroup.Version
+        if ($version -ne "${{ inputs.version }}") {
+          Write-Error "Version mismatch: Directory.Build.props has $version but input is ${{ inputs.version }}"
+          exit 1
+        }
+        ./scripts/validate-version.ps1 -BranchName "${{ steps.release.outputs.BRANCH }}"
+        echo "✅ Version verified: $version"
+
+    - name: Restore
+      run: dotnet restore ${{ env.SOLUTION_FILE }}
+
+    - name: Security checks
+      shell: pwsh
+      run: ./scripts/run-security-checks.ps1 -Configuration Release -NoRestore
+
+    - name: Build app
+      run: dotnet build ${{ env.APP_PROJECT }} --configuration Release --no-restore
+
+    - name: Test
+      shell: pwsh
+      run: ./scripts/run-tests.ps1 -Configuration Release -Verbosity normal
+
+    - name: Build Store Package
+      shell: pwsh
+      run: |
+        Write-Host "Building Store upload package..." -ForegroundColor Cyan
+        msbuild src/ClipSave.Package/ClipSave.Package.wapproj `
+          /p:Configuration=Release `
+          /p:Platform=AnyCPU `
+          /p:UapAppxPackageBuildMode=StoreUpload `
+          /p:AppxBundle=Always `
+          /p:AppxPackageDir="${{ github.workspace }}/StorePackage/" `
+          /p:AppxPackageSigningEnabled=false
+
+    - name: Upload Store Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: store-package-${{ inputs.version }}
+        path: StorePackage/**/*.msixupload
+        retention-days: 30
+
+    - name: Summary
+      shell: pwsh
+      run: |
+        @"
+        ## ✅ Store Package Built Successfully
+
+        | Item | Value |
+        |------|-------|
+        | **Version** | ``${{ inputs.version }}`` |
+        | **Branch** | ``${{ steps.release.outputs.BRANCH }}`` |
+        | **Package** | ``.msixupload`` |
+
+        ### 📥 Next Steps
+
+        1. Download artifact from **Actions** → **Artifacts**
+        2. Login to [Partner Center](https://partner.microsoft.com/dashboard)
+        3. Create new submission
+        4. Upload ``.msixupload`` file
+        5. Update metadata and release notes
+        6. Submit for certification
+
+        ### ✅ Pre-submission Checklist
+
+        - [ ] GitHub Release tested (24+ hours)
+        - [ ] No critical bugs reported
+        - [ ] App description updated (JP/EN)
+        - [ ] Screenshots current
+        - [ ] Release notes prepared
+        - [ ] Age rating verified
+        "@ >> $env:GITHUB_STEP_SUMMARY

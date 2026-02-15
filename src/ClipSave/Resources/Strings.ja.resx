@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Common_Confirmation" xml:space="preserve"><value>確認</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>閉じる</value></data>
+  <data name="Common_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>キャンセル</value></data>
+  <data name="Common_Unknown" xml:space="preserve"><value>不明</value></data>
+
+  <data name="SettingsWindow_Title" xml:space="preserve"><value>ClipSave 設定</value></data>
+  <data name="SettingsWindow_Tab_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="SettingsWindow_Tab_Hotkey" xml:space="preserve"><value>ホットキー</value></data>
+  <data name="SettingsWindow_Tab_Notification" xml:space="preserve"><value>通知</value></data>
+  <data name="SettingsWindow_Tab_Language" xml:space="preserve"><value>言語</value></data>
+  <data name="SettingsWindow_Tab_Advanced" xml:space="preserve"><value>詳細</value></data>
+
+  <data name="SettingsWindow_Save_ContentTypesTitle" xml:space="preserve"><value>保存するコンテンツ種別</value></data>
+  <data name="SettingsWindow_Save_ContentTypesHint" xml:space="preserve"><value>チェックを外すと、そのコンテンツ種別は保存されません。</value></data>
+  <data name="SettingsWindow_Save_ImageCheckbox" xml:space="preserve"><value>画像（スクリーンショット等）</value></data>
+  <data name="SettingsWindow_Save_ImageFormatLabel" xml:space="preserve"><value>画像形式</value></data>
+  <data name="SettingsWindow_Save_JpegQualityLabel" xml:space="preserve"><value>JPG 品質</value></data>
+  <data name="SettingsWindow_Save_TextCheckbox" xml:space="preserve"><value>テキスト（プレーンテキスト）</value></data>
+  <data name="SettingsWindow_Save_MarkdownCheckbox" xml:space="preserve"><value>Markdown（見出し・リスト等を含むテキスト）</value></data>
+  <data name="SettingsWindow_Save_JsonCheckbox" xml:space="preserve"><value>JSON（構造化データ）</value></data>
+  <data name="SettingsWindow_Save_CsvCheckbox" xml:space="preserve"><value>CSV（表データ・タブ区切りを自動変換）</value></data>
+  <data name="SettingsWindow_Save_ContentTypesWarning" xml:space="preserve"><value>すべて無効です。保存するには 1 つ以上のコンテンツ種別を有効にしてください。</value></data>
+
+  <data name="SettingsWindow_Save_FileNameTitle" xml:space="preserve"><value>保存ファイル名</value></data>
+  <data name="SettingsWindow_Save_FileNameHint" xml:space="preserve"><value>保存時のファイル名の設定を行います。</value></data>
+  <data name="SettingsWindow_Save_FileNameDuplicateHint" xml:space="preserve"><value>同名ファイルがある場合は末尾に _1, _2, ... の連番が付きます。</value></data>
+  <data name="SettingsWindow_Save_PrefixLabel" xml:space="preserve"><value>プレフィックス</value></data>
+  <data name="SettingsWindow_Save_TimestampLabel" xml:space="preserve"><value>タイムスタンプ</value></data>
+  <data name="SettingsWindow_Save_IncludeTimestampCheckbox" xml:space="preserve"><value>付与する</value></data>
+  <data name="SettingsWindow_Save_PreviewLabel" xml:space="preserve"><value>プレビュー</value></data>
+
+  <data name="SettingsWindow_Hotkey_CurrentCombinationLabel" xml:space="preserve"><value>現在の組み合わせ</value></data>
+  <data name="SettingsWindow_Hotkey_ModifierLabel" xml:space="preserve"><value>修飾キー</value></data>
+  <data name="SettingsWindow_Hotkey_KeyLabel" xml:space="preserve"><value>キー</value></data>
+  <data name="SettingsWindow_Hotkey_ModifierRequiredHint" xml:space="preserve"><value>修飾キーは 1 つ以上必須です。</value></data>
+  <data name="SettingsWindow_Hotkey_NoModifierWarning" xml:space="preserve"><value>修飾キーが選択されていません。保存するには Ctrl / Shift / Alt のいずれかを有効にしてください。</value></data>
+
+  <data name="SettingsWindow_Notification_GlobalHint" xml:space="preserve"><value>通知の全体 ON/OFF は Windows の「設定 &gt; システム &gt; 通知」から変更してください。</value></data>
+  <data name="SettingsWindow_Notification_PerTypeHint" xml:space="preserve"><value>この画面では通知種別ごとの ON/OFF を設定できます。</value></data>
+  <data name="SettingsWindow_Notification_OnSuccess" xml:space="preserve"><value>保存成功時に通知</value></data>
+  <data name="SettingsWindow_Notification_OnNoContent" xml:space="preserve"><value>コンテンツなし時に通知</value></data>
+  <data name="SettingsWindow_Notification_OnError" xml:space="preserve"><value>エラー時に通知</value></data>
+
+  <data name="SettingsWindow_Language_SelectionLabel" xml:space="preserve"><value>表示言語</value></data>
+  <data name="SettingsWindow_Language_ApplyHint" xml:space="preserve"><value>「保存」を押した時点で反映されます。再起動は不要です。</value></data>
+  <data name="SettingsWindow_Advanced_LoggingCheckbox" xml:space="preserve"><value>ログ出力を有効化</value></data>
+  <data name="SettingsWindow_Advanced_LoggingHint" xml:space="preserve"><value>※ ログ出力設定は次回起動時に反映されます</value></data>
+  <data name="SettingsWindow_Button_ResetToDefaults" xml:space="preserve"><value>デフォルトに戻す</value></data>
+  <data name="SettingsWindow_Status_UnsavedChanges" xml:space="preserve"><value>未保存の変更があります</value></data>
+  <data name="SettingsWindow_Tooltip_CloseShortcuts" xml:space="preserve"><value>Esc / Ctrl+W</value></data>
+  <data name="SettingsWindow_Tooltip_SaveShortcuts" xml:space="preserve"><value>Ctrl+S</value></data>
+  <data name="SettingsWindow_CloseConfirmMessage" xml:space="preserve"><value>変更が保存されていません。保存せずに閉じますか？</value></data>
+
+  <data name="SettingsViewModel_SaveFailed" xml:space="preserve"><value>保存に失敗しました: {0}</value></data>
+  <data name="SettingsViewModel_InvalidFormat" xml:space="preserve"><value>保存形式が不正です</value></data>
+  <data name="SettingsViewModel_InvalidJpegQuality" xml:space="preserve"><value>JPG 品質は 1〜100 の範囲で指定してください</value></data>
+  <data name="SettingsViewModel_NoContentType" xml:space="preserve"><value>保存するコンテンツ種別を 1 つ以上有効にしてください</value></data>
+  <data name="SettingsViewModel_NoModifier" xml:space="preserve"><value>ホットキーには修飾キーが必要です</value></data>
+  <data name="SettingsViewModel_NoHotkeyKey" xml:space="preserve"><value>ホットキーのキーを選択してください</value></data>
+  <data name="SettingsViewModel_HotkeyNotSet" xml:space="preserve"><value>未設定</value></data>
+  <data name="SettingsViewModel_Language_English" xml:space="preserve"><value>英語</value></data>
+  <data name="SettingsViewModel_Language_Japanese" xml:space="preserve"><value>日本語</value></data>
+
+  <data name="AboutWindow_Title" xml:space="preserve"><value>ClipSave について</value></data>
+  <data name="AboutWindow_VersionPrefix" xml:space="preserve"><value>バージョン: </value></data>
+  <data name="AboutWindow_SystemInfoTitle" xml:space="preserve"><value>システム情報</value></data>
+  <data name="AboutWindow_DotNetRuntimeLabel" xml:space="preserve"><value>.NET ランタイム:</value></data>
+  <data name="AboutWindow_OsLabel" xml:space="preserve"><value>OS:</value></data>
+  <data name="AboutWindow_BuildDateLabel" xml:space="preserve"><value>ビルド日時:</value></data>
+
+  <data name="Tray_Menu_Settings" xml:space="preserve"><value>設定(&amp;C)</value></data>
+  <data name="Tray_Menu_StartupSettings" xml:space="preserve"><value>スタートアップ設定を開く(&amp;S)</value></data>
+  <data name="Tray_Menu_NotificationSettings" xml:space="preserve"><value>通知設定を開く(&amp;N)</value></data>
+  <data name="Tray_Menu_About" xml:space="preserve"><value>バージョン情報(&amp;A)</value></data>
+  <data name="Tray_Menu_Exit" xml:space="preserve"><value>終了(&amp;X)</value></data>
+
+  <data name="Notification_SaveCompleted" xml:space="preserve"><value>保存完了: {0}</value></data>
+  <data name="Notification_NoContent" xml:space="preserve"><value>保存可能なコンテンツがありません</value></data>
+  <data name="Notification_ErrorPrefix" xml:space="preserve"><value>エラー: {0}</value></data>
+  <data name="Notification_MissingFilePath" xml:space="preserve"><value>保存結果のファイルパスが取得できませんでした</value></data>
+  <data name="Notification_UnknownError" xml:space="preserve"><value>不明なエラーが発生しました</value></data>
+
+  <data name="App_StartupErrorMessage" xml:space="preserve"><value>起動中にエラーが発生しました:
+{0}</value></data>
+  <data name="App_StartupErrorTitle" xml:space="preserve"><value>エラー</value></data>
+  <data name="App_OpenStartupSettingsFailed" xml:space="preserve"><value>Windows のスタートアップ設定を開けませんでした</value></data>
+  <data name="App_OpenNotificationSettingsFailed" xml:space="preserve"><value>Windows の通知設定を開けませんでした</value></data>
+  <data name="App_SettingsCorruption" xml:space="preserve"><value>設定ファイルが破損していたため、既定値で初期化しました。</value></data>
+  <data name="App_SettingsCorruptionWithBackup" xml:space="preserve"><value>設定ファイルが破損していたため、既定値で初期化しました。
+
+バックアップ: {0}</value></data>
+  <data name="App_HotkeyRegisterFailed" xml:space="preserve"><value>ホットキーの登録に失敗しました</value></data>
+  <data name="App_HotkeyRegisterFailedRestored" xml:space="preserve"><value>ホットキーの登録に失敗しました。以前の設定に戻しました。</value></data>
+  <data name="App_HotkeyRegisterFailedRestoreFailed" xml:space="preserve"><value>ホットキーの登録に失敗しました。以前の設定にも戻せませんでした。</value></data>
+  <data name="App_StartupGuidance" xml:space="preserve"><value>自動起動は有効です。右クリック→スタートアップ設定を開くで変更できます。</value></data>
+  <data name="App_CrashDialogMessage" xml:space="preserve"><value>予期しないエラーが発生しました。
+
+ダンプファイル:
+{0}</value></data>
+  <data name="App_CrashDialogTitle" xml:space="preserve"><value>ClipSave - エラー</value></data>
+
+  <data name="SavePipeline_GenericFailure" xml:space="preserve"><value>保存に失敗しました</value></data>
+  <data name="SavePipeline_DiskSpaceInsufficient" xml:space="preserve"><value>ディスク容量が不足しています</value></data>
+</root>

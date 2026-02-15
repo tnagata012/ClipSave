@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-セキュリティ脆弱性を発見した場合は、[GitHub Security Advisory](https://github.com/taka-rl/ClipSave/security/advisories) で非公開報告してください。
+セキュリティ脆弱性を発見した場合は、[GitHub Security Advisory](https://github.com/tnagata012/ClipSave/security/advisories) で非公開報告してください。
 
 Security Advisory が利用できない場合の連絡先: `tnagata012@gmail.com`
 

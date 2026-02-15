@@ -108,7 +108,7 @@ Closes #123
 ### Build & Run
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/tnagata012/ClipSave.git
 cd ClipSave
 dotnet restore src/ClipSave/ClipSave.csproj
 dotnet build src/ClipSave/ClipSave.csproj

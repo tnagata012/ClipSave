@@ -27,7 +27,9 @@ internal static class AppServiceProviderFactory
         Action<ILoggingBuilder, string, int, LogLevel>? configureFileLogger = null)
     {
         var services = new ServiceCollection();
-        var loggingEnabled = ReadLoggingEnabled(settingsPath);
+        var resolvedSettingsPath = ResolveSettingsPath(settingsPath);
+        var settingsDirectory = Path.GetDirectoryName(resolvedSettingsPath) ?? AppDataPaths.GetSettingsDirectory();
+        var loggingEnabled = ReadLoggingEnabled(resolvedSettingsPath);
 
         configureFileLogger ??= static (builder, filePath, retainedFileCountLimit, minimumLevel) =>
             builder.AddFile(filePath,
@@ -56,7 +58,10 @@ internal static class AppServiceProviderFactory
 
         services.AddSingleton<SingleInstanceService>();
         services.AddSingleton<LocalizationService>();
-        services.AddSingleton<SettingsService>();
+        services.AddSingleton<SettingsService>(provider =>
+            new SettingsService(
+                provider.GetRequiredService<ILogger<SettingsService>>(),
+                settingsDirectory));
         services.AddSingleton<ClipboardService>();
         services.AddSingleton<ImageEncodingService>();
         services.AddSingleton<ContentEncodingService>();
@@ -70,6 +75,16 @@ internal static class AppServiceProviderFactory
         services.AddTransient<AboutViewModel>();
 
         return services.BuildServiceProvider();
+    }
+
+    private static string ResolveSettingsPath(string settingsPath)
+    {
+        if (string.IsNullOrWhiteSpace(settingsPath))
+        {
+            return AppDataPaths.GetSettingsFilePath();
+        }
+
+        return Path.GetFullPath(settingsPath);
     }
 
     private static bool ReadLoggingEnabled(string settingsPath)

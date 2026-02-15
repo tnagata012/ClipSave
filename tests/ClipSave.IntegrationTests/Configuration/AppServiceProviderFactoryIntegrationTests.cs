@@ -91,6 +91,28 @@ public class AppServiceProviderFactoryIntegrationTests : IDisposable
         Directory.Exists(_logDirectory).Should().BeFalse();
     }
 
+    [Fact]
+    public void CreateServiceProvider_UsesSuppliedSettingsPathForSettingsService()
+    {
+        // Arrange
+        WriteSettings(loggingEnabled: false);
+
+        // Act
+        using var provider = (ServiceProvider)AppServiceProviderFactory.CreateServiceProvider(
+            _settingsPath,
+            _logDirectory);
+
+        var settingsService = provider.GetRequiredService<SettingsService>();
+        settingsService.UpdateSettings(static settings => settings.Advanced.Logging = true);
+
+        // Assert
+        var saved = JsonSerializer.Deserialize<AppSettings>(
+            File.ReadAllText(_settingsPath),
+            SettingsService.CreateJsonOptions());
+        saved.Should().NotBeNull();
+        saved!.Advanced.Logging.Should().BeTrue();
+    }
+
     private void WriteSettings(bool loggingEnabled)
     {
         var settings = new AppSettings();

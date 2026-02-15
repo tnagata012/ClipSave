@@ -93,6 +93,9 @@ jobs:
       shell: pwsh
       run: ./scripts/run-tests.ps1 -Configuration Release -Verbosity normal
 
+    - name: Restore app for MSIX RID
+      run: dotnet restore ${{ env.APP_PROJECT }} --runtime win-x86
+
     - name: Build Store Package
       shell: pwsh
       run: |
@@ -142,3 +145,4 @@ jobs:
         - [ ] Release notes prepared
         - [ ] Age rating verified
         "@ >> $env:GITHUB_STEP_SUMMARY
+

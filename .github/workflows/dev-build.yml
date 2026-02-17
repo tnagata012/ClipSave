@@ -106,6 +106,24 @@ jobs:
           /p:AppxPackageVersion=${{ steps.version.outputs.MSIX_VERSION }} `
           /p:AppxPackageSigningEnabled=false
 
+    - name: List package outputs
+      shell: pwsh
+      run: |
+        Get-ChildItem "${{ github.workspace }}/output" -Recurse -File |
+          Select-Object FullName, Length |
+          Format-Table -AutoSize
+
+    - name: Upload package artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dev-package-${{ steps.version.outputs.MSIX_VERSION }}
+        path: |
+          output/**/*.msix
+          output/**/*.msixbundle
+          output/**/*.msixupload
+        if-no-files-found: error
+        retention-days: 14
+
     - name: Create Dev Release
       uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
       with:
@@ -123,7 +141,9 @@ jobs:
           | **Date** | ${{ github.event.head_commit.timestamp }} |
 
           > ⚠️ **Development build** - use for testing only
-        files: output/**/*.msix
+        files: |
+          output/**/*.msix
+          output/**/*.msixbundle
         prerelease: true
         make_latest: false
 

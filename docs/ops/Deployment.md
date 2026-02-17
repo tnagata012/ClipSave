@@ -67,6 +67,7 @@ Action の固定方針:
 - `validate-version.ps1 -BranchName <実行ブランチ>` を実行
 - `Directory.Build.props` からコア版 `X.Y.Z` を抽出
 - `X.Y.Z.<GITHUB_RUN_NUMBER>` で MSIX を生成
+- ビルド前に `Package.appxmanifest` の `Identity Version` を `X.Y.Z.<GITHUB_RUN_NUMBER>` に設定
 - `dev-package-<version>` artifact を保存（`*.msixbundle` / `*.msixupload`）
 - `dev-latest` prerelease を更新（`*.msixbundle` を添付）
 - バージョンファイルはコミットしない
@@ -76,6 +77,7 @@ Action の固定方針:
 - 実行ブランチが `release/X.Y.x` 形式でない場合は失敗（手動実行時の誤リリース防止）
 - `validate-version.ps1 -BranchName release/X.Y.x` を実行
 - `Directory.Build.props` の `X.Y.Z` から `X.Y.Z.0` を計算して公開版をビルド
+- ビルド前に `Package.appxmanifest` の `Identity Version` を `X.Y.Z.0` に設定
 - `release-package-<version>` artifact を保存（`*.msixbundle` / `*.msixupload`）
 - `vX.Y.Z` タグの GitHub Release を作成（`*.msixbundle` を添付）
 
@@ -83,6 +85,7 @@ Action の固定方針:
 
 - 入力した `X.Y.Z` から `release/X.Y.x` を解決
 - 対象ブランチ存在を検証
+- ビルド前に `Package.appxmanifest` の `Identity Version` を `X.Y.Z.0` に設定
 - `.msixupload` を生成して Artifact に保存
 
 ## 成果物の取得先

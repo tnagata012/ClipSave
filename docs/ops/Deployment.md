@@ -69,6 +69,7 @@ Action の固定方針:
 - `X.Y.Z.<GITHUB_RUN_NUMBER>` で MSIX を生成
 - ビルド前に `Package.appxmanifest` の `Identity Version` を `X.Y.Z.<GITHUB_RUN_NUMBER>` に設定
 - `dev-package-<version>` artifact を保存（`*.msixbundle` / `*.msixupload`）
+- `dev-latest` 既存 Asset を削除して最新 `*.msixbundle` のみを添付
 - `dev-latest` prerelease を更新（`*.msixbundle` を添付）
 - バージョンファイルはコミットしない
 

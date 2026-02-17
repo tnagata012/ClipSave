@@ -93,6 +93,11 @@ jobs:
       shell: pwsh
       run: ./scripts/run-tests.ps1 -Configuration Release -Verbosity normal
 
+    # Desktop Bridge packaging restores/publishes the app as win-x86 internally.
+    # Keep this even when package platform is AnyCPU, otherwise NETSDK1047 occurs.
+    - name: Restore app assets for MSIX runtime
+      run: dotnet restore ${{ env.APP_PROJECT }} --runtime win-x86
+
     - name: Build Store Package
       shell: pwsh
       run: |

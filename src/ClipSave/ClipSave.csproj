@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\ClipSave.ico" />
+    <Resource Include="Assets\ClipSaveLogo.png" />
   </ItemGroup>
 
 </Project>

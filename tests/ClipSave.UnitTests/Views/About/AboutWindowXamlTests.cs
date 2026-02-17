@@ -19,4 +19,15 @@ public class AboutWindowXamlTests
         bindings.Should().NotBeEmpty();
         bindings.Should().OnlyContain(binding => binding.Contains("Mode=OneWay", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void AboutLogo_UsesPngAssetWithHighQualityScaling()
+    {
+        var xamlPath = Path.Combine(TestPaths.SourceRoot, "Views", "About", "AboutWindow.xaml");
+        var xaml = File.ReadAllText(xamlPath);
+
+        xaml.Should().Contain("Source=\"/Assets/ClipSaveLogo.png\"");
+        xaml.Should().Contain("RenderOptions.BitmapScalingMode=\"HighQuality\"");
+        xaml.Should().NotContain("Source=\"/Assets/ClipSave.ico\"");
+    }
 }

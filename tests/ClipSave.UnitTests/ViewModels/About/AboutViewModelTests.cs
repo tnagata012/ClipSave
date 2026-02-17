@@ -33,7 +33,7 @@ public class AboutViewModelTests
 
         viewModel.Version.Should().Match(v =>
             v == "Unknown" ||
-            System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+$"));
+            System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+\.\d+$"));
     }
 
     [Fact]

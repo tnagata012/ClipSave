@@ -158,6 +158,31 @@ jobs:
         if-no-files-found: error
         retention-days: 14
 
+    - name: Cleanup old dev release assets
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $tag = "dev-latest"
+        $repo = "${{ github.repository }}"
+
+        $assetNames = gh release view $tag --repo $repo --json assets --jq '.assets[].name' 2>$null
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "Release '$tag' not found. Skipping asset cleanup."
+          exit 0
+        }
+
+        $assets = @($assetNames | Where-Object { $_ -and $_.Trim() -ne "" })
+        if ($assets.Count -eq 0) {
+          Write-Host "No assets to cleanup in '$tag'."
+          exit 0
+        }
+
+        foreach ($asset in $assets) {
+          gh release delete-asset $tag $asset --repo $repo --yes
+          Write-Host "Deleted old asset: $asset"
+        }
+
     - name: Create Dev Release
       uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
       with:

@@ -91,6 +91,21 @@ jobs:
     - name: Restore app assets for MSIX runtime
       run: dotnet restore ${{ env.APP_PROJECT }} --runtime win-x86
 
+    - name: Set MSIX manifest version
+      shell: pwsh
+      run: |
+        $manifestPath = "src/ClipSave.Package/Package.appxmanifest"
+        [xml]$manifest = Get-Content $manifestPath
+        $ns = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
+        $ns.AddNamespace("appx", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
+        $identity = $manifest.SelectSingleNode("/appx:Package/appx:Identity", $ns)
+        if (-not $identity) {
+          throw "Identity node not found in $manifestPath"
+        }
+        $identity.SetAttribute("Version", "${{ steps.version.outputs.MSIX_VERSION }}")
+        $manifest.Save($manifestPath)
+        Write-Host "Updated Package.appxmanifest version to ${{ steps.version.outputs.MSIX_VERSION }}"
+
     - name: Build MSIX
       shell: pwsh
       run: |
@@ -101,6 +116,24 @@ jobs:
           /p:AppxBundleManifestVersion=${{ steps.version.outputs.MSIX_VERSION }} `
           /p:AppxManifestIdentityVersion=${{ steps.version.outputs.MSIX_VERSION }} `
           /p:AppxPackageSigningEnabled=false
+
+    - name: Validate bundle version
+      shell: pwsh
+      run: |
+        $outputDir = "${{ github.workspace }}/output"
+        $expectedVersion = "${{ steps.version.outputs.MSIX_VERSION }}"
+        $bundles = Get-ChildItem $outputDir -Recurse -File -Filter *.msixbundle
+        if (-not $bundles) {
+          throw "No .msixbundle found under $outputDir"
+        }
+
+        $pattern = "_$([regex]::Escape($expectedVersion))_"
+        $matched = $bundles | Where-Object { $_.Name -match $pattern }
+        if (-not $matched) {
+          $actual = ($bundles | Select-Object -ExpandProperty Name) -join ", "
+          throw "Bundle filename does not contain expected version '$expectedVersion'. Found: $actual"
+        }
+        Write-Host "Bundle version validated: $($matched[0].Name)"
 
     - name: List package outputs
       shell: pwsh

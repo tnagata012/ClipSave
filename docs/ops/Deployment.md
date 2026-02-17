@@ -23,8 +23,8 @@ graph TB
 | ワークフロー | トリガー | 主な用途 | 生成物 |
 |-------------|---------|---------|--------|
 | [pr-check.yml](../../.github/workflows/pr-check.yml) | PR (`main`, `release/*`) | ビルド・テスト・セキュリティチェック・SPEC整合・版数整合チェック | `TestResults/**/*.trx`（artifact） |
-| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` への push / 手動 | 開発版配布（`docs/**` と `*.md` のみ変更時は自動起動しない） | `output/**/*.msix` |
-| [release-build.yml](../../.github/workflows/release-build.yml) | `release/*` への push / 手動 | 公開版配布（GitHub Release） | `output/**/*.msix` |
+| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` への push / 手動 | 開発版配布（`docs/**` と `*.md` のみ変更時は自動起動しない） | `output/**/*.msix` / `output/**/*.msixbundle`（加えて `dev-package-*` artifact） |
+| [release-build.yml](../../.github/workflows/release-build.yml) | `release/*` への push / 手動 | 公開版配布（GitHub Release） | `output/**/*.msix` / `output/**/*.msixbundle`（加えて `release-package-*` artifact） |
 | [store-publish.yml](../../.github/workflows/store-publish.yml) | 手動実行（`X.Y.Z` 指定） | Store 提出パッケージ生成 | `StorePackage/**/*.msixupload` |
 
 注意:
@@ -66,7 +66,8 @@ Action の固定方針:
 - `validate-version.ps1 -BranchName <実行ブランチ>` を実行
 - `Directory.Build.props` からコア版 `X.Y.Z` を抽出
 - `X.Y.Z.<GITHUB_RUN_NUMBER>` で MSIX を生成
-- `dev-latest` prerelease を更新
+- `dev-package-<version>` artifact を保存（`*.msix` / `*.msixbundle` / `*.msixupload`）
+- `dev-latest` prerelease を更新（`*.msix` / `*.msixbundle` を添付）
 - バージョンファイルはコミットしない
 
 ### Release Build (`release/*`)
@@ -74,13 +75,20 @@ Action の固定方針:
 - 実行ブランチが `release/X.Y.x` 形式でない場合は失敗（手動実行時の誤リリース防止）
 - `validate-version.ps1 -BranchName release/X.Y.x` を実行
 - `Package.appxmanifest` の `X.Y.Z.0` で公開版をビルド
-- `vX.Y.Z` タグの GitHub Release を作成
+- `release-package-<version>` artifact を保存（`*.msix` / `*.msixbundle` / `*.msixupload`）
+- `vX.Y.Z` タグの GitHub Release を作成（`*.msix` / `*.msixbundle` を添付）
 
 ### Store Publish（手動）
 
 - 入力した `X.Y.Z` から `release/X.Y.x` を解決
 - 対象ブランチ存在を検証
 - `.msixupload` を生成して Artifact に保存
+
+## 成果物の取得先
+
+- Dev Build: `Actions` の `dev-package-*` artifact、または `Releases` の `dev-latest` prerelease
+- Release Build: `Actions` の `release-package-*` artifact、または `Releases` の `vX.Y.Z`
+- Store Publish: `Actions` の `store-package-<version>` artifact（`.msixupload`）
 
 ## 実運用手順
 

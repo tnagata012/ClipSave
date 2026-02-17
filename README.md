@@ -28,7 +28,10 @@ ClipSave は、コピーした内容を `Ctrl+Shift+V` で即保存する軽量�
 
 ## インストール
 
-- **GitHub Releases**: リポジトリの `Releases` タブから MSIX を取得
+- **GitHub Releases**: リポジトリの `Releases` タブから公開版を取得
+- **GitHub Actions Artifacts**: `Dev Build` / `Release Build` 実行結果の `dev-package-*` / `release-package-*` から取得
+- **開発版（Dev Build）**: `Releases` の `dev-latest` prerelease から取得
+- **パッケージ形式**: `*.msix` または `*.msixbundle`（構成により異なる）
 - **Microsoft Store**: 審査承認後に利用可能予定
 - **ソースからビルド**:
 

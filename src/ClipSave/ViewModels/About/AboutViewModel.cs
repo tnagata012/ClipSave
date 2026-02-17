@@ -5,11 +5,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace ClipSave.ViewModels.About;
 
 public partial class AboutViewModel : ObservableObject
 {
+    private static readonly Regex PackageFolderVersionPattern = new(
+        @"_(?<version>\d+\.\d+\.\d+\.\d+)_",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly LocalizationService _localizationService;
 
     public event EventHandler? RequestClose;
@@ -52,13 +57,56 @@ public partial class AboutViewModel : ObservableObject
 
     private static string GetAssemblyVersion(Assembly assembly, LocalizationService localizationService)
     {
+        if (TryGetPackageVersionFromInstallPath(assembly.Location, out var packageVersion))
+        {
+            return packageVersion;
+        }
+
         var version = assembly.GetName().Version;
         if (version == null)
         {
             return localizationService.GetString("Common_Unknown");
         }
 
-        return $"{version.Major}.{version.Minor}.{version.Build}";
+        return NormalizeFourPartVersion(version);
+    }
+
+    private static bool TryGetPackageVersionFromInstallPath(string? assemblyLocation, out string version)
+    {
+        version = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(assemblyLocation))
+        {
+            return false;
+        }
+
+        var directory = Path.GetDirectoryName(assemblyLocation);
+        while (!string.IsNullOrWhiteSpace(directory))
+        {
+            var folderName = Path.GetFileName(directory);
+            if (string.IsNullOrWhiteSpace(folderName))
+            {
+                break;
+            }
+
+            var match = PackageFolderVersionPattern.Match(folderName);
+            if (match.Success)
+            {
+                version = match.Groups["version"].Value;
+                return true;
+            }
+
+            directory = Path.GetDirectoryName(directory);
+        }
+
+        return false;
+    }
+
+    private static string NormalizeFourPartVersion(Version version)
+    {
+        var build = version.Build >= 0 ? version.Build : 0;
+        var revision = version.Revision >= 0 ? version.Revision : 0;
+        return $"{version.Major}.{version.Minor}.{build}.{revision}";
     }
 
     private static string GetBuildDate(Assembly assembly, LocalizationService localizationService)

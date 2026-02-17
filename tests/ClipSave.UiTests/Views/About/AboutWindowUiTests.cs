@@ -34,6 +34,9 @@ public class AboutWindowUiTests
         textValues.Should().Contain(context.ViewModel.OsVersion);
         textValues.Should().Contain(context.ViewModel.BuildDate);
         textValues.Should().Contain(context.ViewModel.Copyright);
+        context.ViewModel.Version.Should().Match(v =>
+            v == "Unknown" ||
+            System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+\.\d+$"));
         inlineTexts.Should().Contain(context.ViewModel.Version);
     }
 

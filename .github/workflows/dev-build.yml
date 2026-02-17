@@ -104,6 +104,8 @@ jobs:
           /p:Configuration=Release /p:Platform=AnyCPU `
           /p:AppxPackageDir="${{ github.workspace }}/output/" `
           /p:AppxPackageVersion=${{ steps.version.outputs.MSIX_VERSION }} `
+          /p:AppxBundleManifestVersion=${{ steps.version.outputs.MSIX_VERSION }} `
+          /p:AppxManifestIdentityVersion=${{ steps.version.outputs.MSIX_VERSION }} `
           /p:AppxPackageSigningEnabled=false
 
     - name: List package outputs
@@ -118,7 +120,6 @@ jobs:
       with:
         name: dev-package-${{ steps.version.outputs.MSIX_VERSION }}
         path: |
-          output/**/*.msix
           output/**/*.msixbundle
           output/**/*.msixupload
         if-no-files-found: error
@@ -142,7 +143,6 @@ jobs:
 
           > ⚠️ **Development build** - use for testing only
         files: |
-          output/**/*.msix
           output/**/*.msixbundle
         prerelease: true
         make_latest: false

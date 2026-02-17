@@ -79,6 +79,14 @@ jobs:
         ./scripts/validate-version.ps1 -BranchName "${{ steps.release.outputs.BRANCH }}"
         echo "✅ Version verified: $version"
 
+    - name: Resolve package version
+      id: package
+      shell: pwsh
+      run: |
+        $msixVersion = "${{ inputs.version }}.0"
+        echo "MSIX_VERSION=$msixVersion" >> $env:GITHUB_OUTPUT
+        echo "MSIX version: $msixVersion"
+
     - name: Restore
       run: dotnet restore ${{ env.SOLUTION_FILE }}
 
@@ -108,6 +116,9 @@ jobs:
           /p:UapAppxPackageBuildMode=StoreUpload `
           /p:AppxBundle=Always `
           /p:AppxPackageDir="${{ github.workspace }}/StorePackage/" `
+          /p:AppxPackageVersion=${{ steps.package.outputs.MSIX_VERSION }} `
+          /p:AppxBundleManifestVersion=${{ steps.package.outputs.MSIX_VERSION }} `
+          /p:AppxManifestIdentityVersion=${{ steps.package.outputs.MSIX_VERSION }} `
           /p:AppxPackageSigningEnabled=false
 
     - name: Upload Store Package

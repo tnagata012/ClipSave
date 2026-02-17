@@ -57,8 +57,16 @@ jobs:
       run: |
         [xml]$props = Get-Content Directory.Build.props
         $version = $props.Project.PropertyGroup.Version
+        $match = [regex]::Match($version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$')
+        if (-not $match.Success) {
+          Write-Error "Invalid version format in Directory.Build.props (expected X.Y.Z): $version"
+          exit 1
+        }
+        $msixVersion = "$version.0"
         echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "MSIX_VERSION=$msixVersion" >> $env:GITHUB_OUTPUT
         echo "Version: $version"
+        echo "MSIX version: $msixVersion"
 
     - name: Validate version
       shell: pwsh
@@ -89,6 +97,9 @@ jobs:
         msbuild src/ClipSave.Package/ClipSave.Package.wapproj `
           /p:Configuration=Release /p:Platform=AnyCPU `
           /p:AppxPackageDir="${{ github.workspace }}/output/" `
+          /p:AppxPackageVersion=${{ steps.version.outputs.MSIX_VERSION }} `
+          /p:AppxBundleManifestVersion=${{ steps.version.outputs.MSIX_VERSION }} `
+          /p:AppxManifestIdentityVersion=${{ steps.version.outputs.MSIX_VERSION }} `
           /p:AppxPackageSigningEnabled=false
 
     - name: List package outputs
@@ -103,7 +114,6 @@ jobs:
       with:
         name: release-package-${{ steps.version.outputs.VERSION }}
         path: |
-          output/**/*.msix
           output/**/*.msixbundle
           output/**/*.msixupload
         if-no-files-found: error
@@ -133,7 +143,6 @@ jobs:
         name: v${{ steps.version.outputs.VERSION }}
         body: ${{ steps.notes.outputs.NOTES }}
         files: |
-          output/**/*.msix
           output/**/*.msixbundle
         prerelease: false
         make_latest: true

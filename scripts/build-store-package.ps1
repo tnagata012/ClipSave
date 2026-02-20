@@ -29,8 +29,8 @@ Push-Location $projectRoot
 try {
     # Validate current branch (Store package must be built from release branch)
     $currentBranch = git branch --show-current 2>$null
-    if (-not $currentBranch -or $currentBranch -notmatch '^release/\d+\.\d+\.x$') {
-        Write-Error "Current branch is '$currentBranch'. Switch to a release branch (release/X.Y.x) before building Store package."
+    if (-not $currentBranch -or $currentBranch -notmatch '^release/\d+\.\d+$') {
+        Write-Error "Current branch is '$currentBranch'. Switch to a release branch (release/X.Y) before building Store package."
         exit 1
     }
 
@@ -58,7 +58,7 @@ try {
 
     # Verify version in both files
     Write-Host "`n[1/7] Verifying version consistency..." -ForegroundColor Yellow
-    & "$projectRoot\scripts\validate-version.ps1" -ProjectRoot $projectRoot -BranchName $currentBranch
+    & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $currentBranch
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Version validation failed"
         exit 1

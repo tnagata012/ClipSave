@@ -30,7 +30,7 @@ jobs:
           Write-Error "Invalid version format: $version (expected X.Y.Z)"
           exit 1
         }
-        $branch = "release/$($matches['major']).$($matches['minor']).x"
+        $branch = "release/$($matches['major']).$($matches['minor'])"
         echo "BRANCH=$branch" >> $env:GITHUB_OUTPUT
         echo "Resolved branch: $branch"
 
@@ -38,7 +38,8 @@ jobs:
       shell: pwsh
       run: |
         $branch = "${{ steps.release.outputs.BRANCH }}"
-        $result = gh api "repos/${{ github.repository }}/branches/$branch" 2>$null
+        $encodedBranch = [Uri]::EscapeDataString($branch)
+        $result = gh api "repos/${{ github.repository }}/branches/$encodedBranch" 2>$null
         if (-not $result) {
           Write-Error "Branch '$branch' does not exist. Create a release branch first."
           exit 1
@@ -76,7 +77,7 @@ jobs:
           Write-Error "Version mismatch: Directory.Build.props has $version but input is ${{ inputs.version }}"
           exit 1
         }
-        ./scripts/validate-version.ps1 -BranchName "${{ steps.release.outputs.BRANCH }}"
+        ./scripts/assert-version-policy.ps1 -BranchName "${{ steps.release.outputs.BRANCH }}"
         echo "✅ Version verified: $version"
 
     - name: Resolve package version
@@ -166,11 +167,10 @@ jobs:
 
         ### ✅ Pre-submission Checklist
 
-        - [ ] GitHub Release tested (24+ hours)
+        - [ ] Release package artifact (`release-package-${{ inputs.version }}`, unsigned) reviewed (24+ hours)
         - [ ] No critical bugs reported
         - [ ] App description updated (JP/EN)
         - [ ] Screenshots current
         - [ ] Release notes prepared
         - [ ] Age rating verified
         "@ >> $env:GITHUB_STEP_SUMMARY
-

@@ -15,7 +15,7 @@ ClipSave へのコントリビューションに興味を持っていただき�
 ## Quick Start
 
 1. 変更対象の Issue を確認（大きな変更は先に Issue で合意）。
-2. `main` から短命ブランチを作成（例: `feature/...` / `fix/...` / `docs/...`）。
+2. `main` から短命ブランチを作成（`feature/...` / `fix/...` / `docs/...` / `chore/...`）。
 3. 実装と必要ドキュメントを更新。
 4. ローカルでテストを実行。
 5. 英語のコミットメッセージでコミット。
@@ -46,7 +46,7 @@ ClipSave へのコントリビューションに興味を持っていただき�
 
 - 実装規約: `docs/dev/CodingGuidelines.md`
 - テスト方針: `docs/dev/TestingStrategy.md`
-- ブランチ運用: `docs/ops/BranchStrategy.md`
+- リリース運用: `docs/ops/BranchStrategy.md` / `docs/ops/Versioning.md` / `docs/ops/Deployment.md` / `docs/ops/Signing.md`
 - レビュー担当: `.github/CODEOWNERS`（`@TNagata012`）
 
 PR には少なくとも次を含めてください。
@@ -128,6 +128,9 @@ dotnet run --project src/ClipSave
 - `docs/dev/Architecture.md`: アーキテクチャ
 - `docs/dev/Specification.md`: 仕様（SPEC-ID）
 - `docs/ops/BranchStrategy.md`: ブランチ運用
+- `docs/ops/Versioning.md`: バージョニング規約
+- `docs/ops/Deployment.md`: CI/CD と配布手順
+- `docs/ops/Signing.md`: 署名・証明書運用
 
 ## Questions?
 

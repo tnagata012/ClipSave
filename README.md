@@ -1,9 +1,8 @@
 # ClipSave
 
-[![PR Check](https://github.com/tnagata012/ClipSave/actions/workflows/pr-check.yml/badge.svg)](https://github.com/tnagata012/ClipSave/actions/workflows/pr-check.yml)
 [![Dev Build](https://github.com/tnagata012/ClipSave/actions/workflows/dev-build.yml/badge.svg?branch=main)](https://github.com/tnagata012/ClipSave/actions/workflows/dev-build.yml)
 [![Release Build](https://github.com/tnagata012/ClipSave/actions/workflows/release-build.yml/badge.svg)](https://github.com/tnagata012/ClipSave/actions/workflows/release-build.yml)
-[![GitHub release](https://img.shields.io/github/v/release/tnagata012/ClipSave)](https://github.com/tnagata012/ClipSave/releases)
+[![GitHub prerelease](https://img.shields.io/github/v/release/tnagata012/ClipSave?include_prereleases&label=dev%20prerelease)](https://github.com/tnagata012/ClipSave/releases/tag/dev-latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > ホットキー一発でクリップボード内容をファイル保存できる Windows 常駐アプリ
@@ -28,7 +27,8 @@ ClipSave は、コピーした内容を `Ctrl+Shift+V` で即保存する軽量�
 
 ## インストール
 
-- **GitHub Releases**: リポジトリの `Releases` タブの Assets から `*.msixbundle` を取得
+- **開発版**: リポジトリの `Releases` タブ（`dev-latest` prerelease）から `*.msixbundle` を取得
+- **公開版**: リポジトリの `Releases` タブ（`release-latest`）から `*.msixbundle` を取得
 - **Microsoft Store**: 審査承認後に利用可能予定
 - **ソースからビルド**:
 
@@ -43,7 +43,7 @@ dotnet build src/ClipSave/ClipSave.csproj --configuration Release
 
 - [使い方ガイド](docs/UsageGuide.md) - 基本操作と設定
 - [製品コンセプト](docs/ProductConcept.md) - ビジョンと設計思想
-- [ランディングページ運用](docs/ops/LandingPage.md) - `site/` の更新方針と確認手順
+- [ランディングページ運用](docs/presentation/LandingPage.md) - `site/` の更新方針と確認手順
 - [リリースノート](RELEASE_NOTES.md) - 変更履歴
 
 ## 開発者向け
@@ -54,7 +54,7 @@ dotnet build src/ClipSave/ClipSave.csproj --configuration Release
 |---------|-------------|
 | 設計 | [仕様](docs/dev/Specification.md) ・ [アーキテクチャ](docs/dev/Architecture.md) ・ [コーディングガイドライン](docs/dev/CodingGuidelines.md) |
 | テスト | [テスト戦略](docs/dev/TestingStrategy.md) |
-| 運用 | [デプロイ](docs/ops/Deployment.md) ・ [バージョニング](docs/ops/Versioning.md) ・ [ブランチ戦略](docs/ops/BranchStrategy.md) |
+| 運用 | [デプロイ](docs/ops/Deployment.md) ・ [署名運用](docs/ops/Signing.md) ・ [バージョニング](docs/ops/Versioning.md) ・ [ブランチ戦略](docs/ops/BranchStrategy.md) ・ [アイコン運用](docs/presentation/IconAssets.md) |
 
 ## セキュリティ
 

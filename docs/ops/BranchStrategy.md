@@ -1,100 +1,105 @@
 # ブランチ戦略
 
-ClipSave のブランチ運用ルールを定義します。
+ClipSave のブランチ構成と統合方向を定義します。
 
-## 運用ルール
+## この文書の責務
 
-1. 日常開発は `main` を基点に短命ブランチで行う。
-2. リリース時に `release/X.Y.x` を作成する。
-3. リリース後の修正は `main` に先に入れ、必要分だけ `release` にチェリーピックする。
-4. リリース版のビルドは `release/*` ブランチでのみ行う。
-5. `release` から `main` へ直接マージしない。
+この文書では、以下を扱います。
 
-## ブランチモデル
+- ブランチ種別（`main` / `release/X.Y` / 作業ブランチ）
+- 統合方向（`main` 先行、`release/X.Y` への backport）
+- リリース系列の開始・保守・終了
+- ブランチ命名の制約
 
-| ブランチ | 用途 | 作成タイミング | 期限 |
-|---------|------|----------------|------|
-| `main` | 開発トランク | 常設 | 永続 |
-| `release/X.Y.x` | リリース系列の保守 | メジャー/マイナーリリース時 | サポート終了まで |
+この文書では、以下は扱いません。
 
-## 基本開発フロー
+- 版数規約と `PATCH` 更新手順の詳細（`Versioning.md`）
+- ワークフロー実行手順（`Deployment.md`）
+- 署名方針（現在は一時停止、`Signing.md`）
 
-1. `main` から作業ブランチを作成
-2. 実装・テスト
-3. PR を作成
-4. レビュー後 `main` へマージ
+## 運用原則
 
-```mermaid
-graph LR
-  A[main] --> B[作業ブランチ]
-  B --> C[実装/テスト]
-  C --> D[PR]
-  D --> E[main へマージ]
-```
+1. 開発の主戦場は `main`（Trunk-first）とする。
+2. 公開品質の安定化は `release/X.Y` で行う。
+3. 修正の正本は常に `main` とし、release 側は必要分のみ追従する。
+4. 作業ブランチは短命に保ち、PR で統合する。
 
-## メジャー/マイナーリリース
+## ブランチ種別
 
-### 実行コマンド
+| ブランチ | 寿命 | 用途 |
+|---------|------|------|
+| `main` | 永続 | 次期開発の幹 |
+| `release/X.Y` | 中期 | 公開安定化・パッチ保守 |
+| `feature/*` | 短命 | 機能追加 |
+| `fix/*` | 短命 | 不具合修正・backport 作業 |
+| `docs/*` | 短命 | ドキュメント更新 |
+| `chore/*` | 短命 | 運用・自動化・雑務 |
 
-```powershell
-.\scripts\create-release-branch.ps1 -Version 1.3.0
-```
+## 命名ルール
 
-オプション例:
-```powershell
-.\scripts\create-release-branch.ps1 -Version 1.3.0 -SkipPull
-.\scripts\create-release-branch.ps1 -Version 1.3.0 -MainBranch main -Push
-```
+- 作業ブランチのプレフィックスは `feature/`, `fix/`, `docs/`, `chore/` のみ許可する。
+- 長寿命ブランチは `main` と `release/X.Y` のみとする。
+- `release/X.Y.Z` や `hotfix/*` のようなパッチ単位ブランチは作成しない。
+- 新しいプレフィックスを導入する場合は Issue/PR で合意し、この文書を更新する。
 
-### スクリプトが行うこと
+例:
 
-- `release/1.3.x` を作成
-- `release/1.3.x` のバージョンを `1.3.0` に設定
-- `main` のバージョンを `1.4.0` に更新
-- `main` の `Package.appxmanifest` を `1.4.0.0` に更新
-- 誤操作防止として、`main` の現在版数系列（`X.Y`）と `-Version` の系列が一致しない場合は中断
+- `feature/save-image-hotkey`
+- `fix/release-1.3-backport-042`
+- `docs/update-branch-policy`
+- `chore/bump-main-to-1.4.0`
 
-```mermaid
-graph LR
-  A[main: 1.3.0] --> B[release/1.3.x: 1.3.0]
-  B --> C[Release Build]
-  C --> D[GitHub Release v1.3.0]
-  A --> E[main: 1.4.0]
-```
+## 統合ルール（必須）
 
-## パッチリリース
+1. 作業ブランチは `main` から作成し、PR で `main` に統合する。
+2. `release/X.Y` はメジャー/マイナー開始時にのみ作成する。
+3. `release/X.Y` で新機能開発をしない。
+4. 不具合修正は `main` に先にマージし、必要コミットのみ `release/X.Y` へ `cherry-pick -x` で反映する。
+5. `release/X.Y` から `main` へマージしない。
+6. `main` / `release/X.Y` への人手による直 push は禁止し、PR マージのみで反映する。
+7. 緊急脆弱性修正も `hotfix/*` ではなく通常のパッチリリース手順（`main` 先行 + backport + PR）で扱う。
+8. `PATCH` の更新タイミングは `Versioning.md` の規則に従う。
 
-1. `main` で不具合修正をマージ
-2. `release/X.Y.x` に対象コミットをチェリーピック
-3. `Directory.Build.props` を `X.Y.Z` に更新
-4. `Package.appxmanifest` を `X.Y.Z.0` に更新
-5. `release/X.Y.x` に push して Release Build を実行
+## リリース系列ライフサイクル
 
-```powershell
-git checkout release/1.3.x
-git cherry-pick <commit-hash>
-# バージョン更新
-# Directory.Build.props: 1.3.1
-# Package.appxmanifest: 1.3.1.0
-git commit -am "chore: bump version to 1.3.1"
-git push origin release/1.3.x
-```
+### Start
 
-## 運用ガードレール
+- 安定した `main` から `release/X.Y` を作成する。
+- 同時に `main` は次開発系列（通常は次 `MINOR`）へ進める。
 
-### Do
+### Maintenance
 
-- `main` を常にマージ可能・リリース可能な状態に保つ
-- 修正はまず `main` に入れる
-- リリース系列ごとに `release/X.Y.x` を分ける
+- `release/X.Y` には公開品質に必要な変更のみを入れる。
+- 取り込み元は `main` を正とし、release 側は必要分のみ backport する。
 
-### Don't
+### Support window
 
-- `release` ブランチで新機能開発しない
-- `release` から `main` へ直接マージしない
-- パッチ対応のたびに新しい `hotfix/*` ブランチ運用を復活させない
+- 標準は「最新 1 系列（直近 `release/X.Y`）」のみ同時保守する。
+- 旧系列の保守は、次の条件を満たす場合のみ例外許可する。
+  - 高緊急度のセキュリティ対応
+  - Store 審査/公開上の要請
+  - メンテナーの明示承認
+
+### End of support
+
+- サポート終了後の `release/X.Y` は凍結し、履歴のみ保持する。
+- 凍結後は原則として追加コミットを行わない。
+
+## cherry-pick 競合時の方針
+
+1. `release/X.Y` から backport 用ブランチ（例: `fix/release-X.Y-backport-<id>`）を作成する。
+2. 競合は release 系列の互換性を優先して解消する。
+3. 競合解消内容と理由を PR に明記する。
+4. release 側だけの場当たり修正を避け、必要なら `main` に先行調整を入れて再 backport する。
+
+## GitHub での強制（推奨）
+
+- `main` / `release/*` は Branch protection または Ruleset で保護する。
+- Ruleset の branch name pattern で許可ブランチを制限する。
+- 例: `^(main|release/\\d+\\.\\d+|(feature|fix|docs|chore)/[a-z0-9][a-z0-9._/-]*)$`
 
 ## 関連ドキュメント
 
-- [Versioning](Versioning.md)
-- [Deployment](Deployment.md)
+- [Versioning](Versioning.md) — 版数規約
+- [Deployment](Deployment.md) — 配布 Runbook
+- [Signing](Signing.md) — 署名方針（現在は一時停止）

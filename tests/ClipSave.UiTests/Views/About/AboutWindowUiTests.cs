@@ -14,6 +14,7 @@ public class AboutWindowUiTests
 {
     [StaFact]
     [Spec("SPEC-060-001")]
+    [Spec("SPEC-060-004")]
     public void AboutWindow_DisplaysSystemAndVersionInformation()
     {
         using var context = CreateContext();
@@ -30,13 +31,19 @@ public class AboutWindowUiTests
             .ToList();
 
         textValues.Should().Contain(context.ViewModel.ApplicationName);
+        textValues.Should().Contain(context.ViewModel.InformationalVersion);
         textValues.Should().Contain(context.ViewModel.DotNetVersion);
         textValues.Should().Contain(context.ViewModel.OsVersion);
         textValues.Should().Contain(context.ViewModel.BuildDate);
         textValues.Should().Contain(context.ViewModel.Copyright);
         context.ViewModel.Version.Should().Match(v =>
             v == "Unknown" ||
-            System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+\.\d+$"));
+            System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+$"));
+        context.ViewModel.InformationalVersion.Should().Match(v =>
+            v == "Unknown" ||
+            System.Text.RegularExpressions.Regex.IsMatch(
+                v,
+                @"^\d+\.\d+\.\d+(\.local|-[0-9A-Za-z\.-]+)?(\+sha\.[0-9a-f]{7})?$"));
         inlineTexts.Should().Contain(context.ViewModel.Version);
     }
 

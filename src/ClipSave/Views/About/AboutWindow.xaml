@@ -43,31 +43,40 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="120"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Localizer[AboutWindow_DotNetRuntimeLabel], Mode=OneWay}"
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Localizer[AboutWindow_InformationalVersionLabel], Mode=OneWay}"
                            Foreground="Gray" Margin="0,2"/>
                 <TextBlock Grid.Row="0" Grid.Column="1"
+                           Text="{Binding InformationalVersion, Mode=OneWay}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding InformationalVersion, Mode=OneWay}"
+                           Margin="0,2"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Localizer[AboutWindow_DotNetRuntimeLabel], Mode=OneWay}"
+                           Foreground="Gray" Margin="0,2"/>
+                <TextBlock Grid.Row="1" Grid.Column="1"
                            Text="{Binding DotNetVersion, Mode=OneWay}"
                            TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding DotNetVersion, Mode=OneWay}"
                            Margin="0,2"/>
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Localizer[AboutWindow_OsLabel], Mode=OneWay}"
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding Localizer[AboutWindow_OsLabel], Mode=OneWay}"
                            Foreground="Gray" Margin="0,2"/>
-                <TextBlock Grid.Row="1" Grid.Column="1"
+                <TextBlock Grid.Row="2" Grid.Column="1"
                            Text="{Binding OsVersion, Mode=OneWay}"
                            TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding OsVersion, Mode=OneWay}"
                            Margin="0,2"/>
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding Localizer[AboutWindow_BuildDateLabel], Mode=OneWay}"
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding Localizer[AboutWindow_BuildDateLabel], Mode=OneWay}"
                            Foreground="Gray" Margin="0,2"/>
-                <TextBlock Grid.Row="2" Grid.Column="1"
+                <TextBlock Grid.Row="3" Grid.Column="1"
                            Text="{Binding BuildDate, Mode=OneWay}"
                            Margin="0,2"/>
             </Grid>

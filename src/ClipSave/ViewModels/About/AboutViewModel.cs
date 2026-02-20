@@ -14,6 +14,18 @@ public partial class AboutViewModel : ObservableObject
     private static readonly Regex PackageFolderVersionPattern = new(
         @"_(?<version>\d+\.\d+\.\d+\.\d+)_",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex SemVerCorePattern = new(
+        @"^(?<core>\d+\.\d+\.\d+)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex InformationalVersionPattern = new(
+        @"^(?<core>\d+\.\d+\.\d+(?:\.local|-[0-9A-Za-z\.-]+)?)(?:\+(?<metadata>.+))?$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex ShaMetadataPattern = new(
+        @"^sha\.(?<sha>[0-9a-fA-F]{7,40})$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex RawShaPattern = new(
+        @"^(?<sha>[0-9a-fA-F]{7,40})$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly LocalizationService _localizationService;
 
@@ -23,6 +35,8 @@ public partial class AboutViewModel : ObservableObject
     public LocalizationService Localizer => _localizationService;
 
     public string Version { get; }
+
+    public string InformationalVersion { get; }
 
     public string DotNetVersion { get; }
 
@@ -41,8 +55,12 @@ public partial class AboutViewModel : ObservableObject
     {
         _localizationService = localizationService;
         var assembly = Assembly.GetExecutingAssembly();
+        var rawInformationalVersion = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
 
-        Version = GetAssemblyVersion(assembly, _localizationService);
+        Version = GetSsoVersion(assembly, rawInformationalVersion, _localizationService);
+        InformationalVersion = GetDisplayInformationalVersion(rawInformationalVersion, _localizationService);
         DotNetVersion = RuntimeInformation.FrameworkDescription;
         OsVersion = Environment.OSVersion.VersionString;
         BuildDate = GetBuildDate(assembly, _localizationService);
@@ -55,11 +73,28 @@ public partial class AboutViewModel : ObservableObject
         RequestClose?.Invoke(this, EventArgs.Empty);
     }
 
-    private static string GetAssemblyVersion(Assembly assembly, LocalizationService localizationService)
+    private static string GetSsoVersion(
+        Assembly assembly,
+        string? rawInformationalVersion,
+        LocalizationService localizationService)
     {
-        if (TryGetPackageVersionFromInstallPath(assembly.Location, out var packageVersion))
+        if (TryExtractSemVerCore(rawInformationalVersion, out var coreVersion))
         {
-            return packageVersion;
+            return coreVersion;
+        }
+
+        if (TryGetPackageVersionFromInstallPath(assembly.Location, out var packageVersion)
+            && TryExtractSemVerCore(packageVersion, out coreVersion))
+        {
+            return coreVersion;
+        }
+
+        var fileVersion = assembly
+            .GetCustomAttribute<AssemblyFileVersionAttribute>()?
+            .Version;
+        if (TryExtractSemVerCore(fileVersion, out coreVersion))
+        {
+            return coreVersion;
         }
 
         var version = assembly.GetName().Version;
@@ -68,7 +103,94 @@ public partial class AboutViewModel : ObservableObject
             return localizationService.GetString("Common_Unknown");
         }
 
-        return NormalizeFourPartVersion(version);
+        return $"{version.Major}.{version.Minor}.{Math.Max(version.Build, 0)}";
+    }
+
+    private static string GetDisplayInformationalVersion(
+        string? rawInformationalVersion,
+        LocalizationService localizationService)
+    {
+        if (string.IsNullOrWhiteSpace(rawInformationalVersion))
+        {
+            return localizationService.GetString("Common_Unknown");
+        }
+
+        var normalized = NormalizeInformationalVersion(rawInformationalVersion);
+        return string.IsNullOrWhiteSpace(normalized)
+            ? localizationService.GetString("Common_Unknown")
+            : normalized;
+    }
+
+    private static string NormalizeInformationalVersion(string rawInformationalVersion)
+    {
+        var trimmed = rawInformationalVersion.Trim();
+        var match = InformationalVersionPattern.Match(trimmed);
+        if (!match.Success)
+        {
+            return trimmed;
+        }
+
+        var core = match.Groups["core"].Value;
+        var metadata = match.Groups["metadata"].Value;
+        if (string.IsNullOrWhiteSpace(metadata))
+        {
+            return core;
+        }
+
+        if (TryExtractShortSha(metadata, out var shortSha))
+        {
+            return $"{core}+sha.{shortSha}";
+        }
+
+        return $"{core}+{metadata}";
+    }
+
+    private static bool TryExtractSemVerCore(string? value, out string coreVersion)
+    {
+        coreVersion = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var match = SemVerCorePattern.Match(value.Trim());
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        coreVersion = match.Groups["core"].Value;
+        return true;
+    }
+
+    private static bool TryExtractShortSha(string metadata, out string shortSha)
+    {
+        shortSha = string.Empty;
+        if (string.IsNullOrWhiteSpace(metadata))
+        {
+            return false;
+        }
+
+        var normalizedMetadata = metadata.Trim();
+        var match = ShaMetadataPattern.Match(normalizedMetadata);
+        if (!match.Success)
+        {
+            match = RawShaPattern.Match(normalizedMetadata);
+        }
+
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var rawSha = match.Groups["sha"].Value;
+        if (string.IsNullOrWhiteSpace(rawSha))
+        {
+            return false;
+        }
+
+        shortSha = rawSha[..Math.Min(7, rawSha.Length)].ToLowerInvariant();
+        return true;
     }
 
     private static bool TryGetPackageVersionFromInstallPath(string? assemblyLocation, out string version)
@@ -100,13 +222,6 @@ public partial class AboutViewModel : ObservableObject
         }
 
         return false;
-    }
-
-    private static string NormalizeFourPartVersion(Version version)
-    {
-        var build = version.Build >= 0 ? version.Build : 0;
-        var revision = version.Revision >= 0 ? version.Revision : 0;
-        return $"{version.Major}.{version.Minor}.{build}.{revision}";
     }
 
     private static string GetBuildDate(Assembly assembly, LocalizationService localizationService)

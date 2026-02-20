@@ -1,0 +1,143 @@
+name: Prepare Patch Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'Target release branch (e.g., release/1.3)'
+        required: true
+        type: string
+      create_patch_pr:
+        description: 'Create PR for patch init branch'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: prepare-patch-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: windows-latest
+
+    steps:
+    - name: Validate input
+      shell: pwsh
+      run: |
+        $branch = "${{ inputs.release_branch }}"
+        if ($branch -notmatch '^release/\d+\.\d+$') {
+          throw "Invalid release branch format: $branch (expected release/X.Y)"
+        }
+
+    - name: Checkout release branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.release_branch }}
+        fetch-depth: 0
+
+    - name: Configure git author
+      shell: pwsh
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+    - name: Create patch init branch
+      id: patch
+      shell: pwsh
+      run: |
+        ./scripts/create-patch-release-branch.ps1 `
+          -ReleaseBranch "${{ inputs.release_branch }}" `
+          -Push
+
+        $patchBranch = git branch --show-current
+        if (-not $patchBranch) {
+          throw "Failed to resolve current branch after patch preparation."
+        }
+
+        [xml]$props = Get-Content Directory.Build.props
+        $version = $props.Project.PropertyGroup.Version
+        if (-not $version -or $version -notmatch '^\d+\.\d+\.\d+$') {
+          throw "Invalid version format after patch preparation: $version"
+        }
+
+        echo "PATCH_BRANCH=$patchBranch" >> $env:GITHUB_OUTPUT
+        echo "PATCH_VERSION=$version" >> $env:GITHUB_OUTPUT
+        Write-Host "Patch branch: $patchBranch"
+        Write-Host "Patch version: $version"
+
+    - name: Create PR for patch init branch
+      if: ${{ inputs.create_patch_pr }}
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $head = "${{ steps.patch.outputs.PATCH_BRANCH }}"
+        $base = "${{ inputs.release_branch }}"
+        $version = "${{ steps.patch.outputs.PATCH_VERSION }}"
+        $repo = "${{ github.repository }}"
+
+        $existingPrJson = gh pr list `
+          --repo $repo `
+          --head $head `
+          --base $base `
+          --state open `
+          --json number,url 2>$null
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to query existing pull requests."
+        }
+
+        try {
+          $existingPrs = $existingPrJson | ConvertFrom-Json
+        } catch {
+          throw "Failed to parse pull request query result."
+        }
+
+        if ($null -eq $existingPrs) {
+          $existingPrs = @()
+        } elseif ($existingPrs -isnot [System.Array]) {
+          $existingPrs = @($existingPrs)
+        }
+
+        $existingPr = $existingPrs | Select-Object -First 1
+        if ($existingPr) {
+          Write-Host "PR already exists: #$($existingPr.number) ($head -> $base)"
+          if ($existingPr.url) {
+            Write-Host "PR URL: $($existingPr.url)"
+          }
+          exit 0
+        }
+
+        $title = "chore: start $version patch release"
+        $body = @"
+        Automated PR created by **Prepare Patch Release** workflow.
+
+        - Release branch: $base
+        - Patch init branch: $head
+        - Version: $version
+
+        This PR is the only patch version bump for this release cycle.
+        "@
+
+        gh pr create --repo $repo --base $base --head $head --title $title --body $body
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to create pull request: $head -> $base"
+        }
+
+    - name: Summary
+      shell: pwsh
+      run: |
+        @"
+        ## Patch Release Preparation Complete
+
+        | Item | Value |
+        |------|-------|
+        | Release Branch | `${{ inputs.release_branch }}` |
+        | Patch Branch | `${{ steps.patch.outputs.PATCH_BRANCH }}` |
+        | Patch Version | `${{ steps.patch.outputs.PATCH_VERSION }}` |
+        | PR Created | `${{ inputs.create_patch_pr }}` |
+        "@ >> $env:GITHUB_STEP_SUMMARY

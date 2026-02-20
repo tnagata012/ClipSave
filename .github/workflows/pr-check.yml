@@ -69,4 +69,4 @@ jobs:
 
     - name: Validate version
       shell: pwsh
-      run: ./scripts/validate-version.ps1 -BranchName "${{ github.base_ref }}"
+      run: ./scripts/assert-version-policy.ps1 -BranchName "${{ github.base_ref }}"

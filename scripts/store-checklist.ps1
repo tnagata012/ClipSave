@@ -16,6 +16,21 @@ $ErrorActionPreference = "Stop"
 # Get project root
 $projectRoot = Split-Path -Parent $PSScriptRoot
 
+function Resolve-GitHubRepository {
+    $remoteUrl = git config --get remote.origin.url 2>$null
+    if (-not $remoteUrl) {
+        return $null
+    }
+
+    $pattern = 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$'
+    $match = [regex]::Match($remoteUrl.Trim(), $pattern)
+    if (-not $match.Success) {
+        return $null
+    }
+
+    return "$($match.Groups['owner'].Value)/$($match.Groups['repo'].Value)"
+}
+
 Push-Location $projectRoot
 try {
     # Get version
@@ -34,11 +49,11 @@ try {
 
     # Check 1: Release branch
     Write-Host -NoNewline "  Checking current branch... "
-    if ($currentBranch -and $currentBranch -match '^release/\d+\.\d+\.x$') {
+    if ($currentBranch -and $currentBranch -match '^release/\d+\.\d+$') {
         Write-Host "PASS" -ForegroundColor Green
     } else {
         Write-Host "FAIL" -ForegroundColor Red
-        Write-Host "    Switch to release/X.Y.x before Store submission." -ForegroundColor Gray
+        Write-Host "    Switch to release/X.Y before Store submission." -ForegroundColor Gray
         $allPassed = $false
     }
 
@@ -55,9 +70,9 @@ try {
     # Check 3: Version validation
     Write-Host -NoNewline "  Checking version consistency... "
     if ($currentBranch) {
-        & "$projectRoot\scripts\validate-version.ps1" -ProjectRoot $projectRoot -BranchName $currentBranch *>$null
+        & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $currentBranch *>$null
     } else {
-        & "$projectRoot\scripts\validate-version.ps1" -ProjectRoot $projectRoot *>$null
+        & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot *>$null
     }
     if ($LASTEXITCODE -eq 0) {
         Write-Host "PASS" -ForegroundColor Green
@@ -77,20 +92,54 @@ try {
         $allPassed = $false
     }
 
-    # Check 5: GitHub Release exists
-    Write-Host -NoNewline "  Checking GitHub Release... "
+    # Check 5: Release artifacts exist
+    Write-Host -NoNewline "  Checking release artifacts... "
     $ghAvailable = Get-Command gh -ErrorAction SilentlyContinue
     if ($ghAvailable) {
-        $releaseExists = gh release view "v$version" --json tagName 2>$null
-        if ($releaseExists) {
-            Write-Host "EXISTS" -ForegroundColor Green
+        $repo = Resolve-GitHubRepository
+        if (-not $repo) {
+            Write-Host "SKIPPED" -ForegroundColor Yellow
+            Write-Host "    Could not resolve GitHub repository from remote.origin.url." -ForegroundColor Gray
+            $allPassed = $false
         } else {
-            Write-Host "NOT FOUND" -ForegroundColor Yellow
-            Write-Host "    GitHub Release v$version not found. Consider creating it first." -ForegroundColor Gray
+            $requiredArtifacts = @(
+                "release-package-$version"
+            )
+            $missingArtifacts = @()
+            $queryFailed = $false
+
+            foreach ($artifactName in $requiredArtifacts) {
+                $jqFilter = ".artifacts[] | select(.name == `"$artifactName`" and .expired == false) | .id"
+                $artifactId = gh api --paginate "repos/$repo/actions/artifacts?per_page=100" --jq $jqFilter 2>$null | Select-Object -First 1
+                if ($LASTEXITCODE -ne 0) {
+                    $queryFailed = $true
+                    break
+                }
+
+                if ([string]::IsNullOrWhiteSpace($artifactId)) {
+                    $missingArtifacts += $artifactName
+                }
+            }
+
+            if ($queryFailed) {
+                Write-Host "SKIPPED" -ForegroundColor Yellow
+                Write-Host "    Failed to query Actions artifacts via GitHub CLI." -ForegroundColor Gray
+                $allPassed = $false
+            } elseif ($missingArtifacts.Count -eq 0) {
+                Write-Host "PASS" -ForegroundColor Green
+            } else {
+                Write-Host "NOT FOUND" -ForegroundColor Yellow
+                foreach ($artifact in $missingArtifacts) {
+                    Write-Host "    Missing artifact: $artifact" -ForegroundColor Gray
+                }
+                Write-Host "    Run Release Build and confirm artifacts are retained." -ForegroundColor Gray
+                $allPassed = $false
+            }
         }
     } else {
         Write-Host "SKIPPED" -ForegroundColor Yellow
-        Write-Host "    GitHub CLI not available. Install gh to verify releases." -ForegroundColor Gray
+        Write-Host "    GitHub CLI not available. Install gh to verify release artifacts." -ForegroundColor Gray
+        $allPassed = $false
     }
 
     # Check 6: Release notes
@@ -116,7 +165,7 @@ try {
     Write-Host "Please confirm the following items:`n"
 
     $checklist = @(
-        "GitHub Release tested for at least 24 hours",
+        "Release package artifact (release-package-$version, unsigned) reviewed for at least 24 hours",
         "No critical bugs reported",
         "Partner Center app description updated (Japanese)",
         "Partner Center app description updated (English)",

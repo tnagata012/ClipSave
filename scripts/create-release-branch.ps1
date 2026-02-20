@@ -4,9 +4,9 @@
     Create a new release branch (Trunk-Based Development)
 
 .DESCRIPTION
-    Creates a release branch from main and updates versions for both branches.
-    - release/X.Y.x: X.Y.0 (stable)
-    - main: X.(Y+1).0 (next development line)
+    Creates a release branch from main and prepares a PR branch for main version bump.
+    - release/X.Y: X.Y.0 (stable)
+    - chore/* branch from main: X.(Y+1).0 (next development line, PR required)
     - Package.appxmanifest always keeps numeric X.Y.Z.0
 
 .PARAMETER Version
@@ -23,11 +23,11 @@
 
 .EXAMPLE
     .\create-release-branch.ps1 -Version 1.3.0
-    # Creates release/1.3.x at 1.3.0 and updates main to 1.4.0
+    # Creates release/1.3 at 1.3.0 and creates a PR branch for main=1.4.0
 
 .EXAMPLE
     .\create-release-branch.ps1 -Version 1.3.0 -Push
-    # Same as above, then pushes both branches
+    # Same as above, then pushes release + PR branch
 #>
 
 param(
@@ -62,16 +62,18 @@ if ($patch -ne 0) {
     Fail "Release branch creation only supports .0 versions (example: 1.3.0). Use release branch updates for patch releases."
 }
 
-$branchName = "release/$major.$minor.x"
+$branchName = "release/$major.$minor"
 $nextMinor = $minor + 1
 $nextMainVersion = "$major.$nextMinor.0"
+$mainBumpBranch = "chore/bump-$MainBranch-to-$nextMainVersion"
 
 $propsPath = Join-Path $projectRoot "Directory.Build.props"
 $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifest"
 
 Write-Host "=== Create Release Branch (Trunk-Based Development) ===" -ForegroundColor Cyan
 Write-Host "Release branch: $branchName (version $Version)" -ForegroundColor White
-Write-Host "Main branch   : $MainBranch (version $nextMainVersion)" -ForegroundColor White
+Write-Host "Main branch   : $MainBranch (target version $nextMainVersion via PR branch)" -ForegroundColor White
+Write-Host "PR branch     : $mainBumpBranch" -ForegroundColor White
 Write-Host ""
 
 Push-Location $projectRoot
@@ -96,7 +98,7 @@ try {
     }
 
     # 1. Switch to main branch
-    Write-Host "[1/8] Switching to $MainBranch..." -ForegroundColor Yellow
+    Write-Host "[1/9] Switching to $MainBranch..." -ForegroundColor Yellow
     git checkout $MainBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Failed to checkout $MainBranch."
@@ -104,20 +106,20 @@ try {
 
     # 2. Pull latest branch unless skipped
     if ($SkipPull) {
-        Write-Host "[2/8] Skipping pull (use -SkipPull:$false to enable)." -ForegroundColor Gray
+        Write-Host "[2/9] Skipping pull (use -SkipPull:$false to enable)." -ForegroundColor Gray
     } elseif ($hasOrigin) {
-        Write-Host "[2/8] Pulling latest $MainBranch..." -ForegroundColor Yellow
+        Write-Host "[2/9] Pulling latest $MainBranch..." -ForegroundColor Yellow
         git pull origin $MainBranch
         if ($LASTEXITCODE -ne 0) {
             Fail "Failed to pull from origin/$MainBranch."
         }
     } else {
-        Write-Host "[2/8] Remote 'origin' not found. Skipping pull." -ForegroundColor Yellow
+        Write-Host "[2/9] Remote 'origin' not found. Skipping pull." -ForegroundColor Yellow
     }
 
     # 3. Validate current main branch version policy
-    Write-Host "[3/8] Validating $MainBranch version policy..." -ForegroundColor Yellow
-    & "$projectRoot\scripts\validate-version.ps1" -ProjectRoot $projectRoot -BranchName $MainBranch
+    Write-Host "[3/9] Validating $MainBranch version policy..." -ForegroundColor Yellow
+    & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $MainBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Version validation failed on $MainBranch."
     }
@@ -135,11 +137,15 @@ try {
         Fail "Target release version $Version does not match current $MainBranch line $mainVersion. Use a matching X.Y.0 version."
     }
 
-    # 4. Check if release branch already exists (local or remote)
-    Write-Host "[4/8] Checking branch existence..." -ForegroundColor Yellow
+    # 4. Check if target branches already exist (local or remote)
+    Write-Host "[4/9] Checking branch existence..." -ForegroundColor Yellow
     git show-ref --verify --quiet "refs/heads/$branchName"
     if ($LASTEXITCODE -eq 0) {
         Fail "Local branch '$branchName' already exists."
+    }
+    git show-ref --verify --quiet "refs/heads/$mainBumpBranch"
+    if ($LASTEXITCODE -eq 0) {
+        Fail "Local branch '$mainBumpBranch' already exists."
     }
 
     if ($hasOrigin) {
@@ -147,17 +153,21 @@ try {
         if ($LASTEXITCODE -eq 0) {
             Fail "Remote branch '$branchName' already exists on origin."
         }
+        git ls-remote --exit-code --heads origin $mainBumpBranch *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Fail "Remote branch '$mainBumpBranch' already exists on origin."
+        }
     }
 
     # 5. Create release branch
-    Write-Host "[5/8] Creating release branch..." -ForegroundColor Yellow
+    Write-Host "[5/9] Creating release branch..." -ForegroundColor Yellow
     git checkout -b $branchName
     if ($LASTEXITCODE -ne 0) {
         Fail "Failed to create '$branchName'."
     }
 
     # 6. Update and commit release branch versions
-    Write-Host "[6/8] Updating release branch version to $Version..." -ForegroundColor Yellow
+    Write-Host "[6/9] Updating release branch version to $Version..." -ForegroundColor Yellow
     [xml]$props = Get-Content $propsPath
     $props.Project.PropertyGroup.Version = $Version
     $props.Save($propsPath)
@@ -179,18 +189,23 @@ try {
         Write-Host "  [INFO] No version changes to commit on release branch." -ForegroundColor Gray
     }
 
-    & "$projectRoot\scripts\validate-version.ps1" -ProjectRoot $projectRoot -BranchName $branchName
+    & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $branchName
     if ($LASTEXITCODE -ne 0) {
         Fail "Version validation failed on $branchName."
     }
 
-    # 7. Switch to main and update next development version
-    Write-Host "[7/8] Updating $MainBranch to $nextMainVersion..." -ForegroundColor Yellow
+    # 7. Switch to main and create PR branch for next development version
+    Write-Host "[7/9] Creating PR branch for $MainBranch version bump..." -ForegroundColor Yellow
     git checkout $MainBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Failed to switch back to $MainBranch."
     }
+    git checkout -b $mainBumpBranch
+    if ($LASTEXITCODE -ne 0) {
+        Fail "Failed to create PR branch '$mainBumpBranch'."
+    }
 
+    Write-Host "[8/9] Updating $mainBumpBranch to $nextMainVersion..." -ForegroundColor Yellow
     [xml]$props = Get-Content $propsPath
     $props.Project.PropertyGroup.Version = $nextMainVersion
     $props.Save($propsPath)
@@ -206,33 +221,33 @@ try {
     if ($LASTEXITCODE -ne 0) {
         git commit -m "chore: bump $MainBranch version to $nextMainVersion"
         if ($LASTEXITCODE -ne 0) {
-            Fail "Failed to commit version update on $MainBranch."
+            Fail "Failed to commit version update on $mainBumpBranch."
         }
     } else {
-        Write-Host "  [INFO] No version changes to commit on $MainBranch." -ForegroundColor Gray
+        Write-Host "  [INFO] No version changes to commit on $mainBumpBranch." -ForegroundColor Gray
     }
 
-    & "$projectRoot\scripts\validate-version.ps1" -ProjectRoot $projectRoot -BranchName $MainBranch
+    & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $MainBranch
     if ($LASTEXITCODE -ne 0) {
-        Fail "Version validation failed on $MainBranch after update."
+        Fail "Version validation failed on $mainBumpBranch after update."
     }
 
-    # 8. Push if requested
+    # 9. Push if requested
     if ($Push) {
-        Write-Host "[8/8] Pushing branches..." -ForegroundColor Yellow
+        Write-Host "[9/9] Pushing branches..." -ForegroundColor Yellow
         git push -u origin $branchName
         if ($LASTEXITCODE -ne 0) {
             Fail "Failed to push $branchName."
         }
         Write-Host "  [OK] Pushed $branchName" -ForegroundColor Green
 
-        git push origin $MainBranch
+        git push -u origin $mainBumpBranch
         if ($LASTEXITCODE -ne 0) {
-            Fail "Failed to push $MainBranch."
+            Fail "Failed to push $mainBumpBranch."
         }
-        Write-Host "  [OK] Pushed $MainBranch" -ForegroundColor Green
+        Write-Host "  [OK] Pushed $mainBumpBranch" -ForegroundColor Green
     } else {
-        Write-Host "[8/8] Skipping push (use -Push to push automatically)" -ForegroundColor Gray
+        Write-Host "[9/9] Skipping push (use -Push to push automatically)" -ForegroundColor Gray
     }
 
     Write-Host ""
@@ -240,17 +255,19 @@ try {
     Write-Host ""
     Write-Host "Summary:" -ForegroundColor Cyan
     Write-Host "  Release: $branchName -> $Version" -ForegroundColor White
-    Write-Host "  Main   : $MainBranch -> $nextMainVersion" -ForegroundColor White
+    Write-Host "  Main PR: $mainBumpBranch -> $nextMainVersion (target: $MainBranch)" -ForegroundColor White
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "1. Update RELEASE_NOTES.md for v$Version."
     if (-not $Push) {
         Write-Host "2. Push both branches:"
         Write-Host "   git push -u origin $branchName"
-        Write-Host "   git push origin $MainBranch"
-        Write-Host "3. Release Build triggers on push to release/*."
+        Write-Host "   git push -u origin $mainBumpBranch"
+        Write-Host "3. Create PR: $mainBumpBranch -> $MainBranch"
+        Write-Host "4. Release Build triggers on push to release/*."
     } else {
-        Write-Host "2. Release Build will run automatically (already pushed)."
+        Write-Host "2. Create PR: $mainBumpBranch -> $MainBranch"
+        Write-Host "3. Release Build will run automatically (already pushed)."
     }
     Write-Host ""
     Write-Host "Patch release reminder:" -ForegroundColor Cyan

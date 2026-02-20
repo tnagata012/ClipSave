@@ -1,16 +1,16 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Check current version information
+    Show current version report
 
 .DESCRIPTION
     Displays version information from:
     - Installed MSIX package (if any)
     - Project files (Directory.Build.props, Package.appxmanifest)
-    - Latest GitHub releases
+    - GitHub distribution channels (dev release + release artifacts)
 
 .EXAMPLE
-    .\check-version.ps1
+    .\show-version-report.ps1
 #>
 
 $ErrorActionPreference = "SilentlyContinue"
@@ -93,29 +93,62 @@ if ($package) {
 
 Write-Host ""
 
-# Section 3: GitHub Releases
-Write-Host "[GitHub Releases]" -ForegroundColor Yellow
+# Section 3: GitHub Distribution
+Write-Host "[GitHub Distribution]" -ForegroundColor Yellow
 
-# Check if gh is available
+function Resolve-GitHubRepository {
+    $remoteUrl = git config --get remote.origin.url 2>$null
+    if (-not $remoteUrl) {
+        return $null
+    }
+
+    $pattern = 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$'
+    $match = [regex]::Match($remoteUrl.Trim(), $pattern)
+    if (-not $match.Success) {
+        return $null
+    }
+
+    return "$($match.Groups['owner'].Value)/$($match.Groups['repo'].Value)"
+}
+
 $ghAvailable = Get-Command gh -ErrorAction SilentlyContinue
 
 if ($ghAvailable) {
-    # Get latest stable release
-    $latestRelease = gh release view --json tagName,publishedAt,isPrerelease 2>$null | ConvertFrom-Json
-    if ($latestRelease -and -not $latestRelease.isPrerelease) {
-        $publishedDate = [DateTime]::Parse($latestRelease.publishedAt).ToString("yyyy-MM-dd")
-        Write-Host "  Latest Stable : $($latestRelease.tagName) ($publishedDate)" -ForegroundColor Green
-    }
+    $repo = Resolve-GitHubRepository
+    if (-not $repo) {
+        Write-Host "  Repository   : unresolved (remote.origin.url is not a GitHub URL)" -ForegroundColor Gray
+    } else {
+        # Dev channel (prerelease tag)
+        $devRelease = gh release view dev-latest --repo $repo --json tagName,publishedAt 2>$null | ConvertFrom-Json
+        if ($devRelease) {
+            $publishedDate = [DateTime]::Parse($devRelease.publishedAt).ToString("yyyy-MM-dd HH:mm")
+            Write-Host "  Dev Channel  : $($devRelease.tagName) ($publishedDate)" -ForegroundColor Yellow
+        } else {
+            Write-Host "  Dev Channel  : dev-latest not found" -ForegroundColor Gray
+        }
 
-    # Get dev release
-    $devRelease = gh release view dev-latest --json tagName,publishedAt 2>$null | ConvertFrom-Json
-    if ($devRelease) {
-        $publishedDate = [DateTime]::Parse($devRelease.publishedAt).ToString("yyyy-MM-dd HH:mm")
-        Write-Host "  Dev (Latest)  : $($devRelease.tagName) ($publishedDate)" -ForegroundColor Yellow
-    }
+        # Release channel (stable tag)
+        $releaseChannel = gh release view release-latest --repo $repo --json tagName,publishedAt 2>$null | ConvertFrom-Json
+        if ($releaseChannel) {
+            $publishedDate = [DateTime]::Parse($releaseChannel.publishedAt).ToString("yyyy-MM-dd HH:mm")
+            Write-Host "  Release Tag  : $($releaseChannel.tagName) ($publishedDate)" -ForegroundColor Green
+        } else {
+            Write-Host "  Release Tag  : release-latest not found" -ForegroundColor Gray
+        }
 
-    if (-not $latestRelease -and -not $devRelease) {
-        Write-Host "  No releases found" -ForegroundColor Gray
+        # Release base (Actions artifacts)
+        $latestReleaseArtifactLine = gh api --paginate --slurp "repos/$repo/actions/artifacts?per_page=100" `
+            --jq '([.[].artifacts[]? | select((.expired == false) and (.name | startswith("release-package-")))] | sort_by(.created_at) | reverse | .[0]? | [.name, .created_at] | @tsv) // empty' 2>$null |
+            Select-Object -First 1
+
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($latestReleaseArtifactLine)) {
+            $parts = $latestReleaseArtifactLine -split "`t", 2
+            $artifactName = $parts[0]
+            $createdAt = if ($parts.Count -ge 2) { [DateTime]::Parse($parts[1]).ToString("yyyy-MM-dd HH:mm") } else { "unknown" }
+            Write-Host "  Release Base : $artifactName ($createdAt)" -ForegroundColor Green
+        } else {
+            Write-Host "  Release Base : release-package-* artifact not found" -ForegroundColor Gray
+        }
     }
 } else {
     Write-Host "  GitHub CLI not available (install with: winget install GitHub.cli)" -ForegroundColor Gray

@@ -1,0 +1,135 @@
+name: Prepare Release Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (X.Y.0)'
+        required: true
+        type: string
+      create_main_bump_pr:
+        description: 'Create PR for main version bump branch'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: prepare-release-branch
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout main
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        fetch-depth: 0
+
+    - name: Configure git author
+      shell: pwsh
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+    - name: Create release and main bump branches
+      shell: pwsh
+      run: |
+        ./scripts/create-release-branch.ps1 `
+          -Version "${{ inputs.version }}" `
+          -MainBranch "main" `
+          -Push
+
+    - name: Create PR for main version bump branch
+      if: ${{ inputs.create_main_bump_pr }}
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $version = "${{ inputs.version }}"
+        if ($version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.0$') {
+          throw "Invalid version format: $version (expected X.Y.0)"
+        }
+
+        $major = [int]$matches['major']
+        $minor = [int]$matches['minor']
+        $nextMainVersion = "$major.$($minor + 1).0"
+        $head = "chore/bump-main-to-$nextMainVersion"
+        $base = "main"
+        $repo = "${{ github.repository }}"
+
+        $existingPrJson = gh pr list `
+          --repo $repo `
+          --head $head `
+          --base $base `
+          --state open `
+          --json number,url 2>$null
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to query existing pull requests."
+        }
+
+        try {
+          $existingPrs = $existingPrJson | ConvertFrom-Json
+        } catch {
+          throw "Failed to parse pull request query result."
+        }
+
+        if ($null -eq $existingPrs) {
+          $existingPrs = @()
+        } elseif ($existingPrs -isnot [System.Array]) {
+          $existingPrs = @($existingPrs)
+        }
+
+        $existingPr = $existingPrs | Select-Object -First 1
+        if ($existingPr) {
+          Write-Host "PR already exists: #$($existingPr.number) ($head -> $base)"
+          if ($existingPr.url) {
+            Write-Host "PR URL: $($existingPr.url)"
+          }
+          exit 0
+        }
+
+        $title = "chore: bump main version to $nextMainVersion"
+        $body = @"
+        Automated PR created by **Prepare Release Branch** workflow.
+
+        - Release branch: release/$major.$minor
+        - Target branch: main
+        - Main bump branch: $head
+        "@
+
+        gh pr create --repo $repo --base $base --head $head --title $title --body $body
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to create pull request: $head -> $base"
+        }
+
+    - name: Summary
+      shell: pwsh
+      run: |
+        $version = "${{ inputs.version }}"
+        if ($version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.0$') {
+          throw "Invalid version format: $version (expected X.Y.0)"
+        }
+        $major = [int]$matches['major']
+        $minor = [int]$matches['minor']
+        $nextMainVersion = "$major.$($minor + 1).0"
+        $releaseBranch = "release/$major.$minor"
+        $mainBumpBranch = "chore/bump-main-to-$nextMainVersion"
+        $prCreated = "${{ inputs.create_main_bump_pr }}"
+
+        @"
+        ## Release Branch Preparation Complete
+
+        | Item | Value |
+        |------|-------|
+        | Release Version | $version |
+        | Release Branch | $releaseBranch |
+        | Main Bump Branch | $mainBumpBranch |
+        | PR Created | $prCreated |
+        "@ >> $env:GITHUB_STEP_SUMMARY

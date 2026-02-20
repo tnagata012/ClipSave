@@ -1,168 +1,122 @@
 # デプロイ
 
-ClipSave の CI/CD と配布手順を定義します。
+ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 
-## 全体フロー
+## この文書の責務
 
-```mermaid
-graph TB
-  A[main で開発] --> B{リリース準備完了}
-  B -->|Yes| C[release/X.Y.x 作成]
-  C --> D[Release Build]
-  D --> E[GitHub Release]
-  E --> F{Store 提出}
-  F -->|Yes| G[Store Publish]
+この文書では、以下を扱います。
 
-  H[不具合修正] --> I[main で修正]
-  I --> J[release へチェリーピック]
-  J --> D
-```
+- GitHub Actions ワークフローの役割
+- 配布チャネルごとの成果物
+- メジャー/マイナー、パッチ、Store 提出の実行手順
+- ロールバック/取り下げ手順
+
+この文書では、以下は扱いません。
+
+- ブランチ設計方針（`BranchStrategy.md`）
+- 版数フォーマットや `PATCH` 規約の定義（`Versioning.md`）
+- 署名方針（`Signing.md`）
 
 ## ワークフロー一覧
 
-| ワークフロー | トリガー | 主な用途 | 生成物 |
-|-------------|---------|---------|--------|
-| [pr-check.yml](../../.github/workflows/pr-check.yml) | PR (`main`, `release/*`) | ビルド・テスト・セキュリティチェック・SPEC整合・版数整合チェック | `TestResults/**/*.trx`（artifact） |
-| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` への push / 手動 | 開発版配布（`docs/**` と `*.md` のみ変更時は自動起動しない） | `output/**/*.msixbundle`（加えて `dev-package-*` artifact に `*.msixupload` を含む） |
-| [release-build.yml](../../.github/workflows/release-build.yml) | `release/*` への push / 手動 | 公開版配布（GitHub Release） | `output/**/*.msixbundle`（加えて `release-package-*` artifact に `*.msixupload` を含む） |
-| [store-publish.yml](../../.github/workflows/store-publish.yml) | 手動実行（`X.Y.Z` 指定） | Store 提出パッケージ生成 | `StorePackage/**/*.msixupload` |
+| ワークフロー | トリガー | 用途 | 主な生成物 |
+|-------------|---------|------|-----------|
+| [pr-check.yml](../../.github/workflows/pr-check.yml) | PR（`main`, `release/*`） | 品質ゲート | `TestResults/**/*.trx` |
+| [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y.0`） | `release/X.Y` 作成 + main 側 bump ブランチ作成 | `release/X.Y`, `chore/bump-main-to-*` |
+| [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`） | patch init ブランチ作成 | `chore/release-X.Y.(Z+1)-init` |
+| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest` |
+| [release-build.yml](../../.github/workflows/release-build.yml) | `release/*` push / 手動 | 公開候補生成（未署名） | `release-package-*`, `release-latest` |
+| [store-publish.yml](../../.github/workflows/store-publish.yml) | 手動（`X.Y.Z`） | Store 提出物生成 | `store-package-*`（`.msixupload`） |
 
-注意:
-- 配布用成果物は `*.msixbundle` を使用（`*.msix` は配布対象外）。
-- Store 提出には `.msixupload` が必要（`.msix` は提出不可）。
-- 日常開発は `main`、リリース系列保守は `release/X.Y.x`。
+補足:
 
-## MSIX 署名方針
+- 配布対象は `*.msixbundle`（現行は未署名）、Store 提出対象は `.msixupload`。
+- `PATCH` 更新規約は `Versioning.md` を正本とする。
 
-- CI（`dev-build.yml` / `release-build.yml` / `store-publish.yml`）と `scripts/build-store-package.ps1` は、`/p:AppxPackageSigningEnabled=false` でビルドする。
-- 本リポジトリでは、署名証明書（PFX）や秘密情報を保管しない。
-- Store 配布は `.msixupload` を Partner Center に提出し、配布チャネル側の署名・配布フローに委ねる。
+## 実行前チェック
 
-## 各ワークフローの要点
+1. `main` / `release/X.Y` への直 push を行わない運用であることを確認する。
+2. 実行対象ブランチ（`main` または `release/X.Y`）が意図どおりであることを確認する。
+3. `./scripts/assert-version-policy.ps1` が成功することを確認する。
+4. `./scripts/run-tests.ps1` と `./scripts/run-security-checks.ps1` が成功することを確認する。
+5. 署名運用は一時停止中であることを理解したうえで、検証対象を明確化する（詳細は `Signing.md`）。
 
-### セキュリティチェック（共通）
+## 成果物チャネル
 
-すべてのビルド系ワークフローと `build-store-package.ps1` で `run-security-checks.ps1` を実行する。
+| チャネル | 配布元 | 用途 |
+|---------|-------|------|
+| Dev | `dev-latest` / `dev-package-*` | 検証配布（未署名） |
+| Release | `release-latest` / `release-package-*` | 公開候補比較（未署名） |
+| Store | `store-package-*`（`.msixupload`） | Partner Center 提出 |
 
-| チェック項目 | 内容 | 検出時の扱い |
-|-------------|------|-------------|
-| 依存脆弱性スキャン | `dotnet list package --vulnerable --include-transitive` | ビルド失敗 |
-| 静的セキュリティ分析 | Roslyn Security Analyzer（`AnalysisModeSecurity=All`） | 警告をエラー扱い |
+## Store Publish の版数解決ルール
 
-Action の固定方針:
-- GitHub 公式 action: メジャータグ（例: `@v4`）
-- サードパーティ action: フル SHA で固定
-
-### PR Check
-
-- `dotnet restore/build/test` を実行
-- `LocalizationResourceCompletenessTests` を先行実行し、翻訳リソース欠落を早期検出
-- `run-tests.ps1` の TRX を artifact に保存し、失敗時のログ調査を容易にする
-- `check-spec-coverage.ps1` で仕様 ID とテスト `Spec` 属性の整合性を検証
-- `validate-version.ps1 -BranchName <base branch>` で整合性検証
-
-### Dev Build (`main`)
-
-- 実行ブランチが `main` でない場合は失敗（手動実行時の誤配布防止）
-- `validate-version.ps1 -BranchName <実行ブランチ>` を実行
-- `Directory.Build.props` からコア版 `X.Y.Z` を抽出
-- `X.Y.Z.<GITHUB_RUN_NUMBER>` で MSIX を生成
-- ビルド前に `Package.appxmanifest` の `Identity Version` を `X.Y.Z.<GITHUB_RUN_NUMBER>` に設定
-- `dev-package-<version>` artifact を保存（`*.msixbundle` / `*.msixupload`）
-- `dev-latest` 既存 Asset を削除して最新 `*.msixbundle` のみを添付
-- `dev-latest` prerelease を更新（`*.msixbundle` を添付）
-- バージョンファイルはコミットしない
-
-### Release Build (`release/*`)
-
-- 実行ブランチが `release/X.Y.x` 形式でない場合は失敗（手動実行時の誤リリース防止）
-- `validate-version.ps1 -BranchName release/X.Y.x` を実行
-- `Directory.Build.props` の `X.Y.Z` から `X.Y.Z.0` を計算して公開版をビルド
-- ビルド前に `Package.appxmanifest` の `Identity Version` を `X.Y.Z.0` に設定
-- `release-package-<version>` artifact を保存（`*.msixbundle` / `*.msixupload`）
-- `vX.Y.Z` タグの GitHub Release を作成（`*.msixbundle` を添付）
-
-### Store Publish（手動）
-
-- 入力した `X.Y.Z` から `release/X.Y.x` を解決
-- 対象ブランチ存在を検証
-- ビルド前に `Package.appxmanifest` の `Identity Version` を `X.Y.Z.0` に設定
-- `.msixupload` を生成して Artifact に保存
-
-## 成果物の取得先
-
-- Dev Build: `Actions` の `dev-package-*` artifact、または `Releases` の `dev-latest` prerelease
-- Release Build: `Actions` の `release-package-*` artifact、または `Releases` の `vX.Y.Z`
-- Store Publish: `Actions` の `store-package-<version>` artifact（`.msixupload`）
+- 入力 `version=X.Y.Z` から対象ブランチ `release/X.Y` を解決する。
+- 解決した `release/X.Y` を checkout し、その時点のソースから再ビルドする。
+- 入力 `X.Y.Z` と `Directory.Build.props` が一致しない場合は失敗する。
 
 ## 実運用手順
 
 ### メジャー/マイナーリリース
 
-1. `main` が安定したら以下を実行
-
-```powershell
-.\scripts\create-release-branch.ps1 -Version 1.3.0
-```
-
-2. `release/1.3.x` を push
-3. Release Build 実行
-4. GitHub Release を確認
+1. `Prepare Release Branch`（推奨）または `create-release-branch.ps1` で `release/X.Y` を作成する。
+2. `chore/bump-main-to-* -> main` の PR をレビューしてマージする。
+3. `release/X.Y` の安定化を PR で反映する。
+4. 複数の公開候補（`release-package-*`）から採用コミットを決定する。
+5. 採用版を `release-latest` に反映して候補比較に使う（現行は未署名）。
 
 ### パッチリリース
 
-1. `main` で修正してマージ
-2. `release/X.Y.x` にチェリーピック
-3. バージョン更新
-4. `release/X.Y.x` に push
-5. Release Build 実行
-
-```powershell
-git checkout release/1.3.x
-git cherry-pick <commit-hash>
-# Directory.Build.props: 1.3.1
-# Package.appxmanifest: 1.3.1.0
-git commit -am "chore: bump version to 1.3.1"
-git push origin release/1.3.x
-```
+1. `Prepare Patch Release`（推奨）または `create-patch-release-branch.ps1` で patch init ブランチを作成する。
+2. patch init PR（`chore/release-X.Y.(Z+1)-init -> release/X.Y`）をマージする。
+3. 不具合修正を `main` へマージする。
+4. 必要コミットを `release/X.Y` へ backport PR で反映する。
+5. 候補ビルドから採用コミットを決定し、Store 提出対象版を確定する。
 
 ### Store 提出
 
-1. 展開前チェック
+1. `./scripts/store-checklist.ps1` を実行する。
+2. `Store Publish`（`version=X.Y.Z`）または `./scripts/build-store-package.ps1` で `.msixupload` を生成する。
+3. Partner Center に提出する。
 
-```powershell
-.\scripts\store-checklist.ps1
-```
+## ロールバック/取り下げ
 
-2. Store パッケージ作成
-- GitHub Actions: `Store Publish` を手動実行
-- ローカル: `.\scripts\build-store-package.ps1`
+### Dev / Release 配布物
 
-3. Partner Center で `.msixupload` を提出
+1. 問題のある配布リンクを停止または更新する。
+2. `main`（必要なら `release/X.Y`）へ復旧 PR を反映する。
+3. 修正版を再ビルドして差し替える。
+
+### Store 提出後
+
+1. Partner Center 側で該当提出の公開を停止/取り下げする。
+2. `release/X.Y` で次のパッチ版を準備する。
+3. 新版 `.msixupload` を再提出する。
 
 ## 補足
 
-### なぜ Store は手動運用か
+### なぜ Store 提出を手動運用にするか
 
 | 理由 | 内容 |
 |------|------|
 | 審査プロセス | Microsoft 側審査が必要 |
-| メタデータ更新 | 説明文・画像は人手更新が必要 |
+| メタデータ更新 | 説明文・画像更新に人手が必要 |
 | リスク管理 | 段階的リリース判断が必要 |
 
 ### 便利コマンド
 
 ```powershell
-.\scripts\check-version.ps1
+.\scripts\show-version-report.ps1
+.\scripts\assert-version-policy.ps1 -BranchName release/1.3
 .\scripts\run-tests.ps1 -Configuration Release
 .\scripts\run-security-checks.ps1 -Configuration Release
-.\scripts\measure-build-success.ps1 -Workflow "Dev Build"
-.\scripts\measure-downloads.ps1 -IncludePrerelease:$true
+.\scripts\store-checklist.ps1
 ```
 
 ## 関連ドキュメント
 
-- [BranchStrategy](BranchStrategy.md)
-- [IconAssets](IconAssets.md)
-- [Versioning](Versioning.md)
-- [RELEASE_NOTES](../../RELEASE_NOTES.md)
+- [BranchStrategy](BranchStrategy.md) — ブランチ構成と統合方向
+- [Versioning](Versioning.md) — 版数規約
+- [Signing](Signing.md) — 署名方針（現在は一時停止）
+- [IconAssets](../presentation/IconAssets.md) — アイコン運用
+- [RELEASE_NOTES](../../RELEASE_NOTES.md) — 変更履歴

@@ -18,7 +18,7 @@ env:
   APP_PROJECT: src/ClipSave/ClipSave.csproj
 
 jobs:
-  build:
+  build_and_publish:
     runs-on: windows-latest
 
     steps:
@@ -46,12 +46,12 @@ jobs:
       shell: pwsh
       run: |
         $branch = "${{ github.ref_name }}"
-        if ($branch -notmatch '^release/\d+\.\d+\.x$') {
-          Write-Error "Release Build can run only on release/X.Y.x branches. Current ref: $branch"
+        if ($branch -notmatch '^release/\d+\.\d+$') {
+          Write-Error "Release Build can run only on release/X.Y branches. Current ref: $branch"
           exit 1
         }
 
-    - name: Get version
+    - name: Resolve release build versions
       id: version
       shell: pwsh
       run: |
@@ -62,15 +62,38 @@ jobs:
           Write-Error "Invalid version format in Directory.Build.props (expected X.Y.Z): $version"
           exit 1
         }
-        $msixVersion = "$version.0"
+        $coreVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
+        $shortSha = "${{ github.sha }}".Substring(0, 7)
+        $segments = @(
+          [int]$match.Groups['major'].Value,
+          [int]$match.Groups['minor'].Value,
+          [int]$match.Groups['patch'].Value,
+          0
+        )
+        if ($segments | Where-Object { $_ -lt 0 -or $_ -gt 65535 }) {
+          Write-Error "MSIX version segments must be within 0..65535. Resolved segments: $($segments -join '.')"
+          exit 1
+        }
+
+        $assemblyVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).0.0"
+        $fileVersion = "$coreVersion.0"
+        $informationalVersion = "$coreVersion+sha.$shortSha"
+        $msixVersion = "$coreVersion.0"
+
         echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "ASSEMBLY_VERSION=$assemblyVersion" >> $env:GITHUB_OUTPUT
+        echo "FILE_VERSION=$fileVersion" >> $env:GITHUB_OUTPUT
+        echo "INFORMATIONAL_VERSION=$informationalVersion" >> $env:GITHUB_OUTPUT
         echo "MSIX_VERSION=$msixVersion" >> $env:GITHUB_OUTPUT
         echo "Version: $version"
+        echo "AssemblyVersion: $assemblyVersion"
+        echo "FileVersion: $fileVersion"
+        echo "InformationalVersion: $informationalVersion"
         echo "MSIX version: $msixVersion"
 
     - name: Validate version
       shell: pwsh
-      run: ./scripts/validate-version.ps1 -BranchName "${{ github.ref_name }}"
+      run: ./scripts/assert-version-policy.ps1 -BranchName "${{ github.ref_name }}"
 
     - name: Restore
       run: dotnet restore ${{ env.SOLUTION_FILE }}
@@ -80,7 +103,13 @@ jobs:
       run: ./scripts/run-security-checks.ps1 -Configuration Release -NoRestore
 
     - name: Build app
-      run: dotnet build ${{ env.APP_PROJECT }} --configuration Release --no-restore
+      shell: pwsh
+      run: |
+        dotnet build ${{ env.APP_PROJECT }} --configuration Release --no-restore `
+          /p:Version="${{ steps.version.outputs.VERSION }}" `
+          /p:AssemblyVersion="${{ steps.version.outputs.ASSEMBLY_VERSION }}" `
+          /p:FileVersion="${{ steps.version.outputs.FILE_VERSION }}" `
+          /p:InformationalVersion="${{ steps.version.outputs.INFORMATIONAL_VERSION }}"
 
     - name: Test
       shell: pwsh
@@ -106,18 +135,22 @@ jobs:
         $manifest.Save($manifestPath)
         Write-Host "Updated Package.appxmanifest version to ${{ steps.version.outputs.MSIX_VERSION }}"
 
-    - name: Build MSIX
+    - name: Build unsigned MSIX
       shell: pwsh
       run: |
         msbuild src/ClipSave.Package/ClipSave.Package.wapproj `
           /p:Configuration=Release /p:Platform=AnyCPU `
+          /p:Version="${{ steps.version.outputs.VERSION }}" `
+          /p:AssemblyVersion="${{ steps.version.outputs.ASSEMBLY_VERSION }}" `
+          /p:FileVersion="${{ steps.version.outputs.FILE_VERSION }}" `
+          /p:InformationalVersion="${{ steps.version.outputs.INFORMATIONAL_VERSION }}" `
           /p:AppxPackageDir="${{ github.workspace }}/output/" `
           /p:AppxPackageVersion=${{ steps.version.outputs.MSIX_VERSION }} `
           /p:AppxBundleManifestVersion=${{ steps.version.outputs.MSIX_VERSION }} `
           /p:AppxManifestIdentityVersion=${{ steps.version.outputs.MSIX_VERSION }} `
           /p:AppxPackageSigningEnabled=false
 
-    - name: Validate bundle version
+    - name: Validate unsigned bundle version
       shell: pwsh
       run: |
         $outputDir = "${{ github.workspace }}/output"
@@ -133,7 +166,7 @@ jobs:
           $actual = ($bundles | Select-Object -ExpandProperty Name) -join ", "
           throw "Bundle filename does not contain expected version '$expectedVersion'. Found: $actual"
         }
-        Write-Host "Bundle version validated: $($matched[0].Name)"
+        Write-Host "Unsigned bundle version validated: $($matched[0].Name)"
 
     - name: List package outputs
       shell: pwsh
@@ -146,37 +179,74 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: release-package-${{ steps.version.outputs.VERSION }}
-        path: |
-          output/**/*.msixbundle
-          output/**/*.msixupload
+        path: output/**/*.msixbundle
         if-no-files-found: error
         retention-days: 30
 
-    - name: Extract release notes
-      id: notes
+    - name: Cleanup old release assets
       shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
-        $content = Get-Content RELEASE_NOTES.md -Raw
-        $version = "${{ steps.version.outputs.VERSION }}"
-        $escapedVersion = [regex]::Escape($version)
-        $pattern = "(?s)## v$escapedVersion.*?(?=## v|\z)"
-        if ($content -match $pattern) {
-          $notes = $matches[0].Trim()
-        } else {
-          $notes = "No release notes found for version $version"
-        }
-        "NOTES<<EOF" >> $env:GITHUB_OUTPUT
-        $notes >> $env:GITHUB_OUTPUT
-        "EOF" >> $env:GITHUB_OUTPUT
+        $tag = "release-latest"
+        $repo = "${{ github.repository }}"
 
-    - name: Create Release
+        $assetNames = gh release view $tag --repo $repo --json assets --jq '.assets[].name' 2>$null
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "Release '$tag' not found. Skipping asset cleanup."
+          exit 0
+        }
+
+        $assets = @($assetNames | Where-Object { $_ -and $_.Trim() -ne "" })
+        if ($assets.Count -eq 0) {
+          Write-Host "No assets to cleanup in '$tag'."
+          exit 0
+        }
+
+        foreach ($asset in $assets) {
+          gh release delete-asset $tag $asset --repo $repo --yes
+          Write-Host "Deleted old asset: $asset"
+        }
+
+    - name: Create Release Channel
       uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
       with:
-        tag_name: v${{ steps.version.outputs.VERSION }}
-        name: v${{ steps.version.outputs.VERSION }}
-        body: ${{ steps.notes.outputs.NOTES }}
+        tag_name: release-latest
+        name: Release (Latest)
+        body: |
+          ## Release Build (Unsigned)
+
+          | Item | Value |
+          |------|-------|
+          | **Version** | `${{ steps.version.outputs.VERSION }}` |
+          | **InformationalVersion** | `${{ steps.version.outputs.INFORMATIONAL_VERSION }}` |
+          | **FileVersion** | `${{ steps.version.outputs.FILE_VERSION }}` |
+          | **Package Version** | `${{ steps.version.outputs.MSIX_VERSION }}` |
+          | **Signing** | `disabled (temporary)` |
+          | **Commit** | [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
+          | **Build** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+          > Unsigned package: signing workflow is temporarily deferred.
         files: |
           output/**/*.msixbundle
         prerelease: false
-        make_latest: true
+        make_latest: false
+
+    - name: Summary
+      shell: pwsh
+      run: |
+        @"
+        ## Release Build Complete (Unsigned)
+
+        | Item | Value |
+        |------|-------|
+        | Version | `${{ steps.version.outputs.VERSION }}` |
+        | InformationalVersion | `${{ steps.version.outputs.INFORMATIONAL_VERSION }}` |
+        | FileVersion | `${{ steps.version.outputs.FILE_VERSION }}` |
+        | Package Version | `${{ steps.version.outputs.MSIX_VERSION }}` |
+        | Signing | `disabled (temporary)` |
+        | Artifact | `release-package-${{ steps.version.outputs.VERSION }}` |
+        | Branch | `${{ github.ref_name }}` |
+        | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+        "@ >> $env:GITHUB_STEP_SUMMARY
 

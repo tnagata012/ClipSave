@@ -1,22 +1,23 @@
-# Validate version consistency between files.
-# Usage: .\validate-version.ps1 [-BranchName <string>] [-ProjectRoot <path>]
+# Assert version policy consistency between files.
+# Usage: .\assert-version-policy.ps1 [-BranchName <string>] [-ProjectRoot <path>]
 #
 # Examples:
-#   .\validate-version.ps1
-#   .\validate-version.ps1 -BranchName "main"
-#   .\validate-version.ps1 -BranchName "release/1.2.x"
-#   .\validate-version.ps1 -ProjectRoot "C:\path\to\repo"
+#   .\assert-version-policy.ps1
+#   .\assert-version-policy.ps1 -BranchName "main"
+#   .\assert-version-policy.ps1 -BranchName "release/1.2"
+#   .\assert-version-policy.ps1 -ProjectRoot "C:\path\to\repo"
 #
 # Rules:
 # - Directory.Build.props: always X.Y.Z
-# - release/X.Y.x: X.Y.Z, and X.Y must match branch name
+# - release/X.Y: X.Y.Z, and X.Y must match branch name
 # - Package.appxmanifest: always X.Y.Z.0
+# - CI-injected assembly metadata (InformationalVersion/FileVersion) is out of scope
 
 param(
     [string]$BranchName = $null,
     [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
     [string]$MainBranchName = "main",
-    [string]$ReleaseBranchPattern = '^release/(?<major>\d+)\.(?<minor>\d+)\.x$'
+    [string]$ReleaseBranchPattern = '^release/(?<major>\d+)\.(?<minor>\d+)$'
 )
 
 $ErrorActionPreference = "Stop"
@@ -75,6 +76,12 @@ if (-not $manifestVersion -or $manifestVersion -notmatch '^\d+\.\d+\.\d+\.\d+$')
     Fail "Invalid Package.appxmanifest version format. Expected X.Y.Z.0. Actual: $manifestVersion"
 }
 
+$manifestVersionMatch = [regex]::Match($manifestVersion, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\.(?<revision>\d+)$')
+$manifestRevision = [int]$manifestVersionMatch.Groups['revision'].Value
+if ($manifestRevision -ne 0) {
+    Fail "Package.appxmanifest revision must be 0 in repository. Actual: $manifestVersion"
+}
+
 # Validate file consistency
 $expectedManifestVersion = "$coreVersion.0"
 if ($manifestVersion -ne $expectedManifestVersion) {
@@ -95,7 +102,7 @@ if ($BranchName) {
             $branchMajor = [int]$releaseBranchMatch.Groups['major'].Value
             $branchMinor = [int]$releaseBranchMatch.Groups['minor'].Value
             if ($branchMajor -ne $major -or $branchMinor -ne $minor) {
-                Fail "release branch name and file version mismatch. Branch=release/$branchMajor.$branchMinor.x, File=$coreVersion"
+                Fail "release branch name and file version mismatch. Branch=release/$branchMajor.$branchMinor, File=$coreVersion"
             }
 
             Write-Host "[OK] release branch validation passed" -ForegroundColor Green

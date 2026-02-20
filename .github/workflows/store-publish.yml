@@ -88,6 +88,36 @@ jobs:
         echo "MSIX_VERSION=$msixVersion" >> $env:GITHUB_OUTPUT
         echo "MSIX version: $msixVersion"
 
+    - name: Resolve store build versions
+      id: version
+      shell: pwsh
+      run: |
+        $version = "${{ inputs.version }}"
+        $match = [regex]::Match($version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$')
+        if (-not $match.Success) {
+          Write-Error "Invalid version format: $version (expected X.Y.Z)"
+          exit 1
+        }
+
+        $coreVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
+        $shortSha = (git rev-parse --short=7 HEAD).Trim()
+        if (-not $shortSha -or $shortSha.Length -ne 7) {
+          Write-Error "Failed to resolve short SHA from checked-out commit."
+          exit 1
+        }
+        $assemblyVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).0.0"
+        $fileVersion = "$coreVersion.0"
+        $informationalVersion = "$coreVersion+sha.$shortSha"
+
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "ASSEMBLY_VERSION=$assemblyVersion" >> $env:GITHUB_OUTPUT
+        echo "FILE_VERSION=$fileVersion" >> $env:GITHUB_OUTPUT
+        echo "INFORMATIONAL_VERSION=$informationalVersion" >> $env:GITHUB_OUTPUT
+        echo "Version: $version"
+        echo "AssemblyVersion: $assemblyVersion"
+        echo "FileVersion: $fileVersion"
+        echo "InformationalVersion: $informationalVersion"
+
     - name: Restore
       run: dotnet restore ${{ env.SOLUTION_FILE }}
 
@@ -96,7 +126,13 @@ jobs:
       run: ./scripts/run-security-checks.ps1 -Configuration Release -NoRestore
 
     - name: Build app
-      run: dotnet build ${{ env.APP_PROJECT }} --configuration Release --no-restore
+      shell: pwsh
+      run: |
+        dotnet build ${{ env.APP_PROJECT }} --configuration Release --no-restore `
+          /p:Version="${{ steps.version.outputs.VERSION }}" `
+          /p:AssemblyVersion="${{ steps.version.outputs.ASSEMBLY_VERSION }}" `
+          /p:FileVersion="${{ steps.version.outputs.FILE_VERSION }}" `
+          /p:InformationalVersion="${{ steps.version.outputs.INFORMATIONAL_VERSION }}"
 
     - name: Test
       shell: pwsh
@@ -129,6 +165,10 @@ jobs:
         msbuild src/ClipSave.Package/ClipSave.Package.wapproj `
           /p:Configuration=Release `
           /p:Platform=AnyCPU `
+          /p:Version="${{ steps.version.outputs.VERSION }}" `
+          /p:AssemblyVersion="${{ steps.version.outputs.ASSEMBLY_VERSION }}" `
+          /p:FileVersion="${{ steps.version.outputs.FILE_VERSION }}" `
+          /p:InformationalVersion="${{ steps.version.outputs.INFORMATIONAL_VERSION }}" `
           /p:UapAppxPackageBuildMode=StoreUpload `
           /p:AppxBundle=Always `
           /p:AppxPackageDir="${{ github.workspace }}/StorePackage/" `
@@ -154,6 +194,7 @@ jobs:
         |------|-------|
         | **Version** | ``${{ inputs.version }}`` |
         | **Branch** | ``${{ steps.release.outputs.BRANCH }}`` |
+        | **InformationalVersion** | ``${{ steps.version.outputs.INFORMATIONAL_VERSION }}`` |
         | **Package** | ``.msixupload`` |
 
         ### 📥 Next Steps

@@ -86,6 +86,25 @@ public class SettingsServiceTests : IDisposable
 
         var backupFiles = Directory.GetFiles(_testAppDataPath, "settings.json.backup.*");
         backupFiles.Should().NotBeEmpty();
+
+        mockLogger.Verify(
+            value => value.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((state, _) =>
+                    state.ToString()!.Contains("Settings file is not valid JSON. Reinitializing with defaults.")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.AtLeastOnce);
+
+        mockLogger.Verify(
+            value => value.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains("Failed to load settings file")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never);
     }
 
     [Fact]

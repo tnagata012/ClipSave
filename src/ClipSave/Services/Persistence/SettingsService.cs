@@ -76,6 +76,15 @@ public class SettingsService
                 ReportCorruption(new SettingsCorruptionEventArgs(backupPath));
             }
         }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(
+                "Settings file is not valid JSON. Reinitializing with defaults. Path: {Path}. Reason: {Reason}",
+                _settingsPath,
+                ex.Message);
+            var backupPath = BackupCorruptedSettings();
+            ReportCorruption(new SettingsCorruptionEventArgs(backupPath, ex));
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load settings file");

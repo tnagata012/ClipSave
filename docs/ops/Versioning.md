@@ -38,7 +38,7 @@ ClipSave の版数規約と判定ルールを定義します。
 | 属性 | Release | Dev | 用途 |
 |------|---------|-----|------|
 | `Directory.Build.props` (`Version`) | `X.Y.Z` | `X.Y.Z` | SSOT |
-| `InformationalVersion`（CI 注入） | `X.Y.Z+sha.<shortSha>` | `X.Y.Z-dev.<run>+sha.<shortSha>` | 追跡・判定 |
+| `InformationalVersion`（CI 上書き） | `X.Y.Z+sha.<shortSha>` | `X.Y.Z-dev.<run>+sha.<shortSha>` | 追跡・判定 |
 | `AssemblyVersion` | `X.Y.0.0` | `X.Y.0.0` | バインディング互換維持 |
 | `FileVersion`（CI 注入） | `X.Y.Z.0` | `X.Y.Z.<run>` | DLL 判定補助 |
 | MSIX Version | `X.Y.Z.0` | `X.Y.Z.<run>` | パッケージ版数 |
@@ -48,6 +48,7 @@ ClipSave の版数規約と判定ルールを定義します。
 - `Package.appxmanifest` はリポジトリ上で `X.Y.Z.0` を保持する。
 - Dev 版数（`<run>`）は CI で一時注入し、版数ファイルはコミットしない。
 - `AssemblyVersion = X.Y.0.0` は PATCH ごとの不要な再バインドを避けるため。
+- ローカルの手動ビルドでは `Directory.Build.props` の既定値 `X.Y.Z.local` を使用し、workflow 実行時のみ CI が `X.Y.Z+sha.<shortSha>` / `X.Y.Z-dev.<run>+sha.<shortSha>` に上書きする。
 
 ## ブランチ別版数制約
 

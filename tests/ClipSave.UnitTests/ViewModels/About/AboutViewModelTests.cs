@@ -1,5 +1,7 @@
+using ClipSave.Services;
 using ClipSave.ViewModels.About;
 using FluentAssertions;
+using System.Reflection;
 
 namespace ClipSave.UnitTests;
 
@@ -33,7 +35,123 @@ public class AboutViewModelTests
 
         viewModel.Version.Should().Match(v =>
             v == "Unknown" ||
-            System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+\.\d+$"));
+            System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+$"));
+    }
+
+    [Fact]
+    public void InformationalVersion_IsNotNullOrEmpty()
+    {
+        // Arrange & Act
+        var viewModel = new AboutViewModel();
+
+        // Assert
+        viewModel.InformationalVersion.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void InformationalVersion_HasNormalizedFormat()
+    {
+        // Arrange & Act
+        var viewModel = new AboutViewModel();
+
+        viewModel.InformationalVersion.Should().Match(v =>
+            v == "Unknown" ||
+            System.Text.RegularExpressions.Regex.IsMatch(
+                v,
+                @"^\d+\.\d+\.\d+(\.local|-[0-9A-Za-z\.-]+)?(\+sha\.[0-9a-f]{7})?$"));
+    }
+
+    [Fact]
+    public void InformationalVersion_NormalizesRawShaMetadataToShortFormat()
+    {
+        // Arrange
+        var method = typeof(AboutViewModel).GetMethod(
+            "NormalizeInformationalVersion",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        // Act
+        var normalized = method?.Invoke(
+            null,
+            ["0.0.1+61d6adc83812c4cf0882b323502b4a6dc64df2f7"]) as string;
+
+        // Assert
+        normalized.Should().Be("0.0.1+sha.61d6adc");
+    }
+
+    [Fact]
+    public void InformationalVersion_Display_DoesNotAppendLocalBuildSuffix_ForLocalBuildMetadata()
+    {
+        // Arrange
+        var localization = new LocalizationService();
+
+        var method = typeof(AboutViewModel).GetMethod(
+            "GetDisplayInformationalVersion",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        // Act
+        var displayVersion = method?.Invoke(
+            null,
+            ["0.0.1+61d6adc83812c4cf0882b323502b4a6dc64df2f7", localization]) as string;
+
+        // Assert
+        displayVersion.Should().Be("0.0.1+sha.61d6adc");
+    }
+
+    [Fact]
+    public void InformationalVersion_Display_KeepsDotLocal_ForLocalDefault()
+    {
+        // Arrange
+        var localization = new LocalizationService();
+
+        var method = typeof(AboutViewModel).GetMethod(
+            "GetDisplayInformationalVersion",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        // Act
+        var displayVersion = method?.Invoke(
+            null,
+            ["0.0.1.local", localization]) as string;
+
+        // Assert
+        displayVersion.Should().Be("0.0.1.local");
+    }
+
+    [Fact]
+    public void InformationalVersion_Display_NormalizesRawShaMetadata_ForLocalCore()
+    {
+        // Arrange
+        var localization = new LocalizationService();
+
+        var method = typeof(AboutViewModel).GetMethod(
+            "GetDisplayInformationalVersion",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        // Act
+        var displayVersion = method?.Invoke(
+            null,
+            ["0.0.1.local+61d6adc83812c4cf0882b323502b4a6dc64df2f7", localization]) as string;
+
+        // Assert
+        displayVersion.Should().Be("0.0.1.local+sha.61d6adc");
+    }
+
+    [Fact]
+    public void InformationalVersion_Display_TrimsUnknownInput()
+    {
+        // Arrange
+        var localization = new LocalizationService();
+
+        var method = typeof(AboutViewModel).GetMethod(
+            "GetDisplayInformationalVersion",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        // Act
+        var displayVersion = method?.Invoke(
+            null,
+            ["  custom-build  ", localization]) as string;
+
+        // Assert
+        displayVersion.Should().Be("custom-build");
     }
 
     [Fact]
@@ -139,6 +257,7 @@ public class AboutViewModelTests
 
         viewModel.ApplicationName.Should().NotBeNull();
         viewModel.Version.Should().NotBeNull();
+        viewModel.InformationalVersion.Should().NotBeNull();
         viewModel.DotNetVersion.Should().NotBeNull();
         viewModel.OsVersion.Should().NotBeNull();
         viewModel.BuildDate.Should().NotBeNull();

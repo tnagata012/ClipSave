@@ -125,6 +125,7 @@
 
   <data name="AboutWindow_Title" xml:space="preserve"><value>ClipSave について</value></data>
   <data name="AboutWindow_VersionPrefix" xml:space="preserve"><value>バージョン: </value></data>
+  <data name="AboutWindow_InformationalVersionLabel" xml:space="preserve"><value>詳細バージョン:</value></data>
   <data name="AboutWindow_SystemInfoTitle" xml:space="preserve"><value>システム情報</value></data>
   <data name="AboutWindow_DotNetRuntimeLabel" xml:space="preserve"><value>.NET ランタイム:</value></data>
   <data name="AboutWindow_OsLabel" xml:space="preserve"><value>OS:</value></data>

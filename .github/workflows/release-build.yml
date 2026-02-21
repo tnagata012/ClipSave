@@ -274,7 +274,7 @@ jobs:
     - name: Summary
       shell: pwsh
       run: |
-        @"
+        @'
         ## Release Build Complete (Unsigned)
 
         | Item | Value |
@@ -289,5 +289,5 @@ jobs:
         | Artifact | `release-package-${{ steps.version.outputs.VERSION }}` |
         | Branch | `${{ github.ref_name }}` |
         | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
-        "@ >> $env:GITHUB_STEP_SUMMARY
+        '@ >> $env:GITHUB_STEP_SUMMARY
 

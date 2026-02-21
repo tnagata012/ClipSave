@@ -1,0 +1,26 @@
+{
+  "name": "branch-name-policy",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~ALL"
+      ],
+      "exclude": [
+        "refs/heads/main",
+        "refs/heads/release/*",
+        "refs/heads/feature/*",
+        "refs/heads/fix/*",
+        "refs/heads/docs/*",
+        "refs/heads/chore/*"
+      ]
+    }
+  },
+  "bypass_actors": [],
+  "rules": [
+    {
+      "type": "creation"
+    }
+  ]
+}

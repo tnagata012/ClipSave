@@ -92,12 +92,14 @@ ClipSave のブランチ構成と統合方向を定義します。
 3. 競合解消内容と理由を PR に明記する。
 4. release 側だけの場当たり修正を避け、必要なら `main` に先行調整を入れて再 backport する。
 
-## GitHub での強制（推奨）
+## GitHub での強制
 
 - `main` / `release/*` は Branch protection または Ruleset で保護する。
-- Ruleset の branch name pattern で許可ブランチを制限する。
-- 例: `^(main|release/\\d+\\.\\d+|(feature|fix|docs|chore)/[a-z0-9][a-z0-9._/-]*)$`
 - Ruleset 定義 JSON は `.github/rulesets/` に保存し、GitHub 側の Ruleset 変更時は同時に更新する。
+- 現在は単独運用のため、PR は次の方針で運用し、メンバーが増えた段階で見直す。
+  - オーナー（Code Owner）のレビューを必須とする。
+  - 承認が必須となる人数は 0 人とする。
+  - 最後に push した人でもマージできる。
 
 ## 関連ドキュメント
 

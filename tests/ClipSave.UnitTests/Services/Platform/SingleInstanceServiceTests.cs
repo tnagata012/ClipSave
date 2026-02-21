@@ -87,4 +87,20 @@ public class SingleInstanceServiceTests : IDisposable
 
         result.Should().BeTrue("after the previous instance exits, a new instance should become primary");
     }
+
+    [Fact]
+    public void BuildScopedMutexName_IncludesUserAndSessionScope()
+    {
+        var name = SingleInstanceService.BuildScopedMutexName("S-1-5-21-1234", sessionId: 2);
+
+        name.Should().Be("Local\\ClipSave_SingleInstance_S_1_5_21_1234_s2");
+    }
+
+    [Fact]
+    public void BuildScopedPipeName_UsesSanitizedFallbackWhenScopeIsMissing()
+    {
+        var name = SingleInstanceService.BuildScopedPipeName("", sessionId: null);
+
+        name.Should().StartWith("ClipSave_SingleInstancePipe_unknown_s");
+    }
 }

@@ -69,7 +69,7 @@ flowchart TB
 - **AppWindowCoordinator**: Settings/About ウィンドウの生成・再表示・クローズ時処理
 - **AppServiceProviderFactory**: 起動時の DI / ロギング構成の構築（`Infrastructure/Startup`）
 - **HotkeyWindowFactory**: ホットキー受信用の不可視ウィンドウ生成（`Infrastructure/Startup`）
-- **SingleInstanceService**: 多重起動防止（Mutex）、二重起動時のプロセス間通信（Named Pipe）
+- **SingleInstanceService**: 多重起動防止（Mutex）、二重起動時のプロセス間通信（Named Pipe）。スコープは `1ユーザー/1セッション`（ユーザー SID + Session ID で名前空間分離）
 - **TrayService**: トレイアイコン、メニュー（設定 / スタートアップ設定 / 通知設定 / バージョン情報 / 終了）
 - **HotkeyService**: グローバルホットキーの登録・解除・イベント
 - **SavePipeline**: 保存処理のオーケストレーション、排他制御
@@ -162,7 +162,7 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
   [*] --> CheckMutex
-  CheckMutex --> NotifyAndExit: Already Running
+  CheckMutex --> NotifyAndExit: Already Running (same user/session)
   NotifyAndExit --> [*]: Send IPC → Exit
   CheckMutex --> Starting: Mutex Acquired
 

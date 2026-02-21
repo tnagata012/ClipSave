@@ -121,6 +121,17 @@ public class SpecificationContractTests
     }
 
     [Fact]
+    public void AppLifecycleCoordinator_SecondInstanceRequest_IsDeferredUntilWindowCoordinatorIsReady()
+    {
+        var source = ReadClipSaveSource("Infrastructure", "Startup", "AppLifecycleCoordinator.cs");
+
+        source.Should().Contain("Interlocked.Exchange(ref _pendingSecondInstanceLaunchRequested, 1)");
+        source.Should().Contain("TryProcessPendingSecondInstanceLaunch();");
+        source.Should().Contain("if (_windowCoordinator == null)");
+        source.Should().Contain("Deferred second-instance settings request until window coordinator initialization completes");
+    }
+
+    [Fact]
     public void AppWindowCoordinator_Dispose_ClosesManagedWindows()
     {
         var source = ReadClipSaveSource("Infrastructure", "Startup", "AppWindowCoordinator.cs");

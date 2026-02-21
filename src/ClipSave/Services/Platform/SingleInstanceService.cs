@@ -1,14 +1,17 @@
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+using System.Security.Principal;
 
 namespace ClipSave.Services;
 
 public class SingleInstanceService : IDisposable
 {
-    private const string DefaultMutexName = "Global\\ClipSave_SingleInstance";
-    private const string DefaultPipeName = "ClipSave_SingleInstancePipe";
+    private const string DefaultMutexNamePrefix = "Local\\ClipSave_SingleInstance";
+    private const string DefaultPipeNamePrefix = "ClipSave_SingleInstancePipe";
     private const string OpenSettingsCommand = "OPEN_SETTINGS";
+    private const string UnknownScopeToken = "unknown";
 
     private readonly ILogger<SingleInstanceService> _logger;
     private readonly string _mutexName;
@@ -22,7 +25,7 @@ public class SingleInstanceService : IDisposable
     public event EventHandler? SecondInstanceLaunched;
 
     public SingleInstanceService(ILogger<SingleInstanceService> logger)
-        : this(logger, DefaultMutexName, DefaultPipeName)
+        : this(logger, BuildScopedMutexName(), BuildScopedPipeName())
     {
     }
 
@@ -31,6 +34,67 @@ public class SingleInstanceService : IDisposable
         _logger = logger;
         _mutexName = mutexName;
         _pipeName = pipeName;
+    }
+
+    internal static string BuildScopedMutexName(string? userSid = null, int? sessionId = null)
+    {
+        return $"{DefaultMutexNamePrefix}_{BuildScopeToken(userSid, sessionId)}";
+    }
+
+    internal static string BuildScopedPipeName(string? userSid = null, int? sessionId = null)
+    {
+        return $"{DefaultPipeNamePrefix}_{BuildScopeToken(userSid, sessionId)}";
+    }
+
+    private static string BuildScopeToken(string? userSid, int? sessionId)
+    {
+        var resolvedSid = SanitizeScopeSegment(userSid ?? TryGetCurrentUserSid());
+        var resolvedSession = (sessionId ?? TryGetCurrentSessionId())?.ToString() ?? UnknownScopeToken;
+        return $"{resolvedSid}_s{resolvedSession}";
+    }
+
+    private static string? TryGetCurrentUserSid()
+    {
+        try
+        {
+            return WindowsIdentity.GetCurrent().User?.Value;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static int? TryGetCurrentSessionId()
+    {
+        try
+        {
+            using var process = Process.GetCurrentProcess();
+            return process.SessionId;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string SanitizeScopeSegment(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return UnknownScopeToken;
+        }
+
+        var chars = value.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray();
+        var normalized = new string(chars);
+
+        while (normalized.Contains("__", StringComparison.Ordinal))
+        {
+            normalized = normalized.Replace("__", "_", StringComparison.Ordinal);
+        }
+
+        normalized = normalized.Trim('_');
+        return string.IsNullOrWhiteSpace(normalized) ? UnknownScopeToken : normalized;
     }
 
     public bool TryAcquireOrNotify()

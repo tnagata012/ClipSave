@@ -102,8 +102,12 @@ Closes #123
 ### Prerequisites
 
 - .NET 10 SDK
-- Visual Studio 2022 または Visual Studio Code
+- Visual Studio 2022 (推奨: `MSIX Packaging Tools` / Desktop Bridge が利用可能な構成)
 - Windows 11
+
+> 補足:
+> `src/ClipSave/ClipSave.csproj` のビルド・実行・テストは .NET SDK 単体でも可能です。
+> `src/ClipSave.Package/ClipSave.Package.wapproj` のビルドには Desktop Bridge 関連ターゲットが必要です。
 
 ### Build & Run
 

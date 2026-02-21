@@ -96,7 +96,7 @@ ClipSave のブランチ構成と統合方向を定義します。
 
 - `main` / `release/*` は Branch protection または Ruleset で保護する。
 - Ruleset 定義 JSON は `.github/rulesets/` に保存し、GitHub 側の Ruleset 変更時は同時に更新する。
-- 現在は単独運用のため、PR は次の方針で運用し、メンバーが増えた段階で見直す。
+- PR は次の方針で運用し、メンバーが増えた段階で見直す。
   - オーナー（Code Owner）のレビューを必須とする。
   - 承認が必須となる人数は 0 人とする。
   - 最後に push した人でもマージできる。

@@ -31,7 +31,6 @@
     <Application Id="App"
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
-      <!-- ToastCapable="true" -->
       <uap:VisualElements
         DisplayName="ClipSave"
         Description="ClipSave"

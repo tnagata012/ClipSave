@@ -15,7 +15,7 @@ ClipSave の版数規約と判定ルールを定義します。
 
 - ブランチ統合方向（`BranchStrategy.md`）
 - ワークフロー実行手順（`Deployment.md`）
-- 署名方針（現在は一時停止、`Signing.md`）
+- 署名方針（チャネル別運用、`Signing.md`）
 
 ## 基本方針
 

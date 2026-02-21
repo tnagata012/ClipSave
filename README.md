@@ -27,16 +27,15 @@ ClipSave は、コピーした内容を `Ctrl+Shift+V` で即保存する軽量�
 
 ## インストール
 
-- **開発版**: リポジトリの `Releases` タブ（`dev-latest` prerelease）から `*.msixbundle` を取得
-- **公開版**: リポジトリの `Releases` タブ（`release-latest`）から `*.msixbundle` を取得
-- **Microsoft Store**: 審査承認後に利用可能予定
-- **ソースからビルド**:
+- **Stable（一般ユーザー向け）**: Microsoft Store（公開後）
+- **Dev/Release artifacts**: `Releases`（`dev-latest` / `release-latest`）の `*.msixbundle` は未署名の検証アーティファクトです。インストールする場合は、[検証アーティファクト導入手順](docs/ops/ArtifactInstallation.md) を参照してください
+- **開発・検証（推奨）**: ソースから実行
 
 ```bash
 git clone https://github.com/tnagata012/ClipSave.git
 cd ClipSave
 dotnet restore src/ClipSave/ClipSave.csproj
-dotnet build src/ClipSave/ClipSave.csproj --configuration Release
+dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 ```
 
 ## ドキュメント
@@ -54,7 +53,7 @@ dotnet build src/ClipSave/ClipSave.csproj --configuration Release
 |---------|-------------|
 | 設計 | [仕様](docs/dev/Specification.md) ・ [アーキテクチャ](docs/dev/Architecture.md) ・ [コーディングガイドライン](docs/dev/CodingGuidelines.md) |
 | テスト | [テスト戦略](docs/dev/TestingStrategy.md) |
-| 運用 | [デプロイ](docs/ops/Deployment.md) ・ [署名運用](docs/ops/Signing.md) ・ [バージョニング](docs/ops/Versioning.md) ・ [ブランチ戦略](docs/ops/BranchStrategy.md) ・ [アイコン運用](docs/presentation/IconAssets.md) |
+| 運用 | [デプロイ](docs/ops/Deployment.md) ・ [署名運用](docs/ops/Signing.md) ・ [バージョニング](docs/ops/Versioning.md) ・ [ブランチ戦略](docs/ops/BranchStrategy.md) ・ [検証アーティファクト導入](docs/ops/ArtifactInstallation.md) ・ [アイコン運用](docs/presentation/IconAssets.md) |
 
 ## セキュリティ
 

@@ -24,13 +24,14 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 | [pr-check.yml](../../.github/workflows/pr-check.yml) | PR（`main`, `release/*`） | 品質ゲート | `TestResults/**/*.trx` |
 | [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y.0`） | `release/X.Y` 作成 + main 側 bump ブランチ作成 | `release/X.Y`, `chore/bump-main-to-*` |
 | [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`） | patch init ブランチ作成 | `chore/release-X.Y.(Z+1)-init` |
-| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest` |
-| [release-build.yml](../../.github/workflows/release-build.yml) | `release/*` push / 手動 | 公開候補生成（未署名） | `release-package-*`, `release-latest` |
+| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
+| [release-build.yml](../../.github/workflows/release-build.yml) | `release/*` push / 手動 | 公開候補生成（未署名） | `release-package-*`, `release-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
 | [store-publish.yml](../../.github/workflows/store-publish.yml) | 手動（`X.Y.Z`） | Store 提出物生成 | `store-package-*`（`.msixupload`） |
 
 補足:
 
-- 配布対象は `*.msixbundle`（現行は未署名）、Store 提出対象は `.msixupload`。
+- 配布対象は `*.msixbundle`（未署名）、Store 提出対象は `.msixupload`。
+- Dev/Release 配布では `*.msixbundle` と `SHA256SUMS.txt` をセットで公開し、GitHub Artifact Attestation を記録する。
 - `PATCH` 更新規約は `Versioning.md` を正本とする。
 
 ## 実行前チェック
@@ -39,14 +40,14 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 2. 実行対象ブランチ（`main` または `release/X.Y`）が意図どおりであることを確認する。
 3. `./scripts/assert-version-policy.ps1` が成功することを確認する。
 4. `./scripts/run-tests.ps1` と `./scripts/run-security-checks.ps1` が成功することを確認する。
-5. 署名運用は一時停止中であることを理解したうえで、検証対象を明確化する（詳細は `Signing.md`）。
+5. チャネル別の署名方針（Dev/Release は未署名許容、Stable は Store 正本）を理解したうえで、検証対象を明確化する（詳細は `Signing.md`）。
 
 ## 成果物チャネル
 
 | チャネル | 配布元 | 用途 |
 |---------|-------|------|
-| Dev | `dev-latest` / `dev-package-*` | 検証配布（未署名） |
-| Release | `release-latest` / `release-package-*` | 公開候補比較（未署名） |
+| Dev | `dev-latest` / `dev-package-*` + `SHA256SUMS.txt` + `GitHub Artifact Attestation` | 検証配布（未署名） |
+| Release | `release-latest` / `release-package-*` + `SHA256SUMS.txt` + `GitHub Artifact Attestation` | 公開候補比較（未署名） |
 | Store | `store-package-*`（`.msixupload`） | Partner Center 提出 |
 
 ## Store Publish の版数解決ルール
@@ -70,7 +71,7 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 1. `Prepare Patch Release`（推奨）または `create-patch-release-branch.ps1` で patch init ブランチを作成する。
 2. patch init PR（`chore/release-X.Y.(Z+1)-init -> release/X.Y`）をマージする。
 3. 不具合修正を `main` へマージする。
-4. 必要コミットを `release/X.Y` へ backport PR で反映する。
+4. `release/X.Y` をベースにした `fix/*` backport ブランチで必要コミットを `cherry-pick -x` し、PR で `release/X.Y` へ反映する。
 5. 候補ビルドから採用コミットを決定し、Store 提出対象版を確定する。
 
 ### Store 提出
@@ -111,12 +112,13 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 .\scripts\run-tests.ps1 -Configuration Release
 .\scripts\run-security-checks.ps1 -Configuration Release
 .\scripts\store-checklist.ps1
+.\scripts\verify-artifact.ps1 -BundlePath .\ClipSave.Package_X.Y.Z.W_AnyCPU.msixbundle -Channel dev -SourceRef refs/heads/main
 ```
 
 ## 関連ドキュメント
 
 - [BranchStrategy](BranchStrategy.md) — ブランチ構成と統合方向
 - [Versioning](Versioning.md) — 版数規約
-- [Signing](Signing.md) — 署名方針（現在は一時停止）
+- [Signing](Signing.md) — 署名方針（チャネル別運用）
 - [IconAssets](../presentation/IconAssets.md) — アイコン運用
 - [RELEASE_NOTES](../../RELEASE_NOTES.md) — 変更履歴

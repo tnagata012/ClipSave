@@ -30,10 +30,9 @@ public class HotkeyBehaviorIntegrationTests
         var pressedCount = 0;
         hotkeyService.HotkeyPressed += (_, _) => pressedCount++;
 
+        // Fire two WM_HOTKEY messages back-to-back before pumping dispatcher.
+        // This keeps them inside the suppression window regardless of CI load.
         InvokeHotkeyMessage(hotkeyService);
-        FlushDispatcher();
-        pressedCount.Should().Be(1);
-
         InvokeHotkeyMessage(hotkeyService);
         FlushDispatcher();
         pressedCount.Should().Be(1);

@@ -1,6 +1,6 @@
 using ClipSave.Services;
 using FluentAssertions;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.IO;
 using System.Reflection;
 using System.Windows.Threading;
@@ -25,14 +25,14 @@ public class HotkeyBehaviorIntegrationTests
     [Spec("SPEC-020-003")]
     public void HotkeyMessage_RepeatWithinSuppressionWindow_IsIgnored()
     {
-        using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-        using var hotkeyService = new HotkeyService(loggerFactory.CreateLogger<HotkeyService>());
+        var tick = 1_000L;
+        using var hotkeyService = new HotkeyService(NullLogger<HotkeyService>.Instance, () => tick);
         var pressedCount = 0;
         hotkeyService.HotkeyPressed += (_, _) => pressedCount++;
 
-        // Fire two WM_HOTKEY messages back-to-back before pumping dispatcher.
-        // This keeps them inside the suppression window regardless of CI load.
+        // Keep the second trigger inside the suppression window deterministically.
         InvokeHotkeyMessage(hotkeyService);
+        tick += 50;
         InvokeHotkeyMessage(hotkeyService);
         FlushDispatcher();
         pressedCount.Should().Be(1);

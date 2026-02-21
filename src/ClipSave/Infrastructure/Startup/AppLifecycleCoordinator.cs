@@ -23,6 +23,7 @@ internal sealed class AppLifecycleCoordinator : IDisposable
     private LocalizationService? _localizationService;
     private AppHotkeyCoordinator? _hotkeyCoordinator;
     private AppWindowCoordinator? _windowCoordinator;
+    private int _pendingSecondInstanceLaunchRequested;
     private bool _started;
     private bool _disposed;
 
@@ -73,6 +74,7 @@ internal sealed class AppLifecycleCoordinator : IDisposable
         SubscribeCoreEvents();
         ProcessPendingSettingsCorruption();
         _hotkeyCoordinator!.Initialize();
+        TryProcessPendingSecondInstanceLaunch();
     }
 
     private void ResolveCoreServices()
@@ -219,8 +221,33 @@ internal sealed class AppLifecycleCoordinator : IDisposable
 
     private void OnSecondInstanceLaunched(object? sender, EventArgs e)
     {
-        _logger.LogInformation("Detected second instance launch; opening settings window");
-        _dispatcher.Invoke(() => _windowCoordinator?.ShowOrActivateSettingsDialog());
+        _logger.LogInformation("Detected second instance launch; requesting settings window");
+        Interlocked.Exchange(ref _pendingSecondInstanceLaunchRequested, 1);
+        _ = _dispatcher.BeginInvoke(TryProcessPendingSecondInstanceLaunch);
+    }
+
+    private void TryProcessPendingSecondInstanceLaunch()
+    {
+        if (Interlocked.Exchange(ref _pendingSecondInstanceLaunchRequested, 0) == 0)
+        {
+            return;
+        }
+
+        if (_windowCoordinator == null)
+        {
+            _logger.LogDebug("Deferred second-instance settings request until window coordinator initialization completes");
+            Interlocked.Exchange(ref _pendingSecondInstanceLaunchRequested, 1);
+            return;
+        }
+
+        try
+        {
+            _windowCoordinator.ShowOrActivateSettingsDialog();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to open settings window for second-instance request");
+        }
     }
 
     private void OnNotificationRequested(object? sender, NotificationMessage notification)

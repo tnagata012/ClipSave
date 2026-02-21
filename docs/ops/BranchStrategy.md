@@ -15,7 +15,7 @@ ClipSave のブランチ構成と統合方向を定義します。
 
 - 版数規約と `PATCH` 更新手順の詳細（`Versioning.md`）
 - ワークフロー実行手順（`Deployment.md`）
-- 署名方針（現在は一時停止、`Signing.md`）
+- 署名方針（チャネル別運用、`Signing.md`）
 
 ## 運用原則
 
@@ -51,10 +51,10 @@ ClipSave のブランチ構成と統合方向を定義します。
 
 ## 統合ルール（必須）
 
-1. 作業ブランチは `main` から作成し、PR で `main` に統合する。
+1. `main` 向けの作業ブランチは `main` から作成し、PR で `main` に統合する。
 2. `release/X.Y` はメジャー/マイナー開始時にのみ作成する。
 3. `release/X.Y` で新機能開発をしない。
-4. 不具合修正は `main` に先にマージし、必要コミットのみ `release/X.Y` へ `cherry-pick -x` で反映する。
+4. 不具合修正は `main` に先にマージし、backport は `release/X.Y` をベースにした `fix/*` ブランチへ必要コミットを `cherry-pick -x` し、PR で `release/X.Y` に統合する。
 5. `release/X.Y` から `main` へマージしない。
 6. `main` / `release/X.Y` への人手による直 push は禁止し、PR マージのみで反映する。
 7. 緊急脆弱性修正も `hotfix/*` ではなく通常のパッチリリース手順（`main` 先行 + backport + PR）で扱う。
@@ -102,4 +102,4 @@ ClipSave のブランチ構成と統合方向を定義します。
 
 - [Versioning](Versioning.md) — 版数規約
 - [Deployment](Deployment.md) — 配布 Runbook
-- [Signing](Signing.md) — 署名方針（現在は一時停止）
+- [Signing](Signing.md) — 署名方針（チャネル別運用）

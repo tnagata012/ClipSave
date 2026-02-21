@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: release-build-${{ github.ref }}
@@ -155,18 +157,43 @@ jobs:
       run: |
         $outputDir = "${{ github.workspace }}/output"
         $expectedVersion = "${{ steps.version.outputs.MSIX_VERSION }}"
-        $bundles = Get-ChildItem $outputDir -Recurse -File -Filter *.msixbundle
-        if (-not $bundles) {
+        $bundles = @(Get-ChildItem $outputDir -Recurse -File -Filter *.msixbundle)
+        if ($bundles.Count -eq 0) {
           throw "No .msixbundle found under $outputDir"
         }
-
-        $pattern = "_$([regex]::Escape($expectedVersion))_"
-        $matched = $bundles | Where-Object { $_.Name -match $pattern }
-        if (-not $matched) {
+        if ($bundles.Count -ne 1) {
           $actual = ($bundles | Select-Object -ExpandProperty Name) -join ", "
-          throw "Bundle filename does not contain expected version '$expectedVersion'. Found: $actual"
+          throw "Expected exactly one .msixbundle under $outputDir, found $($bundles.Count): $actual"
         }
-        Write-Host "Unsigned bundle version validated: $($matched[0].Name)"
+
+        $bundle = $bundles[0]
+        $pattern = "_$([regex]::Escape($expectedVersion))_"
+        if ($bundle.Name -notmatch $pattern) {
+          throw "Bundle filename does not contain expected version '$expectedVersion'. Found: $($bundle.Name)"
+        }
+        Write-Host "Unsigned bundle version validated: $($bundle.Name)"
+
+    - name: Generate SHA256 checksums
+      shell: pwsh
+      run: |
+        $outputDir = "${{ github.workspace }}/output"
+        $bundles = @(Get-ChildItem $outputDir -Recurse -File -Filter *.msixbundle | Sort-Object FullName)
+        if ($bundles.Count -eq 0) {
+          throw "No .msixbundle found under $outputDir"
+        }
+        if ($bundles.Count -ne 1) {
+          $actual = ($bundles | Select-Object -ExpandProperty FullName) -join ", "
+          throw "Expected exactly one .msixbundle under $outputDir, found $($bundles.Count): $actual"
+        }
+
+        $bundle = $bundles[0]
+        $checksumFile = Join-Path $outputDir "SHA256SUMS.txt"
+        $relativePath = [System.IO.Path]::GetRelativePath($outputDir, $bundle.FullName).Replace('\', '/')
+        $hash = (Get-FileHash -Path $bundle.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $line = "$hash  $relativePath"
+
+        Set-Content -Path $checksumFile -Value $line -Encoding ascii
+        Write-Host "Generated checksum file: $checksumFile (subject: $relativePath)"
 
     - name: List package outputs
       shell: pwsh
@@ -179,9 +206,18 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: release-package-${{ steps.version.outputs.VERSION }}
-        path: output/**/*.msixbundle
+        path: |
+          output/**/*.msixbundle
+          output/SHA256SUMS.txt
         if-no-files-found: error
         retention-days: 30
+
+    - name: Generate artifact attestation
+      uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+      with:
+        subject-path: |
+          output/**/*.msixbundle
+          output/SHA256SUMS.txt
 
     - name: Cleanup old release assets
       shell: pwsh
@@ -222,13 +258,16 @@ jobs:
           | **InformationalVersion** | `${{ steps.version.outputs.INFORMATIONAL_VERSION }}` |
           | **FileVersion** | `${{ steps.version.outputs.FILE_VERSION }}` |
           | **Package Version** | `${{ steps.version.outputs.MSIX_VERSION }}` |
-          | **Signing** | `disabled (temporary)` |
+          | **Signing** | `unsigned (Release channel policy)` |
+          | **Checksum** | `SHA256SUMS.txt` |
+          | **Provenance** | `GitHub Artifact Attestation` |
           | **Commit** | [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
           | **Build** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
-          > Unsigned package: signing workflow is temporarily deferred.
+          > Unsigned package by channel policy. Verify `SHA256SUMS.txt` and GitHub Artifact Attestation (`gh attestation verify`) before use.
         files: |
           output/**/*.msixbundle
+          output/SHA256SUMS.txt
         prerelease: false
         make_latest: false
 
@@ -244,7 +283,9 @@ jobs:
         | InformationalVersion | `${{ steps.version.outputs.INFORMATIONAL_VERSION }}` |
         | FileVersion | `${{ steps.version.outputs.FILE_VERSION }}` |
         | Package Version | `${{ steps.version.outputs.MSIX_VERSION }}` |
-        | Signing | `disabled (temporary)` |
+        | Signing | `unsigned (Release channel policy)` |
+        | Checksum | `SHA256SUMS.txt` |
+        | Provenance | `GitHub Artifact Attestation` |
         | Artifact | `release-package-${{ steps.version.outputs.VERSION }}` |
         | Branch | `${{ github.ref_name }}` |
         | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |

@@ -1,4 +1,3 @@
-using ClipSave.Models;
 using ClipSave.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;

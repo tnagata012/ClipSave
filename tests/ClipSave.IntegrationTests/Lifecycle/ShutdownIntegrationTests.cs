@@ -1,6 +1,7 @@
 using ClipSave.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 
@@ -153,24 +154,13 @@ public class ShutdownIntegrationTests
         // Disposing should stop the pipe server.
         service.Dispose();
 
-        // Give the server a moment to shut down.
-        await Task.Delay(200);
+        // Wait until the server actually stops accepting connections.
+        var rejected = await WaitUntilAsync(
+            () => !CanConnectToPipe(pipeName, timeoutMs: 100),
+            timeout: TimeSpan.FromSeconds(3),
+            pollInterval: TimeSpan.FromMilliseconds(50));
 
-        // A new client should fail to connect.
-        using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.Out);
-        var connected = false;
-
-        try
-        {
-            client.Connect(timeout: 500);
-            connected = true;
-        }
-        catch (TimeoutException)
-        {
-            connected = false;
-        }
-
-        connected.Should().BeFalse("connection should fail because the pipe server has been stopped");
+        rejected.Should().BeTrue("connection should fail because the pipe server has been stopped");
     }
 
     [Fact]
@@ -254,6 +244,43 @@ public class ShutdownIntegrationTests
                 try { Directory.Delete(testPath, true); }
                 catch { /* ignore */ }
             }
+        }
+    }
+
+    private static async Task<bool> WaitUntilAsync(
+        Func<bool> predicate,
+        TimeSpan timeout,
+        TimeSpan pollInterval)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        while (stopwatch.Elapsed < timeout)
+        {
+            if (predicate())
+            {
+                return true;
+            }
+
+            await Task.Delay(pollInterval);
+        }
+
+        return predicate();
+    }
+
+    private static bool CanConnectToPipe(string pipeName, int timeoutMs)
+    {
+        try
+        {
+            using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.Out);
+            client.Connect(timeout: timeoutMs);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
         }
     }
 }

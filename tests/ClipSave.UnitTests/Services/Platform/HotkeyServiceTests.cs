@@ -67,7 +67,8 @@ public class HotkeyServiceTests
     [StaFact]
     public void WndProc_ConsecutiveHotkeysWithinSuppressionWindow_RaisesSingleEvent()
     {
-        using var hotkeyService = new HotkeyService(_mockLogger.Object);
+        var tick = 10_000L;
+        using var hotkeyService = new HotkeyService(_mockLogger.Object, () => tick);
         var pressedCount = 0;
         hotkeyService.HotkeyPressed += (_, _) => pressedCount++;
 
@@ -75,6 +76,7 @@ public class HotkeyServiceTests
         FlushDispatcher();
         pressedCount.Should().Be(1);
 
+        tick += 50;
         InvokeHotkeyMessage(hotkeyService);
         FlushDispatcher();
         pressedCount.Should().Be(1);

@@ -72,15 +72,13 @@ public class SingleInstanceServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task TryAcquireOrNotify_AfterFirstInstanceDisposed_NewInstanceCanBePrimary()
+    public void TryAcquireOrNotify_AfterFirstInstanceDisposed_NewInstanceCanBePrimary()
     {
         var firstService = CreateService();
         firstService.TryAcquireOrNotify();
 
         firstService.Dispose();
         _services.Remove(firstService);
-
-        await Task.Delay(100);
 
         var newService = CreateService();
         var result = newService.TryAcquireOrNotify();

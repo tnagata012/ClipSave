@@ -21,12 +21,25 @@ public class CrashDumpService
 
     public static string? WriteDump(Exception exception, string source, AppSettings? settings = null)
     {
+        return WriteDump(exception, source, settings, static () => DateTime.Now);
+    }
+
+    internal static string? WriteDump(
+        Exception exception,
+        string source,
+        AppSettings? settings,
+        Func<DateTime> nowProvider)
+    {
         try
         {
+            ArgumentNullException.ThrowIfNull(exception);
+            ArgumentNullException.ThrowIfNull(source);
+            ArgumentNullException.ThrowIfNull(nowProvider);
+
             var dumpDirectory = GetDumpDirectory();
             Directory.CreateDirectory(dumpDirectory);
 
-            var timestamp = DateTime.Now;
+            var timestamp = nowProvider();
             var fileName = $"crash-{timestamp:yyyyMMdd-HHmmss-fff}.txt";
             var filePath = Path.Combine(dumpDirectory, fileName);
 

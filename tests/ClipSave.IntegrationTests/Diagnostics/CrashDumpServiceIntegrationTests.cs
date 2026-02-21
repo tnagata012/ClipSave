@@ -224,13 +224,18 @@ public class CrashDumpServiceIntegrationTests : IDisposable
     {
         // Arrange
         var exception = new Exception("Duplicate test");
+        var timestamp = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Local);
+        var timestampStep = 0;
 
-        // Act: generate multiple dumps in short intervals.
+        // Act: generate multiple dumps with deterministic timestamps.
         var paths = new List<string?>();
         for (int i = 0; i < 3; i++)
         {
-            paths.Add(CrashDumpService.WriteDump(exception, $"UniqueTest_{i}", null));
-            Thread.Sleep(10); // Millisecond precision is enough for uniqueness.
+            paths.Add(CrashDumpService.WriteDump(
+                exception,
+                $"UniqueTest_{i}",
+                null,
+                () => timestamp.AddMilliseconds(timestampStep++)));
         }
 
         // Assert

@@ -9,11 +9,12 @@ namespace ClipSave.Services;
 public class HotkeyService : IDisposable
 {
     private readonly ILogger<HotkeyService> _logger;
+    private readonly Func<long> _tickProvider;
     private IntPtr _windowHandle;
     private const int WmHotkey = 0x0312;
     private const int HotkeyId = 1;
     private bool _isRegistered = false;
-    private long _lastTriggerTick = -RepeatSuppressionMs;
+    private long _lastTriggerTick;
     private const int RepeatSuppressionMs = 100;
 
     public event EventHandler? HotkeyPressed;
@@ -36,8 +37,15 @@ public class HotkeyService : IDisposable
     }
 
     public HotkeyService(ILogger<HotkeyService> logger)
+        : this(logger, static () => Environment.TickCount64)
     {
-        _logger = logger;
+    }
+
+    internal HotkeyService(ILogger<HotkeyService> logger, Func<long> tickProvider)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _tickProvider = tickProvider ?? throw new ArgumentNullException(nameof(tickProvider));
+        _lastTriggerTick = -RepeatSuppressionMs;
     }
 
     public void Initialize(IntPtr windowHandle)
@@ -139,7 +147,7 @@ public class HotkeyService : IDisposable
     {
         if (msg == WmHotkey && wParam.ToInt32() == HotkeyId)
         {
-            var now = Environment.TickCount64;
+            var now = _tickProvider();
             if (now - _lastTriggerTick < RepeatSuppressionMs)
             {
                 _logger.LogDebug("Suppressed hotkey repeat input");

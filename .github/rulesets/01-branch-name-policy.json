@@ -7,19 +7,20 @@
       "include": [
         "~ALL"
       ],
-      "exclude": []
+      "exclude": [
+        "refs/heads/main",
+        "refs/heads/release/*",
+        "refs/heads/feature/*",
+        "refs/heads/fix/*",
+        "refs/heads/docs/*",
+        "refs/heads/chore/*"
+      ]
     }
   },
   "bypass_actors": [],
   "rules": [
     {
-      "type": "branch_name_pattern",
-      "parameters": {
-        "name": "Allowed branch names",
-        "operator": "regex",
-        "pattern": "^(main|release/\\d+\\.\\d+|(feature|fix|docs|chore)/[a-z0-9][a-z0-9._/-]*)$",
-        "negate": false
-      }
+      "type": "creation"
     }
   ]
 }

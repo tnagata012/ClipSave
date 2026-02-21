@@ -280,7 +280,7 @@ jobs:
     - name: Summary
       shell: pwsh
       run: |
-        @"
+        @'
         ## Dev Build Complete (Unsigned)
 
         | Item | Value |
@@ -291,5 +291,5 @@ jobs:
         | Checksum | `SHA256SUMS.txt` |
         | Provenance | `GitHub Artifact Attestation` |
         | Artifact | `dev-package-${{ steps.version.outputs.MSIX_VERSION }}` |
-        "@ >> $env:GITHUB_STEP_SUMMARY
+        '@ >> $env:GITHUB_STEP_SUMMARY
 

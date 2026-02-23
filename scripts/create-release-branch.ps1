@@ -258,16 +258,17 @@ try {
     Write-Host "  Main PR: $mainBumpBranch -> $nextMainVersion (target: $MainBranch)" -ForegroundColor White
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
-    Write-Host "1. Update RELEASE_NOTES.md for v$Version."
+    Write-Host "1. Keep user-facing changes in CHANGELOG.md under [Unreleased]."
+    Write-Host "2. At release finalization, move shipped items to [$Version] - YYYY-MM-DD (see docs/ops/ReleaseNotes.md)."
     if (-not $Push) {
-        Write-Host "2. Push both branches:"
+        Write-Host "3. Push both branches:"
         Write-Host "   git push -u origin $branchName"
         Write-Host "   git push -u origin $mainBumpBranch"
-        Write-Host "3. Create PR: $mainBumpBranch -> $MainBranch"
-        Write-Host "4. Release Build triggers on push to release/*."
+        Write-Host "4. Create PR: $mainBumpBranch -> $MainBranch"
+        Write-Host "5. Release Build triggers on push to release/*."
     } else {
-        Write-Host "2. Create PR: $mainBumpBranch -> $MainBranch"
-        Write-Host "3. Release Build will run automatically (already pushed)."
+        Write-Host "3. Create PR: $mainBumpBranch -> $MainBranch"
+        Write-Host "4. Release Build will run automatically (already pushed)."
     }
     Write-Host ""
     Write-Host "Patch release reminder:" -ForegroundColor Cyan

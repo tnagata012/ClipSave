@@ -43,7 +43,7 @@ dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 - [使い方ガイド](docs/UsageGuide.md) - 基本操作と設定
 - [製品コンセプト](docs/ProductConcept.md) - ビジョンと設計思想
 - [ランディングページ運用](docs/presentation/LandingPage.md) - `site/` の更新方針と確認手順
-- [リリースノート](RELEASE_NOTES.md) - 変更履歴
+- [Changelog](CHANGELOG.md) - 変更履歴
 
 ## 開発者向け
 
@@ -53,7 +53,7 @@ dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 |---------|-------------|
 | 設計 | [仕様](docs/dev/Specification.md) ・ [アーキテクチャ](docs/dev/Architecture.md) ・ [コーディングガイドライン](docs/dev/CodingGuidelines.md) |
 | テスト | [テスト戦略](docs/dev/TestingStrategy.md) |
-| 運用 | [デプロイ](docs/ops/Deployment.md) ・ [署名運用](docs/ops/Signing.md) ・ [バージョニング](docs/ops/Versioning.md) ・ [ブランチ戦略](docs/ops/BranchStrategy.md) ・ [検証アーティファクト導入](docs/ops/ArtifactInstallation.md) ・ [アイコン運用](docs/presentation/IconAssets.md) |
+| 運用 | [デプロイ](docs/ops/Deployment.md) ・ [署名運用](docs/ops/Signing.md) ・ [バージョニング](docs/ops/Versioning.md) ・ [ブランチ戦略](docs/ops/BranchStrategy.md) ・ [CHANGELOG 運用](docs/ops/ReleaseNotes.md) ・ [検証アーティファクト導入](docs/ops/ArtifactInstallation.md) ・ [アイコン運用](docs/presentation/IconAssets.md) |
 
 ## セキュリティ
 

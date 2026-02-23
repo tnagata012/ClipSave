@@ -142,20 +142,26 @@ try {
         $allPassed = $false
     }
 
-    # Check 6: Release notes
-    Write-Host -NoNewline "  Checking release notes... "
-    $releaseNotesPath = Join-Path $projectRoot "RELEASE_NOTES.md"
-    if (Test-Path $releaseNotesPath) {
-        $releaseNotes = Get-Content $releaseNotesPath -Raw
-        if ($releaseNotes -match "## v$([regex]::Escape($version))") {
+    # Check 6: Changelog
+    Write-Host -NoNewline "  Checking changelog... "
+    $changelogPath = Join-Path $projectRoot "CHANGELOG.md"
+
+    if (Test-Path $changelogPath) {
+        $changelog = Get-Content $changelogPath -Raw
+        $versionPattern = [regex]::Escape($version)
+        $modernPattern = "(?m)^##\s+\[$versionPattern\]\s*-\s*\d{4}-\d{2}-\d{2}\s*$"
+
+        if ($changelog -match $modernPattern) {
             Write-Host "FOUND" -ForegroundColor Green
         } else {
             Write-Host "NOT FOUND" -ForegroundColor Yellow
-            Write-Host "    Release notes for v$version not found in RELEASE_NOTES.md" -ForegroundColor Gray
+            Write-Host "    Changelog entry not found in expected format: ## [$version] - YYYY-MM-DD" -ForegroundColor Gray
+            $allPassed = $false
         }
     } else {
         Write-Host "NOT FOUND" -ForegroundColor Yellow
-        Write-Host "    RELEASE_NOTES.md not found at $releaseNotesPath" -ForegroundColor Gray
+        Write-Host "    CHANGELOG.md was not found at $projectRoot" -ForegroundColor Gray
+        $allPassed = $false
     }
 
     Write-Host ""
@@ -166,7 +172,7 @@ try {
 
     $checklist = @(
         "Release package artifact (release-package-$version, unsigned) reviewed for at least 24 hours",
-        "Selected source ref for Store Publish recorded (release-X.Y-latest tag or commit SHA)",
+        "Selected source ref for Store Publish recorded (recommended: X.Y.Z tag; exception: commit SHA)",
         "No critical bugs reported",
         "Partner Center app description updated (Japanese)",
         "Partner Center app description updated (English)",

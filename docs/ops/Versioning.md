@@ -10,6 +10,7 @@ ClipSave の版数規約と判定ルールを定義します。
 - 版数属性のマッピング（`Version` / `InformationalVersion` / `FileVersion` / MSIX）
 - ブランチごとの版数制約
 - 版数更新のルール（メジャー/マイナー、パッチ、Dev）
+- Git タグ運用（固定タグ / 移動タグ）
 
 この文書では、以下は扱いません。
 
@@ -24,6 +25,7 @@ ClipSave の版数規約と判定ルールを定義します。
 3. `PATCH` は「正式リリース回数」に対してのみ増やす。
 4. バージョン更新は原則 PR で実施する。
 5. 署名有無は版数規約に影響させない。
+6. 正式版の固定タグは `X.Y.Z` 形式で統一する。
 
 ## SemVer 規約
 
@@ -48,7 +50,8 @@ ClipSave の版数規約と判定ルールを定義します。
 - `Package.appxmanifest` はリポジトリ上で `X.Y.Z.0` を保持する。
 - Dev 版数（`<run>`）は CI で一時注入し、版数ファイルはコミットしない。
 - `AssemblyVersion = X.Y.0.0` は PATCH ごとの不要な再バインドを避けるため。
-- ローカルの手動ビルドでは `Directory.Build.props` の既定値 `X.Y.Z.local` を使用し、workflow 実行時のみ CI が `X.Y.Z+sha.<shortSha>` / `X.Y.Z-dev.<run>+sha.<shortSha>` に上書きする。
+- ローカル手動ビルドでは `Version=X.Y.Z` を使い、`InformationalVersion` の既定値は `$(Version).local`。
+- workflow 実行時は CI が `InformationalVersion` / `FileVersion` / MSIX Version をチャネル別に上書きする。
 
 ## ブランチ別版数制約
 
@@ -68,6 +71,21 @@ ClipSave の版数規約と判定ルールを定義します。
 補足:
 
 - `dev-latest` と `release-X.Y-latest` は固定版タグではなく移動タグ（floating tag）として運用し、各 workflow 成功時に実行コミットへ更新する。
+
+## Git タグ運用
+
+| 種別 | 形式 | 更新可否 | 用途 |
+|------|------|----------|------|
+| Dev チャネルタグ | `dev-latest` | 可（移動） | `main` の最新検証成果物を指す |
+| Release チャネルタグ | `release-X.Y-latest` | 可（移動） | `release/X.Y` の最新候補を指す |
+| 正式版固定タグ | `X.Y.Z` | 不可（固定） | 正式版の採用コミットを不変で識別する |
+
+運用ルール:
+
+1. `dev-latest` / `release-X.Y-latest` は workflow により更新する移動タグとして扱う。
+2. 正式版を確定したら採用コミットへ `X.Y.Z` タグを作成する。
+3. `X.Y.Z` は作成後に移動・付け替えを行わない（同一版の作り直しは版を上げる）。
+4. Store Publish workflow は `source_ref` 未指定時に `release/X.Y` 先頭を使うため、正式提出では `source_ref=X.Y.Z` を原則指定する（例外時は commit SHA）。
 
 ## 検証ルール（`assert-version-policy.ps1`）
 
@@ -95,12 +113,14 @@ ClipSave の版数規約と判定ルールを定義します。
 1. `Prepare Release Branch`（推奨）または `create-release-branch.ps1` で `release/X.Y` を作成する。
 2. 同時に `chore/bump-main-to-*` を作成し、`main` 側の次系列へ進める。
 3. 安定化中は `X.Y.0` を維持し、候補ビルドを繰り返す。
+4. 採用コミット確定後に正式版固定タグ `X.Y.Z` を作成する。
 
 ### パッチリリース
 
 - 前回正式版が `X.Y.Z` の場合、次回は `X.Y.(Z+1)`。
 - 当該リリースサイクルで `PATCH` を更新する PR は 1 回のみ（patch init PR）。
 - 以降の backport PR では `PATCH` を再度増やさない。
+- 採用コミット確定後に正式版固定タグ `X.Y.Z` を作成する。
 
 実行手段:
 

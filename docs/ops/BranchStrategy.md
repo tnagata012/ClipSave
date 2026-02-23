@@ -49,7 +49,7 @@ ClipSave のブランチ構成と統合方向を定義します。
 - `docs/update-branch-policy`
 - `chore/bump-main-to-1.4.0`
 
-## 統合ルール（必須）
+## 統合ルール
 
 1. `main` 向けの作業ブランチは `main` から作成し、PR で `main` に統合する。
 2. `release/X.Y` はメジャー/マイナー開始時にのみ作成する。

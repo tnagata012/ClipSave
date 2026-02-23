@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using System.Windows.Threading;
 using System.Xml.Linq;
 
@@ -95,10 +94,10 @@ public class StartupAndLanguageIntegrationTests : IDisposable
 
         try
         {
-            SetPrivateField(coordinator, "_settingsService", settingsService);
+            coordinator.SetSettingsServiceForTest(settingsService);
 
-            InvokePrivateVoid(coordinator, "ShowStartupGuidanceIfNeeded");
-            InvokePrivateVoid(coordinator, "ShowStartupGuidanceIfNeeded");
+            coordinator.ShowStartupGuidanceIfNeededForTest();
+            coordinator.ShowStartupGuidanceIfNeededForTest();
 
             settingsService.Current.Advanced.StartupGuidanceShown.Should().BeTrue();
             settingsChangedCount.Should().Be(1);
@@ -130,20 +129,6 @@ public class StartupAndLanguageIntegrationTests : IDisposable
             .Should().Be(AppLanguage.English);
         AppLanguage.ResolveFromSystem(CultureInfo.GetCultureInfo("fr-FR"))
             .Should().Be(AppLanguage.English);
-    }
-
-    private static void SetPrivateField(object instance, string fieldName, object value)
-    {
-        var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        field!.SetValue(instance, value);
-    }
-
-    private static void InvokePrivateVoid(object instance, string methodName)
-    {
-        var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        _ = method!.Invoke(instance, null);
     }
 
     private static string GetProjectPath(params string[] segments)

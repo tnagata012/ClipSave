@@ -15,13 +15,7 @@ public class TrayServiceIntegrationTests
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         using var trayService = new TrayService(loggerFactory.CreateLogger<TrayService>());
 
-        var notifyIconField = typeof(TrayService).GetField(
-            "_notifyIcon",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-
-        notifyIconField.Should().NotBeNull();
-        var notifyIcon = notifyIconField!.GetValue(trayService).Should().BeOfType<NotifyIcon>().Subject;
-        notifyIcon.Visible.Should().BeTrue();
+        trayService.IsTrayIconVisibleForTest().Should().BeTrue();
     }
 
     [StaFact]

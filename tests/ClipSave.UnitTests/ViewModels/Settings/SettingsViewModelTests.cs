@@ -9,7 +9,7 @@ using System.Windows.Input;
 
 namespace ClipSave.UnitTests;
 
-[Collection("SettingsTests")]
+[UnitTest]
 public class SettingsViewModelTests : IDisposable
 {
     private readonly string _testAppDataPath;

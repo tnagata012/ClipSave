@@ -5,6 +5,7 @@ using System.Xml.Linq;
 
 namespace ClipSave.UnitTests;
 
+[UnitTest]
 public class LocalizationResourceCompletenessTests
 {
     [Fact]

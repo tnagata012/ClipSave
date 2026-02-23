@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 
 namespace ClipSave.UnitTests;
 
+[UnitTest]
 public class ContentEncodingServiceTests
 {
     private readonly ContentEncodingService _service;

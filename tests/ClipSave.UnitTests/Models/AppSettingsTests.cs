@@ -4,6 +4,7 @@ using System.Text.Json;
 
 namespace ClipSave.UnitTests;
 
+[UnitTest]
 public class AppSettingsTests
 {
     [Fact]

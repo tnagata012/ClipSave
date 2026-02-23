@@ -2,7 +2,6 @@ using ClipSave.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using System.IO;
-using System.Reflection;
 
 namespace ClipSave.IntegrationTests;
 
@@ -41,9 +40,9 @@ public class SavePathResolutionIntegrationTests : IDisposable
         using var pipeline = CreatePipeline();
         var targetDirectory = Path.GetTempPath();
 
-        var (resolved, path) = InvokeTryGetSaveDirectory(
-            pipeline,
-            new ActiveWindowResult(ActiveWindowKind.Desktop, targetDirectory));
+        var resolved = pipeline.TryResolveSaveDirectoryForTest(
+            new ActiveWindowResult(ActiveWindowKind.Desktop, targetDirectory),
+            out var path);
 
         resolved.Should().BeTrue();
         path.Should().Be(targetDirectory);
@@ -56,9 +55,9 @@ public class SavePathResolutionIntegrationTests : IDisposable
         using var pipeline = CreatePipeline();
         var targetDirectory = Path.GetTempPath();
 
-        var (resolved, path) = InvokeTryGetSaveDirectory(
-            pipeline,
-            new ActiveWindowResult(ActiveWindowKind.Explorer, targetDirectory));
+        var resolved = pipeline.TryResolveSaveDirectoryForTest(
+            new ActiveWindowResult(ActiveWindowKind.Explorer, targetDirectory),
+            out var path);
 
         resolved.Should().BeTrue();
         path.Should().Be(targetDirectory);
@@ -96,21 +95,5 @@ public class SavePathResolutionIntegrationTests : IDisposable
             settingsService,
             new ActiveWindowService(_loggerFactory.CreateLogger<ActiveWindowService>()),
             localizationService);
-    }
-
-    private static (bool Resolved, string Path) InvokeTryGetSaveDirectory(
-        SavePipeline pipeline,
-        ActiveWindowResult activeWindow)
-    {
-        var method = typeof(SavePipeline).GetMethod(
-            "TryGetSaveDirectory",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-
-        var arguments = new object?[] { activeWindow, string.Empty };
-        var resolved = (bool)method!.Invoke(pipeline, arguments)!;
-        var path = arguments[1] as string ?? string.Empty;
-
-        return (resolved, path);
     }
 }

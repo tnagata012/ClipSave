@@ -1,18 +1,23 @@
 using ClipSave.Infrastructure.Startup;
+using ClipSave.Models;
 using ClipSave.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System.IO;
+using System.Windows.Threading;
 
 namespace ClipSave.UnitTests;
 
-[Collection("HotkeyTests")]
+[UnitTest]
 public class AppHotkeyCoordinatorTests : IDisposable
 {
     private readonly string _settingsDirectory;
+    private readonly SettingsService _settingsService;
+    private readonly HotkeyService _hotkeyService;
     private readonly AppHotkeyCoordinator _coordinator;
+    private readonly List<NotificationMessage> _notifications = new();
 
     public AppHotkeyCoordinatorTests()
     {
@@ -21,18 +26,20 @@ public class AppHotkeyCoordinatorTests : IDisposable
             $"ClipSave_AppHotkeyCoordinatorTests_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_settingsDirectory);
 
-        var settingsService = new SettingsService(
+        _settingsService = new SettingsService(
             Mock.Of<ILogger<SettingsService>>(),
             _settingsDirectory);
         var notificationService = new NotificationService(
             Mock.Of<ILogger<NotificationService>>(),
-            settingsService);
-        var hotkeyService = new HotkeyService(
+            _settingsService);
+        notificationService.NotificationRequested += (_, notification) => _notifications.Add(notification);
+
+        _hotkeyService = new HotkeyService(
             Mock.Of<ILogger<HotkeyService>>());
 
         _coordinator = new AppHotkeyCoordinator(
-            hotkeyService,
-            settingsService,
+            _hotkeyService,
+            _settingsService,
             notificationService,
             NullLogger<AppHotkeyCoordinator>.Instance,
             key => key);
@@ -41,6 +48,7 @@ public class AppHotkeyCoordinatorTests : IDisposable
     public void Dispose()
     {
         _coordinator.Dispose();
+        _hotkeyService.Dispose();
 
         if (Directory.Exists(_settingsDirectory))
         {
@@ -54,7 +62,61 @@ public class AppHotkeyCoordinatorTests : IDisposable
         }
     }
 
-    [Fact]
+    [StaFact]
+    public void Initialize_CalledTwice_DoesNotThrow()
+    {
+        var act = () =>
+        {
+            _coordinator.Initialize();
+            _coordinator.Initialize();
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
+    public void Initialize_WhenHotkeySettingIsInvalid_NotifiesRegistrationFailure()
+    {
+        _settingsService.Current.Hotkey.Modifiers = new List<string> { "UnknownModifier" };
+        _settingsService.Current.Hotkey.Key = "V";
+
+        _coordinator.Initialize();
+
+        _notifications.Should().ContainSingle(notification =>
+            notification.Message.Contains("App_HotkeyRegisterFailed", StringComparison.Ordinal));
+    }
+
+    [StaFact]
+    public void HotkeyPressed_WhenServiceRaisesHotkeyMessage_ForwardsEvent()
+    {
+        _coordinator.Initialize();
+
+        var raisedCount = 0;
+        _coordinator.HotkeyPressed += (_, _) => raisedCount++;
+
+        _hotkeyService.TryHandleHotkeyMessageForTest().Should().BeTrue();
+        FlushDispatcher();
+
+        raisedCount.Should().Be(1);
+    }
+
+    [StaFact]
+    public void Dispose_AfterInitialize_UnsubscribesFromHotkeyEvents()
+    {
+        _coordinator.Initialize();
+
+        var raisedCount = 0;
+        _coordinator.HotkeyPressed += (_, _) => raisedCount++;
+
+        _coordinator.Dispose();
+
+        _hotkeyService.TryHandleHotkeyMessageForTest().Should().BeTrue();
+        FlushDispatcher();
+
+        raisedCount.Should().Be(0);
+    }
+
+    [StaFact]
     public void SuspendHotkeyRegistration_BeforeInitialize_DoesNotThrow()
     {
         var act = () => _coordinator.SuspendHotkeyRegistration();
@@ -62,7 +124,7 @@ public class AppHotkeyCoordinatorTests : IDisposable
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [StaFact]
     public void ResumeHotkeyRegistration_BeforeInitialize_DoesNotThrow()
     {
         var act = () => _coordinator.ResumeHotkeyRegistration();
@@ -70,7 +132,7 @@ public class AppHotkeyCoordinatorTests : IDisposable
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [StaFact]
     public void Dispose_CanBeCalledMultipleTimes()
     {
         var act = () =>
@@ -82,7 +144,7 @@ public class AppHotkeyCoordinatorTests : IDisposable
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [StaFact]
     public void Initialize_AfterDispose_ThrowsObjectDisposedException()
     {
         _coordinator.Dispose();
@@ -90,5 +152,14 @@ public class AppHotkeyCoordinatorTests : IDisposable
         var act = () => _coordinator.Initialize();
 
         act.Should().Throw<ObjectDisposedException>();
+    }
+
+    private static void FlushDispatcher()
+    {
+        var frame = new DispatcherFrame();
+        Dispatcher.CurrentDispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
     }
 }

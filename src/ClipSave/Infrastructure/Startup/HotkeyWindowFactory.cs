@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Interop;
 
 namespace ClipSave.Infrastructure.Startup;
 
@@ -15,6 +16,7 @@ internal static class HotkeyWindowFactory
             ShowActivated = false
         };
 
+        _ = new WindowInteropHelper(window).EnsureHandle();
         window.Show();
         window.Hide();
 

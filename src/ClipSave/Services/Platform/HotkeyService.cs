@@ -166,6 +166,13 @@ public class HotkeyService : IDisposable
         return IntPtr.Zero;
     }
 
+    internal bool TryHandleHotkeyMessageForTest(int message = WmHotkey, int hotkeyId = HotkeyId)
+    {
+        var handled = false;
+        _ = WndProc(IntPtr.Zero, message, new IntPtr(hotkeyId), IntPtr.Zero, ref handled);
+        return handled;
+    }
+
     public void Dispose()
     {
         Unregister();

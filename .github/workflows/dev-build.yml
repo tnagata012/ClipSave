@@ -18,7 +18,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DOTNET_VERSION: '10.0.x'
   SOLUTION_FILE: ClipSave.slnx
   APP_PROJECT: src/ClipSave/ClipSave.csproj
 
@@ -35,7 +34,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+        global-json-file: global.json
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2

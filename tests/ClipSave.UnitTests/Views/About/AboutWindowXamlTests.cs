@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace ClipSave.UnitTests;
 
+[UnitTest]
 public class AboutWindowXamlTests
 {
     [Fact]

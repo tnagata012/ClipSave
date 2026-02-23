@@ -20,6 +20,8 @@ ClipSave では **Classical (Detroit-style) / Sociable Tests** を基本とし�
 - **テストのためにプロダクションコードの構造を変えない**
   インターフェース抽出や `virtual` 付与はテスト目的では行わない。
 - `InternalsVisibleTo` により `internal` へアクセスし、実オブジェクトを中心に検証する。
+- private 実装へのリフレクション直接呼び出し（`BindingFlags.NonPublic` など）は原則行わない。
+  必要な場合は最小の `internal` テストフックを設計し、振る舞いとして検証する。
 - **モックは原則使わない**
   ただし **挙動に影響しない観測・通知系の依存**（例: `ILogger<T>`）は運用上の例外として許容する。
   ※例外を導入した場合は、理由を PR で明記しレビューで合意する。
@@ -80,6 +82,7 @@ Integration は特に以下に集中する。
 - 本体 `src/ClipSave` の構造を基本的に鏡写しにする。
 - テスト共通ヘルパーは `TestInfrastructure/` に限定する。
 - クラス名は `<対象クラス名>Tests`。
+- クラスには `[UnitTest]` を付与し、カテゴリ分類を統一する。
 - UI 要素でも、ランタイム起動不要な静的契約検証（XAML 解析など）は Unit で扱ってよい。
 
 ### Integration
@@ -113,6 +116,7 @@ Integration は特に以下に集中する。
 
 | 属性                          | 用途                                     |
 | --------------------------- | -------------------------------------- |
+| `[UnitTest]`                | Unit テストクラスのカテゴリ分類（クラス属性）           |
 | `[Fact]`                    | 通常のテスト                                 |
 | `[StaFact]`                 | WPF・NotifyIcon・Clipboard など STA 必須のテスト |
 | `[Theory]` + `[InlineData]` | 入力違いの同一ロジック検証                          |
@@ -140,6 +144,12 @@ public class SettingsWindowUiTests
 
 - コメント、`Should(..., "reason")`、テスト用例外メッセージは英語で統一する。
 - 仕様検証に必要なデータ（ローカライズ文字列など）は日本語を許容する。
+
+### 契約テストの書き方（壊れにくさ優先）
+
+- ソースコード文字列への単純一致（`File.ReadAllText(...).Should().Contain("...")`）で仕様を保証しない。
+- 契約確認は、可能な限り振る舞い検証または構造化データの検証（例: `XDocument` で `App.xaml` / `app.manifest` / `*.csproj` を解析）で行う。
+- 実装詳細（private フィールド名・private メソッド名）に依存した検証は避ける。
 
 ---
 
@@ -210,6 +220,7 @@ dotnet test tests/ClipSave.UiTests/ClipSave.UiTests.csproj --filter "Category=UI
 用途:
 - 仕様 ID の振り直し・名称変更時に、テスト側の参照漏れを検出する
 - 孤立した `Spec` 属性（仕様に存在しない ID）を早期に検出する
+- 未カバー SPEC や孤立した SPEC がある場合は失敗し、CI でブロックする
 
 ---
 

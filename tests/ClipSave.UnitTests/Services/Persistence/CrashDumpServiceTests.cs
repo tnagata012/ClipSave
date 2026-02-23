@@ -5,6 +5,7 @@ using System.IO;
 
 namespace ClipSave.UnitTests;
 
+[UnitTest]
 public class CrashDumpServiceTests : IDisposable
 {
     private readonly string _testDumpPath;

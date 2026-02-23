@@ -7,7 +7,6 @@ using System.IO;
 namespace ClipSave.IntegrationTests;
 
 [IntegrationTest]
-[Collection("CrashDumpTests")]
 public class CrashDumpServiceIntegrationTests : IDisposable
 {
     private readonly string _testDumpPath;

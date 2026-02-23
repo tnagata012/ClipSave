@@ -153,6 +153,11 @@ public class TrayService : IDisposable
         return TryInvokeMenuItemByMnemonic(keyCode);
     }
 
+    internal bool IsTrayIconVisibleForTest()
+    {
+        return _notifyIcon.Visible;
+    }
+
     public void ShowBalloonNotification(string message, NotificationSeverity severity = NotificationSeverity.Info)
     {
         try

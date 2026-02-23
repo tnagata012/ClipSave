@@ -6,7 +6,6 @@ using System.IO;
 
 namespace ClipSave.UnitTests;
 
-[Collection("SettingsTests")]
 [UnitTest]
 public class SettingsServiceHotkeyValidationTests : IDisposable
 {

@@ -106,7 +106,7 @@ public partial class AboutViewModel : ObservableObject
         return $"{version.Major}.{version.Minor}.{Math.Max(version.Build, 0)}";
     }
 
-    private static string GetDisplayInformationalVersion(
+    internal static string GetDisplayInformationalVersion(
         string? rawInformationalVersion,
         LocalizationService localizationService)
     {
@@ -121,7 +121,7 @@ public partial class AboutViewModel : ObservableObject
             : normalized;
     }
 
-    private static string NormalizeInformationalVersion(string rawInformationalVersion)
+    internal static string NormalizeInformationalVersion(string rawInformationalVersion)
     {
         var trimmed = rawInformationalVersion.Trim();
         var match = InformationalVersionPattern.Match(trimmed);

@@ -32,6 +32,7 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 
 - 配布対象は `*.msixbundle`（未署名）、Store 提出対象は `.msixupload`。
 - Dev/Release 配布では `*.msixbundle` と `SHA256SUMS.txt` をセットで公開し、GitHub Artifact Attestation を記録する。
+- `.NET` SDK の解決はリポジトリ直下の `global.json` を単一の正本とし、workflow の `actions/setup-dotnet` は `global-json-file: global.json` を参照する。
 - `dev-latest` と `release-X.Y-latest` は固定版タグではなく移動タグ（floating tag）として運用し、各 workflow 成功時に実行コミットへ更新する。
 - `release/X.Y` ブランチの配布タグは `release-X.Y-latest`（例: `release/1.3` -> `release-1.3-latest`）。
 - Store 提出は通常 `version` のみで実行できる。採用候補コミットを厳密に固定したい場合のみ `source_ref`（タグ/sha）を追加指定する。

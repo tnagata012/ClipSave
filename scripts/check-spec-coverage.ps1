@@ -49,9 +49,22 @@ if (-not (Test-Path $uiTestsDir)) {
 
 # Extract SPEC-IDs from Specification.md
 $specContent = Get-Content $specFile -Raw
-$specIds = [regex]::Matches($specContent, '\| (SPEC-\d{3}-\d{3}) \|') |
-    ForEach-Object { $_.Groups[1].Value } |
-    Sort-Object -Unique
+$tableSpecMatches = [regex]::Matches(
+    $specContent,
+    '^\|\s*(SPEC-\d{3}-\d{3})\s*\|',
+    [System.Text.RegularExpressions.RegexOptions]::Multiline)
+
+$specIds = @($tableSpecMatches |
+    ForEach-Object { $_.Groups[1].Value.ToUpperInvariant() } |
+    Sort-Object -Unique)
+
+if ($specIds.Count -eq 0) {
+    Write-Host "=== SPEC Coverage Report ===" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "FAIL: No SPEC-IDs were found in Specification.md." -ForegroundColor Red
+    Write-Host "Expected markdown table rows that begin with '| SPEC-xxx-yyy |'." -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "=== SPEC Coverage Report ===" -ForegroundColor Cyan
 Write-Host ""
@@ -66,10 +79,10 @@ $coveredSpecs = @{}
 
 foreach ($file in $testFiles) {
     $content = Get-Content $file.FullName -Raw
-    $matches = [regex]::Matches($content, '\[Spec\("(SPEC-\d{3}-\d{3})"\)\]')
+    $matches = [regex]::Matches($content, '\[Spec\(\s*"(SPEC-\d{3}-\d{3})"\s*\)\]')
     foreach ($match in $matches) {
-        $specId = $match.Groups[1].Value
-        $relativePath = $file.FullName.Substring($ProjectRoot.Length + 1) -replace '\\', '/'
+        $specId = $match.Groups[1].Value.ToUpperInvariant()
+        $relativePath = [System.IO.Path]::GetRelativePath($ProjectRoot, $file.FullName) -replace '\\', '/'
         if (-not $coveredSpecs.ContainsKey($specId)) {
             $coveredSpecs[$specId] = @()
         }
@@ -121,9 +134,16 @@ if ($orphaned.Count -gt 0) {
 
 Write-Host ""
 
-# Exit with non-zero if orphaned specs exist (indicates stale references)
-if ($orphaned.Count -gt 0) {
-    Write-Host "FAIL: Orphaned SPEC-IDs detected. Update tests or Specification.md." -ForegroundColor Red
+# Exit with non-zero if uncovered/orphaned specs exist.
+# Uncovered specs indicate missing test traceability.
+# Orphaned specs indicate stale test references.
+if ($uncovered.Count -gt 0 -or $orphaned.Count -gt 0) {
+    if ($uncovered.Count -gt 0) {
+        Write-Host "FAIL: Uncovered SPEC-IDs detected. Add or update Integration/UI tests." -ForegroundColor Red
+    }
+    if ($orphaned.Count -gt 0) {
+        Write-Host "FAIL: Orphaned SPEC-IDs detected. Update tests or Specification.md." -ForegroundColor Red
+    }
     exit 1
 }
 

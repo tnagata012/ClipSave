@@ -7,6 +7,39 @@ using System.Windows.Media.Imaging;
 
 namespace ClipSave.Services;
 
+internal interface ISaveExecutionGate
+{
+    bool TryEnter();
+    void Exit();
+    bool TryDisposeIfIdle();
+}
+
+internal sealed class SemaphoreSaveExecutionGate : ISaveExecutionGate
+{
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
+
+    public bool TryEnter()
+    {
+        return _semaphore.Wait(0);
+    }
+
+    public void Exit()
+    {
+        _semaphore.Release();
+    }
+
+    public bool TryDisposeIfIdle()
+    {
+        if (!_semaphore.Wait(0))
+        {
+            return false;
+        }
+
+        _semaphore.Dispose();
+        return true;
+    }
+}
+
 public class SavePipeline : IDisposable
 {
     private readonly ILogger<SavePipeline> _logger;
@@ -17,7 +50,9 @@ public class SavePipeline : IDisposable
     private readonly SettingsService _settingsService;
     private readonly ActiveWindowService _activeWindowService;
     private readonly LocalizationService _localizationService;
-    private readonly SemaphoreSlim _saveSemaphore = new(1, 1);
+    private readonly ISaveExecutionGate _saveExecutionGate;
+    private int _disposeRequested;
+    private int _activeExecutions;
 
     public SavePipeline(
         ILogger<SavePipeline> logger,
@@ -28,6 +63,29 @@ public class SavePipeline : IDisposable
         SettingsService settingsService,
         ActiveWindowService activeWindowService,
         LocalizationService? localizationService = null)
+        : this(
+            logger,
+            clipboardService,
+            contentEncodingService,
+            fileStorageService,
+            notificationService,
+            settingsService,
+            activeWindowService,
+            localizationService,
+            new SemaphoreSaveExecutionGate())
+    {
+    }
+
+    internal SavePipeline(
+        ILogger<SavePipeline> logger,
+        ClipboardService clipboardService,
+        ContentEncodingService contentEncodingService,
+        FileStorageService fileStorageService,
+        NotificationService notificationService,
+        SettingsService settingsService,
+        ActiveWindowService activeWindowService,
+        LocalizationService? localizationService,
+        ISaveExecutionGate saveExecutionGate)
     {
         _logger = logger;
         _clipboardService = clipboardService;
@@ -37,15 +95,40 @@ public class SavePipeline : IDisposable
         _settingsService = settingsService;
         _activeWindowService = activeWindowService;
         _localizationService = localizationService ?? new LocalizationService(NullLogger<LocalizationService>.Instance);
+        ArgumentNullException.ThrowIfNull(saveExecutionGate);
+        _saveExecutionGate = saveExecutionGate;
     }
 
     public async Task<SaveResult> ExecuteAsync()
     {
-        if (!_saveSemaphore.Wait(0))
+        if (IsDisposeRequested())
         {
-            _logger.LogDebug("Save pipeline is already running; ignored an additional trigger");
+            _logger.LogDebug("Save pipeline execution was ignored because disposal has been requested");
             return SaveResult.CreateBusy();
         }
+
+        try
+        {
+            if (!_saveExecutionGate.TryEnter())
+            {
+                _logger.LogDebug("Save pipeline is already running; ignored an additional trigger");
+                return SaveResult.CreateBusy();
+            }
+        }
+        catch (ObjectDisposedException) when (IsDisposeRequested())
+        {
+            _logger.LogDebug("Save pipeline execution was ignored because the execution gate has already been disposed");
+            return SaveResult.CreateBusy();
+        }
+
+        if (IsDisposeRequested())
+        {
+            TryReleaseExecutionGateAfterDisposeRequest();
+            TryDisposeExecutionGateIfIdle();
+            return SaveResult.CreateBusy();
+        }
+
+        Interlocked.Increment(ref _activeExecutions);
 
         try
         {
@@ -102,7 +185,12 @@ public class SavePipeline : IDisposable
         }
         finally
         {
-            _saveSemaphore.Release();
+            TryReleaseExecutionGateAfterExecution();
+
+            if (Interlocked.Decrement(ref _activeExecutions) == 0 && IsDisposeRequested())
+            {
+                TryDisposeExecutionGateIfIdle();
+            }
         }
     }
 
@@ -196,6 +284,11 @@ public class SavePipeline : IDisposable
         return true;
     }
 
+    internal bool TryResolveSaveDirectoryForTest(ActiveWindowResult activeWindow, out string savePath)
+    {
+        return TryGetSaveDirectory(activeWindow, out savePath);
+    }
+
     private static SaveSettings CreateSaveSettingsSnapshot(SaveSettings source)
     {
         return new SaveSettings
@@ -276,7 +369,56 @@ public class SavePipeline : IDisposable
 
     public void Dispose()
     {
-        _saveSemaphore.Dispose();
+        Interlocked.Exchange(ref _disposeRequested, 1);
+
+        if (Volatile.Read(ref _activeExecutions) == 0)
+        {
+            TryDisposeExecutionGateIfIdle();
+        }
+
         GC.SuppressFinalize(this);
+    }
+
+    private void TryReleaseExecutionGateAfterExecution()
+    {
+        try
+        {
+            _saveExecutionGate.Exit();
+        }
+        catch (ObjectDisposedException) when (IsDisposeRequested())
+        {
+            _logger.LogDebug("Skipped save execution gate release because pipeline disposal is in progress");
+        }
+    }
+
+    private void TryReleaseExecutionGateAfterDisposeRequest()
+    {
+        try
+        {
+            _saveExecutionGate.Exit();
+        }
+        catch (ObjectDisposedException) when (IsDisposeRequested())
+        {
+            _logger.LogDebug("Skipped save execution gate release after disposal request");
+        }
+    }
+
+    private void TryDisposeExecutionGateIfIdle()
+    {
+        try
+        {
+            if (!_saveExecutionGate.TryDisposeIfIdle())
+            {
+                return;
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private bool IsDisposeRequested()
+    {
+        return Volatile.Read(ref _disposeRequested) == 1;
     }
 }

@@ -4,11 +4,12 @@
     Create or move a floating tag to a specific commit.
 
 .DESCRIPTION
-    Updates `refs/tags/<tag>` in GitHub using `gh api`.
-    If the tag does not exist, it creates it.
+    Force-pushes a floating tag to a commit SHA and verifies
+    the remote ref.
 
 .PARAMETER Repo
     Repository in owner/name format (example: tnagata012/ClipSave).
+    Used as a safety check against the origin remote URL.
 
 .PARAMETER Tag
     Tag name to move (example: dev-latest, release-1.3-latest).
@@ -36,184 +37,132 @@ function Fail([string]$Message) {
     exit 1
 }
 
-function Invoke-GhApi([string[]]$Args) {
-    $stderrPath = [System.IO.Path]::GetTempFileName()
-    try {
-        $stdout = & gh @Args 2> $stderrPath
-        $exitCode = $LASTEXITCODE
-        $stdoutText = ($stdout | ForEach-Object { $_.ToString() }) -join "`n"
-        $stderrText = if (Test-Path $stderrPath) {
-            Get-Content -Path $stderrPath -Raw -ErrorAction SilentlyContinue
-        } else {
-            ""
-        }
-
-        return [pscustomobject]@{
-            ExitCode = $exitCode
-            StdOut = $stdoutText.TrimEnd("`r", "`n")
-            StdErr = "$stderrText".TrimEnd("`r", "`n")
-        }
-    } finally {
-        Remove-Item -Path $stderrPath -Force -ErrorAction SilentlyContinue
+function Invoke-Git([string[]]$ArgList) {
+    $output = & git @ArgList 2>&1
+    return [pscustomobject]@{
+        ExitCode = $LASTEXITCODE
+        Output = (($output | ForEach-Object { $_.ToString() }) -join "`n").TrimEnd("`r", "`n")
     }
 }
 
-function Get-GhScalar([string[]]$Args, [string]$Description) {
-    $result = Invoke-GhApi $Args
+function Get-Detail([pscustomobject]$Result) {
+    if ($Result -and -not [string]::IsNullOrWhiteSpace($Result.Output)) {
+        return $Result.Output
+    }
+    return "(no output)"
+}
+
+function Normalize-RemoteUrl([string]$RemoteUrl) {
+    $url = $RemoteUrl.Trim().TrimEnd("/")
+    if ($url.EndsWith(".git", [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $url.Substring(0, $url.Length - 4)
+    }
+    return $url
+}
+
+function Get-RemoteTagSha([string]$TagName) {
+    $result = Invoke-Git @("ls-remote", "--tags", "origin", "refs/tags/$TagName")
     if ($result.ExitCode -ne 0) {
-        $detail = if (-not [string]::IsNullOrWhiteSpace($result.StdErr)) { $result.StdErr } else { $result.StdOut }
         return [pscustomobject]@{
             Success = $false
-            Error = "Failed to $Description. $detail"
+            Error = "Failed to query remote tag refs. $(Get-Detail $result)"
         }
     }
 
-    $lines = @($result.StdOut -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    if ($lines.Count -eq 0) {
+    $line = $null
+    foreach ($candidate in ($result.Output -split "`r?`n")) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            $line = $candidate.Trim()
+            break
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($line)) {
         return [pscustomobject]@{
             Success = $false
-            Error = "Failed to $Description. No output returned."
+            Error = "Remote tag '$TagName' was not found."
+        }
+    }
+
+    $parts = @($line -split '\s+', 2)
+    if ($parts.Count -lt 2 -or $parts[0] -notmatch '^[0-9a-fA-F]{40}$') {
+        return [pscustomobject]@{
+            Success = $false
+            Error = "Could not parse remote refs for '$TagName'. Raw: $line"
         }
     }
 
     return [pscustomobject]@{
         Success = $true
-        Value = $lines[$lines.Count - 1].Trim()
+        Sha = $parts[0].ToLowerInvariant()
+        Raw = $line
     }
 }
 
-function Resolve-RefCommit([string]$Repo, [string]$Ref, [int]$MaxDepth = 5) {
-    $refTypeResult = Get-GhScalar @("api", "repos/$Repo/git/ref/$Ref", "--jq", ".object.type") "read ref type for '$Ref'"
-    if (-not $refTypeResult.Success) {
-        return [pscustomobject]@{
-            Success = $false
-            Error = $refTypeResult.Error
-        }
-    }
-
-    $refShaResult = Get-GhScalar @("api", "repos/$Repo/git/ref/$Ref", "--jq", ".object.sha") "read ref sha for '$Ref'"
-    if (-not $refShaResult.Success) {
-        return [pscustomobject]@{
-            Success = $false
-            Error = $refShaResult.Error
-        }
-    }
-
-    $rawType = "$($refTypeResult.Value)".Trim().ToLowerInvariant()
-    $rawSha = "$($refShaResult.Value)".Trim().ToLowerInvariant()
-    if ([string]::IsNullOrWhiteSpace($rawType) -or [string]::IsNullOrWhiteSpace($rawSha)) {
-        return [pscustomobject]@{
-            Success = $false
-            Error = "Ref '$Ref' did not return a valid object."
-        }
-    }
-
-    $resolvedType = $rawType
-    $resolvedSha = $rawSha
-    $depth = 0
-
-    while ($resolvedType -eq "tag") {
-        if ($depth -ge $MaxDepth) {
-            return [pscustomobject]@{
-                Success = $false
-                Error = "Tag dereference exceeded max depth ($MaxDepth) for '$Ref'."
-                RawType = $rawType
-                RawSha = $rawSha
-            }
-        }
-
-        $depth++
-        $tagTypeResult = Get-GhScalar @("api", "repos/$Repo/git/tags/$resolvedSha", "--jq", ".object.type") "resolve tag object type '$resolvedSha'"
-        if (-not $tagTypeResult.Success) {
-            return [pscustomobject]@{
-                Success = $false
-                Error = $tagTypeResult.Error
-                RawType = $rawType
-                RawSha = $rawSha
-            }
-        }
-
-        $tagShaResult = Get-GhScalar @("api", "repos/$Repo/git/tags/$resolvedSha", "--jq", ".object.sha") "resolve tag object sha '$resolvedSha'"
-        if (-not $tagShaResult.Success) {
-            return [pscustomobject]@{
-                Success = $false
-                Error = $tagShaResult.Error
-                RawType = $rawType
-                RawSha = $rawSha
-            }
-        }
-
-        $resolvedType = "$($tagTypeResult.Value)".Trim().ToLowerInvariant()
-        $resolvedSha = "$($tagShaResult.Value)".Trim().ToLowerInvariant()
-        if ([string]::IsNullOrWhiteSpace($resolvedType) -or [string]::IsNullOrWhiteSpace($resolvedSha)) {
-            return [pscustomobject]@{
-                Success = $false
-                Error = "Tag object '$rawSha' did not contain a valid target object."
-                RawType = $rawType
-                RawSha = $rawSha
-            }
-        }
-    }
-
-    return [pscustomobject]@{
-        Success = $true
-        RawType = $rawType
-        RawSha = $rawSha
-        ResolvedType = $resolvedType
-        ResolvedSha = $resolvedSha
-    }
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Fail "'git' command not found."
 }
 
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    Fail "'gh' command not found. Install GitHub CLI first."
+$expectedRepo = $Repo.Trim()
+if ([string]::IsNullOrWhiteSpace($expectedRepo)) {
+    Fail "Repo is empty."
 }
 
 $targetSha = $Sha.Trim().ToLowerInvariant()
-$ref = "tags/$Tag"
-$updated = $false
-$patchResult = $null
-$createResult = $null
+$tagName = $Tag.Trim()
+$tagRef = "refs/tags/$tagName"
 
-# Try update first. If tag does not exist, create it.
-$patchResult = Invoke-GhApi @("api", "--method", "PATCH", "repos/$Repo/git/refs/$ref", "-f", "sha=$targetSha", "-F", "force=true")
-if ($patchResult.ExitCode -eq 0) {
-    $updated = $true
-} else {
-    $createResult = Invoke-GhApi @("api", "--method", "POST", "repos/$Repo/git/refs", "-f", "ref=refs/$ref", "-f", "sha=$targetSha")
-    if ($createResult.ExitCode -eq 0) {
-        $updated = $true
-    }
+if ([string]::IsNullOrWhiteSpace($tagName)) {
+    Fail "Tag name is empty."
 }
 
-if (-not $updated) {
-    $patchError = if ($patchResult -and -not [string]::IsNullOrWhiteSpace($patchResult.StdErr)) {
-        $patchResult.StdErr
-    } elseif ($patchResult -and -not [string]::IsNullOrWhiteSpace($patchResult.StdOut)) {
-        $patchResult.StdOut
-    } else {
-        "(no output)"
-    }
-    $createError = if ($createResult -and -not [string]::IsNullOrWhiteSpace($createResult.StdErr)) {
-        $createResult.StdErr
-    } elseif ($createResult -and -not [string]::IsNullOrWhiteSpace($createResult.StdOut)) {
-        $createResult.StdOut
-    } else {
-        "(not attempted or no output)"
-    }
-    Fail "Failed to create or update tag '$Tag' in '$Repo'. PATCH: $patchError | POST: $createError"
+$tagFormatCheck = Invoke-Git @("check-ref-format", $tagRef)
+if ($tagFormatCheck.ExitCode -ne 0) {
+    Fail "Invalid tag name '$tagName'. $(Get-Detail $tagFormatCheck)"
+}
+
+$originResult = Invoke-Git @("remote", "get-url", "origin")
+if ($originResult.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($originResult.Output)) {
+    Fail "Failed to resolve origin remote URL. $(Get-Detail $originResult)"
+}
+
+$originUrl = $originResult.Output.Trim()
+$normalizedOrigin = (Normalize-RemoteUrl $originUrl).ToLowerInvariant()
+$normalizedRepo = $expectedRepo.ToLowerInvariant()
+
+if (-not $normalizedOrigin.EndsWith("/$normalizedRepo") -and -not $normalizedOrigin.EndsWith(":$normalizedRepo")) {
+    Fail "Repo mismatch. Expected '$expectedRepo', but origin is '$originUrl'."
+}
+
+$commitCheck = Invoke-Git @("rev-parse", "--verify", "$targetSha^{commit}")
+if ($commitCheck.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($commitCheck.Output)) {
+    Fail "Target SHA is not a valid commit in the current repository: $targetSha"
+}
+
+# Push SHA directly to remote tag ref to avoid mutating local tags.
+$pushSpec = "${targetSha}:$tagRef"
+$pushResult = Invoke-Git @("push", "origin", $pushSpec, "--force")
+if ($pushResult.ExitCode -ne 0) {
+    Fail "Failed to push tag '$tagName' to origin. $(Get-Detail $pushResult)"
 }
 
 $maxVerifyAttempts = 8
 $verifyDelaySeconds = 2
-$lastState = $null
+$lastError = "Unknown verification error."
+$lastRaw = ""
 
 for ($attempt = 1; $attempt -le $maxVerifyAttempts; $attempt++) {
-    $state = Resolve-RefCommit -Repo $Repo -Ref $ref
-    $lastState = $state
-
-    if ($state.Success -and $state.ResolvedType -eq "commit" -and $state.ResolvedSha -eq $targetSha) {
-        Write-Host "Floating tag updated: $Tag -> $($state.ResolvedSha) (raw: $($state.RawType):$($state.RawSha))"
-        exit 0
+    $state = Get-RemoteTagSha -TagName $tagName
+    if ($state.Success) {
+        if ($state.Sha -eq $targetSha) {
+            Write-Host "Floating tag updated: $tagName -> $($state.Sha) (remote refs: $($state.Raw))"
+            exit 0
+        }
+        $lastError = "Expected: $targetSha, Actual: $($state.Sha)"
+        $lastRaw = $state.Raw
+    } else {
+        $lastError = $state.Error
+        $lastRaw = ""
     }
 
     if ($attempt -lt $maxVerifyAttempts) {
@@ -221,9 +170,8 @@ for ($attempt = 1; $attempt -le $maxVerifyAttempts; $attempt++) {
     }
 }
 
-if (-not $lastState -or -not $lastState.Success) {
-    $errorText = if ($lastState -and $lastState.Error) { $lastState.Error } else { "Unknown verification error." }
-    Fail "Tag update verification failed. Expected: $targetSha. $errorText"
+if ([string]::IsNullOrWhiteSpace($lastRaw)) {
+    Fail "Tag update verification failed. $lastError"
 }
 
-Fail "Tag update verification failed. Expected: $targetSha, Actual: $($lastState.ResolvedSha), ResolvedType: $($lastState.ResolvedType), RawRef: $($lastState.RawType):$($lastState.RawSha)"
+Fail "Tag update verification failed. $lastError, RawRefs: $lastRaw"

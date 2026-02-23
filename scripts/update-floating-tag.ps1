@@ -37,36 +37,70 @@ function Fail([string]$Message) {
 }
 
 function Invoke-GhApi([string[]]$Args) {
-    $output = & gh @Args 2>&1
-    $exitCode = $LASTEXITCODE
-    $text = ($output | ForEach-Object { $_.ToString() }) -join "`n"
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    try {
+        $stdout = & gh @Args 2> $stderrPath
+        $exitCode = $LASTEXITCODE
+        $stdoutText = ($stdout | ForEach-Object { $_.ToString() }) -join "`n"
+        $stderrText = if (Test-Path $stderrPath) {
+            Get-Content -Path $stderrPath -Raw -ErrorAction SilentlyContinue
+        } else {
+            ""
+        }
+
+        return [pscustomobject]@{
+            ExitCode = $exitCode
+            StdOut = $stdoutText.TrimEnd("`r", "`n")
+            StdErr = "$stderrText".TrimEnd("`r", "`n")
+        }
+    } finally {
+        Remove-Item -Path $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Get-GhScalar([string[]]$Args, [string]$Description) {
+    $result = Invoke-GhApi $Args
+    if ($result.ExitCode -ne 0) {
+        $detail = if (-not [string]::IsNullOrWhiteSpace($result.StdErr)) { $result.StdErr } else { $result.StdOut }
+        return [pscustomobject]@{
+            Success = $false
+            Error = "Failed to $Description. $detail"
+        }
+    }
+
+    $lines = @($result.StdOut -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($lines.Count -eq 0) {
+        return [pscustomobject]@{
+            Success = $false
+            Error = "Failed to $Description. No output returned."
+        }
+    }
 
     return [pscustomobject]@{
-        ExitCode = $exitCode
-        Output = $text
+        Success = $true
+        Value = $lines[$lines.Count - 1].Trim()
     }
 }
 
 function Resolve-RefCommit([string]$Repo, [string]$Ref, [int]$MaxDepth = 5) {
-    $refResponse = Invoke-GhApi @("api", "repos/$Repo/git/ref/$Ref")
-    if ($refResponse.ExitCode -ne 0) {
+    $refTypeResult = Get-GhScalar @("api", "repos/$Repo/git/ref/$Ref", "--jq", ".object.type") "read ref type for '$Ref'"
+    if (-not $refTypeResult.Success) {
         return [pscustomobject]@{
             Success = $false
-            Error = "Failed to read ref '$Ref'. $($refResponse.Output)"
+            Error = $refTypeResult.Error
         }
     }
 
-    try {
-        $refObj = $refResponse.Output | ConvertFrom-Json
-    } catch {
+    $refShaResult = Get-GhScalar @("api", "repos/$Repo/git/ref/$Ref", "--jq", ".object.sha") "read ref sha for '$Ref'"
+    if (-not $refShaResult.Success) {
         return [pscustomobject]@{
             Success = $false
-            Error = "Failed to parse ref response for '$Ref'. $($_.Exception.Message)"
+            Error = $refShaResult.Error
         }
     }
 
-    $rawType = "$($refObj.object.type)".Trim().ToLowerInvariant()
-    $rawSha = "$($refObj.object.sha)".Trim().ToLowerInvariant()
+    $rawType = "$($refTypeResult.Value)".Trim().ToLowerInvariant()
+    $rawSha = "$($refShaResult.Value)".Trim().ToLowerInvariant()
     if ([string]::IsNullOrWhiteSpace($rawType) -or [string]::IsNullOrWhiteSpace($rawSha)) {
         return [pscustomobject]@{
             Success = $false
@@ -89,29 +123,28 @@ function Resolve-RefCommit([string]$Repo, [string]$Ref, [int]$MaxDepth = 5) {
         }
 
         $depth++
-        $tagResponse = Invoke-GhApi @("api", "repos/$Repo/git/tags/$resolvedSha")
-        if ($tagResponse.ExitCode -ne 0) {
+        $tagTypeResult = Get-GhScalar @("api", "repos/$Repo/git/tags/$resolvedSha", "--jq", ".object.type") "resolve tag object type '$resolvedSha'"
+        if (-not $tagTypeResult.Success) {
             return [pscustomobject]@{
                 Success = $false
-                Error = "Failed to resolve tag object '$resolvedSha'. $($tagResponse.Output)"
+                Error = $tagTypeResult.Error
                 RawType = $rawType
                 RawSha = $rawSha
             }
         }
 
-        try {
-            $tagObj = $tagResponse.Output | ConvertFrom-Json
-        } catch {
+        $tagShaResult = Get-GhScalar @("api", "repos/$Repo/git/tags/$resolvedSha", "--jq", ".object.sha") "resolve tag object sha '$resolvedSha'"
+        if (-not $tagShaResult.Success) {
             return [pscustomobject]@{
                 Success = $false
-                Error = "Failed to parse tag object '$resolvedSha'. $($_.Exception.Message)"
+                Error = $tagShaResult.Error
                 RawType = $rawType
                 RawSha = $rawSha
             }
         }
 
-        $resolvedType = "$($tagObj.object.type)".Trim().ToLowerInvariant()
-        $resolvedSha = "$($tagObj.object.sha)".Trim().ToLowerInvariant()
+        $resolvedType = "$($tagTypeResult.Value)".Trim().ToLowerInvariant()
+        $resolvedSha = "$($tagShaResult.Value)".Trim().ToLowerInvariant()
         if ([string]::IsNullOrWhiteSpace($resolvedType) -or [string]::IsNullOrWhiteSpace($resolvedSha)) {
             return [pscustomobject]@{
                 Success = $false
@@ -153,8 +186,20 @@ if ($patchResult.ExitCode -eq 0) {
 }
 
 if (-not $updated) {
-    $patchError = if ($patchResult -and $patchResult.Output) { $patchResult.Output } else { "(no output)" }
-    $createError = if ($createResult -and $createResult.Output) { $createResult.Output } else { "(not attempted or no output)" }
+    $patchError = if ($patchResult -and -not [string]::IsNullOrWhiteSpace($patchResult.StdErr)) {
+        $patchResult.StdErr
+    } elseif ($patchResult -and -not [string]::IsNullOrWhiteSpace($patchResult.StdOut)) {
+        $patchResult.StdOut
+    } else {
+        "(no output)"
+    }
+    $createError = if ($createResult -and -not [string]::IsNullOrWhiteSpace($createResult.StdErr)) {
+        $createResult.StdErr
+    } elseif ($createResult -and -not [string]::IsNullOrWhiteSpace($createResult.StdOut)) {
+        $createResult.StdOut
+    } else {
+        "(not attempted or no output)"
+    }
     Fail "Failed to create or update tag '$Tag' in '$Repo'. PATCH: $patchError | POST: $createError"
 }
 

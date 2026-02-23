@@ -1,12 +1,13 @@
 # 検証アーティファクト導入手順
 
-`dev-latest` / `release-latest` の `*.msixbundle` は、開発者向けの未署名成果物です。
+`dev-latest` / `release-X.Y-latest` の `*.msixbundle` は、開発者向けの未署名成果物です。
 本番配布（一般ユーザー向け）は Store チャネルを利用してください。
 
 ## 対象
 
 - Dev チャネル: `dev-latest` / `dev-package-*`
-- Release チャネル: `release-latest` / `release-package-*`
+- Release チャネル: `release-X.Y-latest` / `release-package-*`
+- `release/X.Y` ブランチの最新候補タグは `release-X.Y-latest`（例: `release/1.3` -> `release-1.3-latest`）
 
 ## 事前準備
 

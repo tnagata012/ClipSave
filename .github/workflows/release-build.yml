@@ -57,6 +57,7 @@ jobs:
       id: version
       shell: pwsh
       run: |
+        $branch = "${{ github.ref_name }}"
         [xml]$props = Get-Content Directory.Build.props
         $version = $props.Project.PropertyGroup.Version
         $match = [regex]::Match($version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$')
@@ -64,7 +65,14 @@ jobs:
           Write-Error "Invalid version format in Directory.Build.props (expected X.Y.Z): $version"
           exit 1
         }
+        $branchMatch = [regex]::Match($branch, '^release/(?<major>\d+)\.(?<minor>\d+)$')
+        if (-not $branchMatch.Success) {
+          Write-Error "Invalid release branch format for channel tag resolution: $branch"
+          exit 1
+        }
         $coreVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
+        $releaseLine = "$($branchMatch.Groups['major'].Value).$($branchMatch.Groups['minor'].Value)"
+        $releaseChannelTag = "release-$releaseLine-latest"
         $shortSha = "${{ github.sha }}".Substring(0, 7)
         $segments = @(
           [int]$match.Groups['major'].Value,
@@ -87,11 +95,13 @@ jobs:
         echo "FILE_VERSION=$fileVersion" >> $env:GITHUB_OUTPUT
         echo "INFORMATIONAL_VERSION=$informationalVersion" >> $env:GITHUB_OUTPUT
         echo "MSIX_VERSION=$msixVersion" >> $env:GITHUB_OUTPUT
+        echo "RELEASE_CHANNEL_TAG=$releaseChannelTag" >> $env:GITHUB_OUTPUT
         echo "Version: $version"
         echo "AssemblyVersion: $assemblyVersion"
         echo "FileVersion: $fileVersion"
         echo "InformationalVersion: $informationalVersion"
         echo "MSIX version: $msixVersion"
+        echo "Release channel tag: $releaseChannelTag"
 
     - name: Validate version
       shell: pwsh
@@ -224,7 +234,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        $tag = "release-latest"
+        $tag = "${{ steps.version.outputs.RELEASE_CHANNEL_TAG }}"
         $repo = "${{ github.repository }}"
 
         $assetNames = gh release view $tag --repo $repo --json assets --jq '.assets[].name' 2>$null
@@ -240,15 +250,18 @@ jobs:
         }
 
         foreach ($asset in $assets) {
-          gh release delete-asset $tag $asset --repo $repo --yes
+          gh release delete-asset $tag $asset --repo $repo --yes *> $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to delete old asset '$asset' from release '$tag'."
+          }
           Write-Host "Deleted old asset: $asset"
         }
 
     - name: Create Release Channel
       uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
       with:
-        tag_name: release-latest
-        name: Release (Latest)
+        tag_name: ${{ steps.version.outputs.RELEASE_CHANNEL_TAG }}
+        name: Release Candidate (${{ github.ref_name }})
         body: |
           ## Release Build (Unsigned)
 
@@ -290,4 +303,11 @@ jobs:
         | Branch | `${{ github.ref_name }}` |
         | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
         '@ >> $env:GITHUB_STEP_SUMMARY
+
+    - name: Move release channel tag to current commit
+      if: ${{ success() }}
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: ./scripts/update-floating-tag.ps1 -Repo "${{ github.repository }}" -Tag "${{ steps.version.outputs.RELEASE_CHANNEL_TAG }}" -Sha "${{ github.sha }}"
 

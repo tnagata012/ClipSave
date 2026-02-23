@@ -25,13 +25,16 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 | [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y.0`） | `release/X.Y` 作成 + main 側 bump ブランチ作成 | `release/X.Y`, `chore/bump-main-to-*` |
 | [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`） | patch init ブランチ作成 | `chore/release-X.Y.(Z+1)-init` |
 | [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
-| [release-build.yml](../../.github/workflows/release-build.yml) | `release/*` push / 手動 | 公開候補生成（未署名） | `release-package-*`, `release-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
-| [store-publish.yml](../../.github/workflows/store-publish.yml) | 手動（`X.Y.Z`） | Store 提出物生成 | `store-package-*`（`.msixupload`） |
+| [release-build.yml](../../.github/workflows/release-build.yml) | `release/*` push / 手動 | 公開候補生成（未署名） | `release-package-*`, `release-X.Y-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
+| [store-publish.yml](../../.github/workflows/store-publish.yml) | 手動（`X.Y.Z`、任意 `source_ref`） | Store 提出物生成 | `store-package-*`（`.msixupload`） |
 
 補足:
 
 - 配布対象は `*.msixbundle`（未署名）、Store 提出対象は `.msixupload`。
 - Dev/Release 配布では `*.msixbundle` と `SHA256SUMS.txt` をセットで公開し、GitHub Artifact Attestation を記録する。
+- `dev-latest` と `release-X.Y-latest` は固定版タグではなく移動タグ（floating tag）として運用し、各 workflow 成功時に実行コミットへ更新する。
+- `release/X.Y` ブランチの配布タグは `release-X.Y-latest`（例: `release/1.3` -> `release-1.3-latest`）。
+- Store 提出は通常 `version` のみで実行できる。採用候補コミットを厳密に固定したい場合のみ `source_ref`（タグ/sha）を追加指定する。
 - `PATCH` 更新規約は `Versioning.md` を正本とする。
 
 ## 実行前チェック
@@ -47,13 +50,14 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 | チャネル | 配布元 | 用途 |
 |---------|-------|------|
 | Dev | `dev-latest` / `dev-package-*` + `SHA256SUMS.txt` + `GitHub Artifact Attestation` | 検証配布（未署名） |
-| Release | `release-latest` / `release-package-*` + `SHA256SUMS.txt` + `GitHub Artifact Attestation` | 公開候補比較（未署名） |
+| Release | `release-X.Y-latest` / `release-package-*` + `SHA256SUMS.txt` + `GitHub Artifact Attestation` | 公開候補比較（未署名） |
 | Store | `store-package-*`（`.msixupload`） | Partner Center 提出 |
 
 ## Store Publish の版数解決ルール
 
 - 入力 `version=X.Y.Z` から対象ブランチ `release/X.Y` を解決する。
-- 解決した `release/X.Y` を checkout し、その時点のソースから再ビルドする。
+- `source_ref` 未指定時は解決した `release/X.Y` 先頭を checkout し、その時点のソースから再ビルドする。
+- `source_ref` 指定時は指定 ref を checkout し、`release/X.Y` 系列に含まれるコミットであることを検証する。
 - 入力 `X.Y.Z` と `Directory.Build.props` が一致しない場合は失敗する。
 
 ## 実運用手順
@@ -63,8 +67,8 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 1. `Prepare Release Branch`（推奨）または `create-release-branch.ps1` で `release/X.Y` を作成する。
 2. `chore/bump-main-to-* -> main` の PR をレビューしてマージする。
 3. `release/X.Y` の安定化を PR で反映する。
-4. 複数の公開候補（`release-package-*`）から採用コミットを決定する。
-5. 採用版を `release-latest` に反映して候補比較に使う（現行は未署名）。
+4. `release-X.Y-latest` と複数の公開候補（`release-package-*`）を比較し、採用コミットを決定する。
+5. 採用版 `X.Y.Z` を確定し、必要に応じて採用 ref（例: `release-X.Y-latest` または commit SHA）を記録する。
 
 ### パッチリリース
 
@@ -77,7 +81,7 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 ### Store 提出
 
 1. `./scripts/store-checklist.ps1` を実行する。
-2. `Store Publish`（`version=X.Y.Z`）または `./scripts/build-store-package.ps1` で `.msixupload` を生成する。
+2. `Store Publish`（`version=X.Y.Z`、必要時のみ `source_ref=<tag|sha>`）または `./scripts/build-store-package.ps1` で `.msixupload` を生成する。
 3. Partner Center に提出する。
 
 ## ロールバック/取り下げ

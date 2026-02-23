@@ -93,6 +93,9 @@ if ($package) {
 
 Write-Host ""
 
+# Capture once for both GitHub channel resolution and branch display.
+$currentBranch = git branch --show-current 2>$null
+
 # Section 3: GitHub Distribution
 Write-Host "[GitHub Distribution]" -ForegroundColor Yellow
 
@@ -127,13 +130,47 @@ if ($ghAvailable) {
             Write-Host "  Dev Channel  : dev-latest not found" -ForegroundColor Gray
         }
 
-        # Release channel (stable tag)
-        $releaseChannel = gh release view release-latest --repo $repo --json tagName,publishedAt 2>$null | ConvertFrom-Json
-        if ($releaseChannel) {
-            $publishedDate = [DateTime]::Parse($releaseChannel.publishedAt).ToString("yyyy-MM-dd HH:mm")
-            Write-Host "  Release Tag  : $($releaseChannel.tagName) ($publishedDate)" -ForegroundColor Green
+        # Release channel (branch-scoped floating tag: release-X.Y-latest)
+        $resolvedReleaseTag = $null
+        $releaseBranchMatch = if ($currentBranch) { [regex]::Match($currentBranch, '^release/(?<major>\d+)\.(?<minor>\d+)$') } else { $null }
+        if ($releaseBranchMatch -and $releaseBranchMatch.Success) {
+            $releaseTag = "release-$($releaseBranchMatch.Groups['major'].Value).$($releaseBranchMatch.Groups['minor'].Value)-latest"
+            $releaseChannel = gh release view $releaseTag --repo $repo --json tagName,publishedAt 2>$null | ConvertFrom-Json
+            if ($releaseChannel) {
+                $publishedDate = [DateTime]::Parse($releaseChannel.publishedAt).ToString("yyyy-MM-dd HH:mm")
+                Write-Host "  Release Tag  : $($releaseChannel.tagName) ($publishedDate)" -ForegroundColor Green
+                $resolvedReleaseTag = $releaseChannel.tagName
+            } else {
+                $legacyRelease = gh release view release-latest --repo $repo --json tagName,publishedAt 2>$null | ConvertFrom-Json
+                if ($legacyRelease) {
+                    $publishedDate = [DateTime]::Parse($legacyRelease.publishedAt).ToString("yyyy-MM-dd HH:mm")
+                    Write-Host "  Release Tag  : $($legacyRelease.tagName) ($publishedDate, legacy)" -ForegroundColor Yellow
+                    $resolvedReleaseTag = $legacyRelease.tagName
+                } else {
+                    Write-Host "  Release Tag  : $releaseTag not found" -ForegroundColor Gray
+                }
+            }
         } else {
-            Write-Host "  Release Tag  : release-latest not found" -ForegroundColor Gray
+            $latestReleaseLineTag = gh api --paginate --slurp "repos/$repo/releases?per_page=100" `
+                --jq '([.[].[] | select(.tag_name | test("^release-[0-9]+\\.[0-9]+-latest$"))] | sort_by(.published_at) | reverse | .[0]? | [.tag_name, .published_at] | @tsv) // empty' 2>$null |
+                Select-Object -First 1
+
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($latestReleaseLineTag)) {
+                $parts = $latestReleaseLineTag -split "`t", 2
+                $tagName = $parts[0]
+                $publishedAt = if ($parts.Count -ge 2) { [DateTime]::Parse($parts[1]).ToString("yyyy-MM-dd HH:mm") } else { "unknown" }
+                Write-Host "  Release Tag  : $tagName ($publishedAt)" -ForegroundColor Green
+                $resolvedReleaseTag = $tagName
+            } else {
+                $legacyRelease = gh release view release-latest --repo $repo --json tagName,publishedAt 2>$null | ConvertFrom-Json
+                if ($legacyRelease) {
+                    $publishedDate = [DateTime]::Parse($legacyRelease.publishedAt).ToString("yyyy-MM-dd HH:mm")
+                    Write-Host "  Release Tag  : $($legacyRelease.tagName) ($publishedDate, legacy)" -ForegroundColor Yellow
+                    $resolvedReleaseTag = $legacyRelease.tagName
+                } else {
+                    Write-Host "  Release Tag  : release-X.Y-latest not found" -ForegroundColor Gray
+                }
+            }
         }
 
         # Release base (Actions artifacts)
@@ -149,6 +186,10 @@ if ($ghAvailable) {
         } else {
             Write-Host "  Release Base : release-package-* artifact not found" -ForegroundColor Gray
         }
+
+        if ($coreVersion -and $resolvedReleaseTag) {
+            Write-Host "  Store Hint   : version=$coreVersion, source_ref=$resolvedReleaseTag" -ForegroundColor Cyan
+        }
     }
 } else {
     Write-Host "  GitHub CLI not available (install with: winget install GitHub.cli)" -ForegroundColor Gray
@@ -158,7 +199,6 @@ Write-Host ""
 
 # Section 4: Current Branch
 Write-Host "[Git Branch]" -ForegroundColor Yellow
-$currentBranch = git branch --show-current 2>$null
 if ($currentBranch) {
     Write-Host "  Current : $currentBranch" -ForegroundColor White
 

@@ -166,6 +166,7 @@ try {
 
     $checklist = @(
         "Release package artifact (release-package-$version, unsigned) reviewed for at least 24 hours",
+        "Selected source ref for Store Publish recorded (release-X.Y-latest tag or commit SHA)",
         "No critical bugs reported",
         "Partner Center app description updated (Japanese)",
         "Partner Center app description updated (English)",

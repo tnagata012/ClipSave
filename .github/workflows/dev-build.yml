@@ -245,7 +245,10 @@ jobs:
         }
 
         foreach ($asset in $assets) {
-          gh release delete-asset $tag $asset --repo $repo --yes
+          gh release delete-asset $tag $asset --repo $repo --yes *> $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to delete old asset '$asset' from release '$tag'."
+          }
           Write-Host "Deleted old asset: $asset"
         }
 
@@ -292,4 +295,11 @@ jobs:
         | Provenance | `GitHub Artifact Attestation` |
         | Artifact | `dev-package-${{ steps.version.outputs.MSIX_VERSION }}` |
         '@ >> $env:GITHUB_STEP_SUMMARY
+
+    - name: Move dev-latest tag to current commit
+      if: ${{ success() }}
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: ./scripts/update-floating-tag.ps1 -Repo "${{ github.repository }}" -Tag "dev-latest" -Sha "${{ github.sha }}"
 

@@ -7,6 +7,10 @@ on:
         description: 'Version to publish (e.g., 1.0.0)'
         required: true
         type: string
+      source_ref:
+        description: 'Optional pinned git ref (tag/SHA/refs/*). Empty = tip of resolved release branch'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -34,6 +38,20 @@ jobs:
         echo "BRANCH=$branch" >> $env:GITHUB_OUTPUT
         echo "Resolved branch: $branch"
 
+    - name: Resolve checkout ref
+      id: checkout
+      shell: pwsh
+      run: |
+        $sourceRef = "${{ inputs.source_ref }}".Trim()
+        $defaultRef = "${{ steps.release.outputs.BRANCH }}"
+        $checkoutRef = if ([string]::IsNullOrWhiteSpace($sourceRef)) { $defaultRef } else { $sourceRef }
+        $isPinned = if ([string]::IsNullOrWhiteSpace($sourceRef)) { "false" } else { "true" }
+
+        echo "REF=$checkoutRef" >> $env:GITHUB_OUTPUT
+        echo "PINNED=$isPinned" >> $env:GITHUB_OUTPUT
+        echo "Resolved checkout ref: $checkoutRef"
+        echo "Pinned mode: $isPinned"
+
     - name: Verify branch exists
       shell: pwsh
       run: |
@@ -51,7 +69,36 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        ref: ${{ steps.release.outputs.BRANCH }}
+        ref: ${{ steps.checkout.outputs.REF }}
+        fetch-depth: 0
+
+    - name: Validate pinned source ref is in target release branch
+      if: ${{ steps.checkout.outputs.PINNED == 'true' }}
+      shell: pwsh
+      run: |
+        $branch = "${{ steps.release.outputs.BRANCH }}"
+        $ref = "${{ steps.checkout.outputs.REF }}"
+
+        git fetch --no-tags origin "$branch"
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Failed to fetch origin/$branch for ancestry verification."
+          exit 1
+        }
+
+        git merge-base --is-ancestor HEAD "origin/$branch"
+        $mergeBaseExit = $LASTEXITCODE
+        if ($mergeBaseExit -eq 1) {
+          Write-Error "Pinned ref '$ref' is not contained in origin/$branch"
+          exit 1
+        }
+        if ($mergeBaseExit -ne 0) {
+          Write-Error "Failed to verify whether pinned ref '$ref' is contained in origin/$branch"
+          exit 1
+        }
+
+        $head = (git rev-parse HEAD).Trim()
+        $branchHead = (git rev-parse "origin/$branch").Trim()
+        echo "Pinned ref verified: $ref -> $head (ancestor of origin/$branch @ $branchHead)"
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -100,6 +147,11 @@ jobs:
         }
 
         $coreVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
+        $commitSha = (git rev-parse HEAD).Trim()
+        if (-not $commitSha -or $commitSha.Length -ne 40) {
+          Write-Error "Failed to resolve commit SHA from checked-out source."
+          exit 1
+        }
         $shortSha = (git rev-parse --short=7 HEAD).Trim()
         if (-not $shortSha -or $shortSha.Length -ne 7) {
           Write-Error "Failed to resolve short SHA from checked-out commit."
@@ -113,6 +165,7 @@ jobs:
         echo "ASSEMBLY_VERSION=$assemblyVersion" >> $env:GITHUB_OUTPUT
         echo "FILE_VERSION=$fileVersion" >> $env:GITHUB_OUTPUT
         echo "INFORMATIONAL_VERSION=$informationalVersion" >> $env:GITHUB_OUTPUT
+        echo "COMMIT_SHA=$commitSha" >> $env:GITHUB_OUTPUT
         echo "Version: $version"
         echo "AssemblyVersion: $assemblyVersion"
         echo "FileVersion: $fileVersion"
@@ -194,6 +247,8 @@ jobs:
         |------|-------|
         | **Version** | ``${{ inputs.version }}`` |
         | **Branch** | ``${{ steps.release.outputs.BRANCH }}`` |
+        | **Checkout Ref** | ``${{ steps.checkout.outputs.REF }}`` |
+        | **Commit SHA** | ``${{ steps.version.outputs.COMMIT_SHA }}`` |
         | **InformationalVersion** | ``${{ steps.version.outputs.INFORMATIONAL_VERSION }}`` |
         | **Package** | ``.msixupload`` |
 

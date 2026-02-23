@@ -63,7 +63,11 @@ ClipSave の版数規約と判定ルールを定義します。
 |------|----------|--------|
 | CI/CD | `InformationalVersion` + 実行ブランチ | `-` サフィックスなし、かつ `release/X.Y` 実行 |
 | DLL 確認 | `FileVersion` | 4 番目（BUILD）が `0` なら Release |
-| 配布物 | 配布チャネル | `release-latest` または `release-build.yml` 由来成果物を Release とみなす |
+| 配布物 | 配布チャネル | `release-X.Y-latest` または `release-build.yml` 由来成果物を Release とみなす |
+
+補足:
+
+- `dev-latest` と `release-X.Y-latest` は固定版タグではなく移動タグ（floating tag）として運用し、各 workflow 成功時に実行コミットへ更新する。
 
 ## 検証ルール（`assert-version-policy.ps1`）
 

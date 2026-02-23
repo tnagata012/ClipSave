@@ -8,7 +8,4 @@
 - 
 
 ## Changelog
-- [ ] User-facing changes are added to `CHANGELOG.md` under `[Unreleased]`
-- [ ] No user-facing changes (`N/A`)
-- Category: `Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security` / `N/A`
-- Entry: `<paste exact CHANGELOG entry or N/A>`
+- [ ] Changelog handled: updated `CHANGELOG.md` under `[Unreleased]` for user-facing changes, or `N/A` if none.

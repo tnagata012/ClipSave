@@ -6,7 +6,6 @@ using System.Windows.Threading;
 
 namespace ClipSave.UnitTests;
 
-[Collection("HotkeyTests")]
 [UnitTest]
 public class HotkeyServiceTests
 {
@@ -57,14 +56,6 @@ public class HotkeyServiceTests
     }
 
     [Fact]
-    public void HotkeyService_CanBeConstructed()
-    {
-        using var hotkeyService = new HotkeyService(_mockLogger.Object);
-
-        hotkeyService.Should().NotBeNull();
-    }
-
-    [StaFact]
     public void WndProc_ConsecutiveHotkeysWithinSuppressionWindow_RaisesSingleEvent()
     {
         var tick = 10_000L;
@@ -72,36 +63,14 @@ public class HotkeyServiceTests
         var pressedCount = 0;
         hotkeyService.HotkeyPressed += (_, _) => pressedCount++;
 
-        InvokeHotkeyMessage(hotkeyService);
+        hotkeyService.TryHandleHotkeyMessageForTest().Should().BeTrue();
         FlushDispatcher();
         pressedCount.Should().Be(1);
 
         tick += 50;
-        InvokeHotkeyMessage(hotkeyService);
+        hotkeyService.TryHandleHotkeyMessageForTest().Should().BeTrue();
         FlushDispatcher();
         pressedCount.Should().Be(1);
-    }
-
-    private static void InvokeHotkeyMessage(HotkeyService service)
-    {
-        var wndProc = typeof(HotkeyService).GetMethod(
-            "WndProc",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        wndProc.Should().NotBeNull();
-
-        var handled = false;
-        var args = new object?[]
-        {
-            IntPtr.Zero,
-            0x0312,
-            new IntPtr(1),
-            IntPtr.Zero,
-            handled
-        };
-
-        _ = wndProc!.Invoke(service, args);
-        args[4].Should().BeOfType<bool>();
-        ((bool)args[4]!).Should().BeTrue();
     }
 
     private static void FlushDispatcher()

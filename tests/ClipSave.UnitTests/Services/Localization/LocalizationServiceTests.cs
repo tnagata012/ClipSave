@@ -5,7 +5,6 @@ using System.Globalization;
 
 namespace ClipSave.UnitTests;
 
-[Collection("SettingsTests")]
 [UnitTest]
 public class LocalizationServiceTests
 {

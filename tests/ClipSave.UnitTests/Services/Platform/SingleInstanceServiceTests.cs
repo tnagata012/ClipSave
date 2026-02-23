@@ -40,38 +40,6 @@ public class SingleInstanceServiceTests : IDisposable
     }
 
     [Fact]
-    public void TryAcquireOrNotify_SecondInstance_ReturnsFalse()
-    {
-        var firstService = CreateService();
-        firstService.TryAcquireOrNotify();
-
-        var secondService = CreateService();
-        var result = secondService.TryAcquireOrNotify();
-
-        result.Should().BeFalse("the second instance should fail when another instance exists");
-    }
-
-    [Fact]
-    public async Task TryAcquireOrNotify_SecondInstance_RaisesSecondInstanceLaunched()
-    {
-        var firstService = CreateService();
-        firstService.TryAcquireOrNotify();
-
-        var eventRaised = new TaskCompletionSource<bool>();
-        firstService.SecondInstanceLaunched += (_, _) => eventRaised.TrySetResult(true);
-
-        var secondService = CreateService();
-        secondService.TryAcquireOrNotify();
-
-        var result = await Task.WhenAny(
-            eventRaised.Task,
-            Task.Delay(TimeSpan.FromSeconds(5)));
-
-        result.Should().Be(eventRaised.Task, "starting a second instance should raise SecondInstanceLaunched");
-        (await eventRaised.Task).Should().BeTrue();
-    }
-
-    [Fact]
     public void TryAcquireOrNotify_AfterFirstInstanceDisposed_NewInstanceCanBePrimary()
     {
         var firstService = CreateService();

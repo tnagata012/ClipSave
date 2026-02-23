@@ -20,6 +20,20 @@ internal sealed class AppWindowCoordinator : IDisposable
     private bool _isShuttingDown;
     private bool _disposed;
 
+    internal SettingsWindow? SettingsWindowForTest => _settingsWindow;
+
+    internal AboutWindow? AboutWindowForTest => _aboutWindow;
+
+    internal void SetTrackedSettingsWindowForTest(SettingsWindow? window)
+    {
+        _settingsWindow = window;
+    }
+
+    internal void SetTrackedAboutWindowForTest(AboutWindow? window)
+    {
+        _aboutWindow = window;
+    }
+
     public AppWindowCoordinator(
         IServiceProvider serviceProvider,
         SettingsService settingsService,

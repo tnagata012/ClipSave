@@ -4,6 +4,7 @@ using System.Windows.Media.Imaging;
 
 namespace ClipSave.UnitTests;
 
+[UnitTest]
 public class ClipboardContentTests
 {
     #region ContentType

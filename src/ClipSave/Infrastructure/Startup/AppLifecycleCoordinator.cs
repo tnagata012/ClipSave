@@ -43,6 +43,16 @@ internal sealed class AppLifecycleCoordinator : IDisposable
 
     public SettingsService? SettingsService => _settingsService;
 
+    internal void SetSettingsServiceForTest(SettingsService settingsService)
+    {
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+    }
+
+    internal void ShowStartupGuidanceIfNeededForTest()
+    {
+        ShowStartupGuidanceIfNeeded();
+    }
+
     public bool TryStartPrimaryInstance()
     {
         ThrowIfDisposed();

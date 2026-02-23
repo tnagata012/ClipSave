@@ -2,7 +2,6 @@ using ClipSave.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.IO;
-using System.Reflection;
 using System.Windows.Threading;
 
 namespace ClipSave.IntegrationTests;
@@ -31,31 +30,11 @@ public class HotkeyBehaviorIntegrationTests
         hotkeyService.HotkeyPressed += (_, _) => pressedCount++;
 
         // Keep the second trigger inside the suppression window deterministically.
-        InvokeHotkeyMessage(hotkeyService);
+        hotkeyService.TryHandleHotkeyMessageForTest().Should().BeTrue();
         tick += 50;
-        InvokeHotkeyMessage(hotkeyService);
+        hotkeyService.TryHandleHotkeyMessageForTest().Should().BeTrue();
         FlushDispatcher();
         pressedCount.Should().Be(1);
-    }
-
-    private static void InvokeHotkeyMessage(HotkeyService service)
-    {
-        var wndProc = typeof(HotkeyService).GetMethod(
-            "WndProc",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        wndProc.Should().NotBeNull();
-
-        var args = new object?[]
-        {
-            IntPtr.Zero,
-            0x0312,
-            new IntPtr(1),
-            IntPtr.Zero,
-            false
-        };
-
-        _ = wndProc!.Invoke(service, args);
-        ((bool)args[4]!).Should().BeTrue();
     }
 
     private static void FlushDispatcher()

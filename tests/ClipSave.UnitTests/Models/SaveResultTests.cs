@@ -3,6 +3,7 @@ using FluentAssertions;
 
 namespace ClipSave.UnitTests;
 
+[UnitTest]
 public class SaveResultTests
 {
     [Fact]

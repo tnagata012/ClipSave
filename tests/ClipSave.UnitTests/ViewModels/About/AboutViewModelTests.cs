@@ -1,10 +1,10 @@
 using ClipSave.Services;
 using ClipSave.ViewModels.About;
 using FluentAssertions;
-using System.Reflection;
 
 namespace ClipSave.UnitTests;
 
+[UnitTest]
 public class AboutViewModelTests
 {
     [Fact]
@@ -64,15 +64,9 @@ public class AboutViewModelTests
     [Fact]
     public void InformationalVersion_NormalizesRawShaMetadataToShortFormat()
     {
-        // Arrange
-        var method = typeof(AboutViewModel).GetMethod(
-            "NormalizeInformationalVersion",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
         // Act
-        var normalized = method?.Invoke(
-            null,
-            ["0.0.1+61d6adc83812c4cf0882b323502b4a6dc64df2f7"]) as string;
+        var normalized = AboutViewModel.NormalizeInformationalVersion(
+            "0.0.1+61d6adc83812c4cf0882b323502b4a6dc64df2f7");
 
         // Assert
         normalized.Should().Be("0.0.1+sha.61d6adc");
@@ -84,14 +78,10 @@ public class AboutViewModelTests
         // Arrange
         var localization = new LocalizationService();
 
-        var method = typeof(AboutViewModel).GetMethod(
-            "GetDisplayInformationalVersion",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
         // Act
-        var displayVersion = method?.Invoke(
-            null,
-            ["0.0.1+61d6adc83812c4cf0882b323502b4a6dc64df2f7", localization]) as string;
+        var displayVersion = AboutViewModel.GetDisplayInformationalVersion(
+            "0.0.1+61d6adc83812c4cf0882b323502b4a6dc64df2f7",
+            localization);
 
         // Assert
         displayVersion.Should().Be("0.0.1+sha.61d6adc");
@@ -103,14 +93,10 @@ public class AboutViewModelTests
         // Arrange
         var localization = new LocalizationService();
 
-        var method = typeof(AboutViewModel).GetMethod(
-            "GetDisplayInformationalVersion",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
         // Act
-        var displayVersion = method?.Invoke(
-            null,
-            ["0.0.1.local", localization]) as string;
+        var displayVersion = AboutViewModel.GetDisplayInformationalVersion(
+            "0.0.1.local",
+            localization);
 
         // Assert
         displayVersion.Should().Be("0.0.1.local");
@@ -122,14 +108,10 @@ public class AboutViewModelTests
         // Arrange
         var localization = new LocalizationService();
 
-        var method = typeof(AboutViewModel).GetMethod(
-            "GetDisplayInformationalVersion",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
         // Act
-        var displayVersion = method?.Invoke(
-            null,
-            ["0.0.1.local+61d6adc83812c4cf0882b323502b4a6dc64df2f7", localization]) as string;
+        var displayVersion = AboutViewModel.GetDisplayInformationalVersion(
+            "0.0.1.local+61d6adc83812c4cf0882b323502b4a6dc64df2f7",
+            localization);
 
         // Assert
         displayVersion.Should().Be("0.0.1.local+sha.61d6adc");
@@ -141,14 +123,10 @@ public class AboutViewModelTests
         // Arrange
         var localization = new LocalizationService();
 
-        var method = typeof(AboutViewModel).GetMethod(
-            "GetDisplayInformationalVersion",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
         // Act
-        var displayVersion = method?.Invoke(
-            null,
-            ["  custom-build  ", localization]) as string;
+        var displayVersion = AboutViewModel.GetDisplayInformationalVersion(
+            "  custom-build  ",
+            localization);
 
         // Assert
         displayVersion.Should().Be("custom-build");

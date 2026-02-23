@@ -9,7 +9,6 @@ using System.Text.Json;
 
 namespace ClipSave.UnitTests;
 
-[Collection("SettingsTests")]
 [UnitTest]
 public class SettingsServiceTests : IDisposable
 {

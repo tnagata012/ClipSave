@@ -7,7 +7,6 @@ using System.Windows.Media.Imaging;
 namespace ClipSave.IntegrationTests;
 
 [IntegrationTest]
-[Collection("SettingsTests")]
 public class SettingsServiceIntegrationTests : IDisposable
 {
     private readonly string _testAppDataPath;

@@ -9,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.IO;
-using System.Reflection;
 using System.Windows;
 
 namespace ClipSave.IntegrationTests;
@@ -92,10 +91,10 @@ public class AppWindowCoordinatorIntegrationTests : IDisposable
     public void ShowOrActivateAboutWindow_WhenAlreadyOpen_ReusesExistingWindow()
     {
         _windowCoordinator.ShowOrActivateAboutWindow();
-        var first = GetPrivateField<Window>(_windowCoordinator, "_aboutWindow");
+        var first = _windowCoordinator.AboutWindowForTest;
 
         _windowCoordinator.ShowOrActivateAboutWindow();
-        var second = GetPrivateField<Window>(_windowCoordinator, "_aboutWindow");
+        var second = _windowCoordinator.AboutWindowForTest;
 
         first.Should().NotBeNull();
         second.Should().BeSameAs(first);
@@ -106,7 +105,7 @@ public class AppWindowCoordinatorIntegrationTests : IDisposable
     public void Dispose_ClosesOpenedWindows()
     {
         _windowCoordinator.ShowOrActivateAboutWindow();
-        var aboutWindow = GetPrivateField<Window>(_windowCoordinator, "_aboutWindow");
+        var aboutWindow = _windowCoordinator.AboutWindowForTest;
         aboutWindow.Should().NotBeNull();
 
         var settingsWindow = new SettingsWindow
@@ -117,7 +116,7 @@ public class AppWindowCoordinatorIntegrationTests : IDisposable
                 _loggerFactory.CreateLogger<SettingsViewModel>())
         };
         settingsWindow.Show();
-        SetPrivateField(_windowCoordinator, "_settingsWindow", settingsWindow);
+        _windowCoordinator.SetTrackedSettingsWindowForTest(settingsWindow);
 
         _windowCoordinator.Dispose();
 
@@ -140,26 +139,12 @@ public class AppWindowCoordinatorIntegrationTests : IDisposable
                 _loggerFactory.CreateLogger<SettingsViewModel>())
         };
         settingsWindow.Show();
-        SetPrivateField(_windowCoordinator, "_settingsWindow", settingsWindow);
+        _windowCoordinator.SetTrackedSettingsWindowForTest(settingsWindow);
 
         _windowCoordinator.ShowOrActivateSettingsDialog();
 
         _localizationService.CurrentLanguage.Should().Be(AppLanguage.Japanese);
         settingsWindow.Close();
-    }
-
-    private static T? GetPrivateField<T>(object target, string fieldName)
-    {
-        var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return (T?)field!.GetValue(target);
-    }
-
-    private static void SetPrivateField(object target, string fieldName, object value)
-    {
-        var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        field!.SetValue(target, value);
     }
 
     private static void EnsureApplication()

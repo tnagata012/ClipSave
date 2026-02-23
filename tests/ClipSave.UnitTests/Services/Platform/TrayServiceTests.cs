@@ -26,14 +26,7 @@ public class TrayServiceTests : IDisposable
     [StaFact]
     public void Constructor_ShowsTrayIconImmediately()
     {
-        var notifyIconField = typeof(TrayService).GetField(
-            "_notifyIcon",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-
-        notifyIconField.Should().NotBeNull();
-        var notifyIcon = notifyIconField!.GetValue(_trayService).Should().BeOfType<NotifyIcon>().Subject;
-
-        notifyIcon.Visible.Should().BeTrue();
+        _trayService.IsTrayIconVisibleForTest().Should().BeTrue();
     }
 
     [StaFact]

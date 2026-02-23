@@ -1,14 +1,12 @@
 ## Summary
-- Why this change is needed:
-- What changed:
+- Background:
+- Changes:
 
 ## Validation
-- Local checks:
-  - [ ] `./scripts/run-tests.ps1 -Configuration Debug`
-  - [ ] `./scripts/run-security-checks.ps1 -Configuration Debug -NoRestore`
-  - [ ] (if spec changed) `./scripts/check-spec-coverage.ps1`
-- CI:
-  - [ ] `PR Check` passed
+- `./scripts/run-tests.ps1 -Configuration Debug`: `pass` / `fail` / `not run`
+- `./scripts/run-security-checks.ps1 -Configuration Debug -NoRestore`: `pass` / `fail` / `not run`
+- (if spec changed) `./scripts/check-spec-coverage.ps1`: `pass` / `fail` / `not run`
+- `PR Check` workflow: `pass` / `fail` / `pending` (link)
 
 ## Impact
 - Spec impact: `None` / `SPEC-...`
@@ -16,5 +14,6 @@
 - Breaking changes: `None` / describe
 
 ## Notes
-- Risks and rollback plan (if any):
 - Related issue/PR: `Closes #...` / `Refs #...`
+- Rollback plan:
+- (if backport/cherry-pick conflict) conflict resolution notes:

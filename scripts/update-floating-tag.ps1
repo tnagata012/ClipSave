@@ -4,12 +4,12 @@
     Create or move a floating tag to a specific commit.
 
 .DESCRIPTION
-    Uses standard git commands to update a floating tag and verifies
-    that the remote tag points to the expected commit.
+    Force-pushes a floating tag to a commit SHA and verifies
+    the remote ref.
 
 .PARAMETER Repo
     Repository in owner/name format (example: tnagata012/ClipSave).
-    Used as a safety check against the origin remote.
+    Used as a safety check against the origin remote URL.
 
 .PARAMETER Tag
     Tag name to move (example: dev-latest, release-1.3-latest).
@@ -37,110 +37,65 @@ function Fail([string]$Message) {
     exit 1
 }
 
-function Invoke-Git([string[]]$Args) {
-    $stderrPath = [System.IO.Path]::GetTempFileName()
-    try {
-        $stdout = & git @Args 2> $stderrPath
-        $exitCode = $LASTEXITCODE
-        $stdoutText = ($stdout | ForEach-Object { $_.ToString() }) -join "`n"
-        $stderrText = if (Test-Path $stderrPath) {
-            Get-Content -Path $stderrPath -Raw -ErrorAction SilentlyContinue
-        } else {
-            ""
-        }
-
-        return [pscustomobject]@{
-            ExitCode = $exitCode
-            StdOut = "$stdoutText".TrimEnd("`r", "`n")
-            StdErr = "$stderrText".TrimEnd("`r", "`n")
-        }
-    } finally {
-        Remove-Item -Path $stderrPath -Force -ErrorAction SilentlyContinue
+function Invoke-Git([string[]]$ArgList) {
+    $output = & git @ArgList 2>&1
+    return [pscustomobject]@{
+        ExitCode = $LASTEXITCODE
+        Output = (($output | ForEach-Object { $_.ToString() }) -join "`n").TrimEnd("`r", "`n")
     }
 }
 
-function Format-GitError([pscustomobject]$Result) {
-    $parts = @()
-    if ($Result -and -not [string]::IsNullOrWhiteSpace($Result.StdErr)) {
-        $parts += "stderr: $($Result.StdErr)"
+function Get-Detail([pscustomobject]$Result) {
+    if ($Result -and -not [string]::IsNullOrWhiteSpace($Result.Output)) {
+        return $Result.Output
     }
-    if ($Result -and -not [string]::IsNullOrWhiteSpace($Result.StdOut)) {
-        $parts += "stdout: $($Result.StdOut)"
-    }
-    if ($parts.Count -eq 0) {
-        return "(no output)"
-    }
-    return ($parts -join " | ")
+    return "(no output)"
 }
 
-function Parse-GitHubRepoFromRemoteUrl([string]$RemoteUrl) {
-    if ([string]::IsNullOrWhiteSpace($RemoteUrl)) {
-        return $null
+function Normalize-RemoteUrl([string]$RemoteUrl) {
+    $url = $RemoteUrl.Trim().TrimEnd("/")
+    if ($url.EndsWith(".git", [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $url.Substring(0, $url.Length - 4)
     }
-
-    $url = $RemoteUrl.Trim()
-
-    $httpsMatch = [regex]::Match($url, '^https://github\.com/(?<repo>[^/\s]+/[^/\s]+?)(?:\.git)?/?$')
-    if ($httpsMatch.Success) {
-        return $httpsMatch.Groups['repo'].Value
-    }
-
-    $sshMatch = [regex]::Match($url, '^git@github\.com:(?<repo>[^/\s]+/[^/\s]+?)(?:\.git)?$')
-    if ($sshMatch.Success) {
-        return $sshMatch.Groups['repo'].Value
-    }
-
-    return $null
+    return $url
 }
 
-function Resolve-RemoteTagCommit([string]$TagName) {
-    $lsResult = Invoke-Git @("ls-remote", "--tags", "origin", "refs/tags/$TagName", "refs/tags/$TagName^{}")
-    if ($lsResult.ExitCode -ne 0) {
+function Get-RemoteTagSha([string]$TagName) {
+    $result = Invoke-Git @("ls-remote", "--tags", "origin", "refs/tags/$TagName")
+    if ($result.ExitCode -ne 0) {
         return [pscustomobject]@{
             Success = $false
-            Error = "Failed to query remote tag refs. $(Format-GitError $lsResult)"
+            Error = "Failed to query remote tag refs. $(Get-Detail $result)"
         }
     }
 
-    $lines = @($lsResult.StdOut -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    if ($lines.Count -eq 0) {
+    $line = $null
+    foreach ($candidate in ($result.Output -split "`r?`n")) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            $line = $candidate.Trim()
+            break
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($line)) {
         return [pscustomobject]@{
             Success = $false
             Error = "Remote tag '$TagName' was not found."
-            Raw = ""
         }
     }
 
-    $rawSha = $null
-    $peeledSha = $null
-    foreach ($line in $lines) {
-        $match = [regex]::Match($line.Trim(), '^(?<sha>[0-9a-fA-F]{40})\s+refs/tags/(?<name>.+?)(?<peeled>\^\{\})?$')
-        if (-not $match.Success) {
-            continue
-        }
-        $sha = $match.Groups['sha'].Value.ToLowerInvariant()
-        $isPeeled = $match.Groups['peeled'].Success
-        if ($isPeeled) {
-            $peeledSha = $sha
-        } else {
-            $rawSha = $sha
-        }
-    }
-
-    $resolvedSha = if (-not [string]::IsNullOrWhiteSpace($peeledSha)) { $peeledSha } else { $rawSha }
-    if ([string]::IsNullOrWhiteSpace($resolvedSha)) {
+    $parts = @($line -split '\s+', 2)
+    if ($parts.Count -lt 2 -or $parts[0] -notmatch '^[0-9a-fA-F]{40}$') {
         return [pscustomobject]@{
             Success = $false
-            Error = "Could not parse remote refs for '$TagName'."
-            Raw = ($lines -join " | ")
+            Error = "Could not parse remote refs for '$TagName'. Raw: $line"
         }
     }
 
     return [pscustomobject]@{
         Success = $true
-        RawSha = $rawSha
-        ResolvedSha = $resolvedSha
-        Raw = ($lines -join " | ")
+        Sha = $parts[0].ToLowerInvariant()
+        Raw = $line
     }
 }
 
@@ -148,55 +103,66 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Fail "'git' command not found."
 }
 
+$expectedRepo = $Repo.Trim()
+if ([string]::IsNullOrWhiteSpace($expectedRepo)) {
+    Fail "Repo is empty."
+}
+
 $targetSha = $Sha.Trim().ToLowerInvariant()
 $tagName = $Tag.Trim()
+$tagRef = "refs/tags/$tagName"
 
 if ([string]::IsNullOrWhiteSpace($tagName)) {
     Fail "Tag name is empty."
 }
 
-$originUrlResult = Invoke-Git @("remote", "get-url", "origin")
-if ($originUrlResult.ExitCode -ne 0) {
-    Fail "Failed to resolve origin remote URL. $(Format-GitError $originUrlResult)"
+$tagFormatCheck = Invoke-Git @("check-ref-format", $tagRef)
+if ($tagFormatCheck.ExitCode -ne 0) {
+    Fail "Invalid tag name '$tagName'. $(Get-Detail $tagFormatCheck)"
 }
 
-$originUrl = $originUrlResult.StdOut.Trim()
-$originRepo = Parse-GitHubRepoFromRemoteUrl $originUrl
-if (-not [string]::IsNullOrWhiteSpace($Repo) -and -not [string]::IsNullOrWhiteSpace($originRepo)) {
-    if ($Repo.Trim() -ne $originRepo) {
-        Fail "Repo mismatch. Expected '$Repo', but origin is '$originRepo' ($originUrl)."
-    }
+$originResult = Invoke-Git @("remote", "get-url", "origin")
+if ($originResult.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($originResult.Output)) {
+    Fail "Failed to resolve origin remote URL. $(Get-Detail $originResult)"
 }
 
-$commitCheck = Invoke-Git @("cat-file", "-t", $targetSha)
-if ($commitCheck.ExitCode -ne 0 -or $commitCheck.StdOut.Trim().ToLowerInvariant() -ne "commit") {
+$originUrl = $originResult.Output.Trim()
+$normalizedOrigin = (Normalize-RemoteUrl $originUrl).ToLowerInvariant()
+$normalizedRepo = $expectedRepo.ToLowerInvariant()
+
+if (-not $normalizedOrigin.EndsWith("/$normalizedRepo") -and -not $normalizedOrigin.EndsWith(":$normalizedRepo")) {
+    Fail "Repo mismatch. Expected '$expectedRepo', but origin is '$originUrl'."
+}
+
+$commitCheck = Invoke-Git @("rev-parse", "--verify", "$targetSha^{commit}")
+if ($commitCheck.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($commitCheck.Output)) {
     Fail "Target SHA is not a valid commit in the current repository: $targetSha"
 }
 
-# Create/update a lightweight local tag at the target commit.
-$tagResult = Invoke-Git @("tag", "-f", $tagName, $targetSha)
-if ($tagResult.ExitCode -ne 0) {
-    Fail "Failed to create/update local tag '$tagName'. $(Format-GitError $tagResult)"
-}
-
-# Push floating tag ref explicitly and force-update remote.
-$pushResult = Invoke-Git @("push", "origin", "refs/tags/$tagName", "--force")
+# Push SHA directly to remote tag ref to avoid mutating local tags.
+$pushSpec = "${targetSha}:$tagRef"
+$pushResult = Invoke-Git @("push", "origin", $pushSpec, "--force")
 if ($pushResult.ExitCode -ne 0) {
-    Fail "Failed to push tag '$tagName' to origin. $(Format-GitError $pushResult)"
+    Fail "Failed to push tag '$tagName' to origin. $(Get-Detail $pushResult)"
 }
 
 $maxVerifyAttempts = 8
 $verifyDelaySeconds = 2
-$lastState = $null
+$lastError = "Unknown verification error."
+$lastRaw = ""
 
 for ($attempt = 1; $attempt -le $maxVerifyAttempts; $attempt++) {
-    $state = Resolve-RemoteTagCommit -TagName $tagName
-    $lastState = $state
-
-    if ($state.Success -and $state.ResolvedSha -eq $targetSha) {
-        $raw = if ($state.Raw) { $state.Raw } else { "(no raw refs)" }
-        Write-Host "Floating tag updated: $tagName -> $($state.ResolvedSha) (remote refs: $raw)"
-        exit 0
+    $state = Get-RemoteTagSha -TagName $tagName
+    if ($state.Success) {
+        if ($state.Sha -eq $targetSha) {
+            Write-Host "Floating tag updated: $tagName -> $($state.Sha) (remote refs: $($state.Raw))"
+            exit 0
+        }
+        $lastError = "Expected: $targetSha, Actual: $($state.Sha)"
+        $lastRaw = $state.Raw
+    } else {
+        $lastError = $state.Error
+        $lastRaw = ""
     }
 
     if ($attempt -lt $maxVerifyAttempts) {
@@ -204,9 +170,8 @@ for ($attempt = 1; $attempt -le $maxVerifyAttempts; $attempt++) {
     }
 }
 
-if (-not $lastState -or -not $lastState.Success) {
-    $detail = if ($lastState -and $lastState.Error) { $lastState.Error } else { "Unknown verification error." }
-    Fail "Tag update verification failed. Expected: $targetSha. $detail"
+if ([string]::IsNullOrWhiteSpace($lastRaw)) {
+    Fail "Tag update verification failed. $lastError"
 }
 
-Fail "Tag update verification failed. Expected: $targetSha, Actual: $($lastState.ResolvedSha), RawRefs: $($lastState.Raw)"
+Fail "Tag update verification failed. $lastError, RawRefs: $lastRaw"

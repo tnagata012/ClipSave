@@ -58,7 +58,7 @@ function Invoke-GhApi([string[]]$Args) {
     }
 }
 
-function Get-GhScalar([string[]]$Args, [string]$Description) {
+function Get-GhScalar([string[]]$Args, [string]$Description, [string]$ValuePattern = ".+") {
     $result = Invoke-GhApi $Args
     if ($result.ExitCode -ne 0) {
         $detail = if (-not [string]::IsNullOrWhiteSpace($result.StdErr)) { $result.StdErr } else { $result.StdOut }
@@ -76,14 +76,23 @@ function Get-GhScalar([string[]]$Args, [string]$Description) {
         }
     }
 
+    $matches = @($lines | Where-Object { $_ -match $ValuePattern })
+    if ($matches.Count -eq 0) {
+        $raw = ($lines -join " | ")
+        return [pscustomobject]@{
+            Success = $false
+            Error = "Failed to $Description. Output did not match expected pattern '$ValuePattern'. Raw output: $raw"
+        }
+    }
+
     return [pscustomobject]@{
         Success = $true
-        Value = $lines[$lines.Count - 1].Trim()
+        Value = $matches[0].Trim()
     }
 }
 
 function Resolve-RefCommit([string]$Repo, [string]$Ref, [int]$MaxDepth = 5) {
-    $refTypeResult = Get-GhScalar @("api", "repos/$Repo/git/ref/$Ref", "--jq", ".object.type") "read ref type for '$Ref'"
+    $refTypeResult = Get-GhScalar @("api", "repos/$Repo/git/ref/$Ref", "--jq", ".object.type") "read ref type for '$Ref'" "^(commit|tag)$"
     if (-not $refTypeResult.Success) {
         return [pscustomobject]@{
             Success = $false
@@ -91,7 +100,7 @@ function Resolve-RefCommit([string]$Repo, [string]$Ref, [int]$MaxDepth = 5) {
         }
     }
 
-    $refShaResult = Get-GhScalar @("api", "repos/$Repo/git/ref/$Ref", "--jq", ".object.sha") "read ref sha for '$Ref'"
+    $refShaResult = Get-GhScalar @("api", "repos/$Repo/git/ref/$Ref", "--jq", ".object.sha") "read ref sha for '$Ref'" "^[0-9a-fA-F]{40}$"
     if (-not $refShaResult.Success) {
         return [pscustomobject]@{
             Success = $false
@@ -123,7 +132,7 @@ function Resolve-RefCommit([string]$Repo, [string]$Ref, [int]$MaxDepth = 5) {
         }
 
         $depth++
-        $tagTypeResult = Get-GhScalar @("api", "repos/$Repo/git/tags/$resolvedSha", "--jq", ".object.type") "resolve tag object type '$resolvedSha'"
+        $tagTypeResult = Get-GhScalar @("api", "repos/$Repo/git/tags/$resolvedSha", "--jq", ".object.type") "resolve tag object type '$resolvedSha'" "^(commit|tag)$"
         if (-not $tagTypeResult.Success) {
             return [pscustomobject]@{
                 Success = $false
@@ -133,7 +142,7 @@ function Resolve-RefCommit([string]$Repo, [string]$Ref, [int]$MaxDepth = 5) {
             }
         }
 
-        $tagShaResult = Get-GhScalar @("api", "repos/$Repo/git/tags/$resolvedSha", "--jq", ".object.sha") "resolve tag object sha '$resolvedSha'"
+        $tagShaResult = Get-GhScalar @("api", "repos/$Repo/git/tags/$resolvedSha", "--jq", ".object.sha") "resolve tag object sha '$resolvedSha'" "^[0-9a-fA-F]{40}$"
         if (-not $tagShaResult.Success) {
             return [pscustomobject]@{
                 Success = $false

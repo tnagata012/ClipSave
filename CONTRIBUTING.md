@@ -46,7 +46,7 @@ ClipSave へのコントリビューションに興味を持っていただき�
 
 - 実装規約: `docs/dev/CodingGuidelines.md`
 - テスト方針: `docs/dev/TestingStrategy.md`
-- リリース運用: `docs/ops/BranchStrategy.md` / `docs/ops/Versioning.md` / `docs/ops/Deployment.md` / `docs/ops/Signing.md`
+- リリース運用: `docs/ops/BranchStrategy.md` / `docs/ops/Versioning.md` / `docs/ops/Deployment.md` / `docs/ops/Signing.md` / `docs/ops/ReleaseNotes.md`
 - レビュー担当: `.github/CODEOWNERS`（`@TNagata012`）
 
 PR には少なくとも次を含めてください。
@@ -54,6 +54,7 @@ PR には少なくとも次を含めてください。
 - 変更概要と背景
 - テスト結果（実行コマンドと結果）
 - 仕様影響がある場合は関連 SPEC-ID やドキュメント更新内容
+- ユーザー影響がある変更は `CHANGELOG.md` の `[Unreleased]` を更新（詳細は `docs/ops/ReleaseNotes.md`）
 
 ## Language Policy
 

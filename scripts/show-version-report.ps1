@@ -187,8 +187,11 @@ if ($ghAvailable) {
             Write-Host "  Release Base : release-package-* artifact not found" -ForegroundColor Gray
         }
 
-        if ($coreVersion -and $resolvedReleaseTag) {
-            Write-Host "  Store Hint   : version=$coreVersion, source_ref=$resolvedReleaseTag" -ForegroundColor Cyan
+        if ($coreVersion) {
+            Write-Host "  Store Hint   : version=$coreVersion, source_ref=<X.Y.Z tag (recommended) or commit SHA>" -ForegroundColor Cyan
+            if ($resolvedReleaseTag) {
+                Write-Host "                 Candidate channel tag: $resolvedReleaseTag (do not use as final source_ref)" -ForegroundColor Gray
+            }
         }
     }
 } else {

@@ -24,7 +24,7 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 | [pr-check.yml](../../.github/workflows/pr-check.yml) | PR（`main`, `release/*`） | 品質ゲート | `TestResults/**/*.trx` |
 | [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y.0`） | `release/X.Y` 作成 + main 側 bump ブランチ作成 | `release/X.Y`, `chore/bump-main-to-*` |
 | [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`） | patch init ブランチ作成 | `chore/release-X.Y.(Z+1)-init` |
-| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
+| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push（`docs/**`, `*.md` のみ変更時は除く） / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
 | [release-build.yml](../../.github/workflows/release-build.yml) | `release/*` push / 手動 | 公開候補生成（未署名） | `release-package-*`, `release-X.Y-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
 | [store-publish.yml](../../.github/workflows/store-publish.yml) | 手動（`X.Y.Z`、任意 `source_ref`） | Store 提出物生成 | `store-package-*`（`.msixupload`） |
 
@@ -35,7 +35,8 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 - `.NET` SDK の解決はリポジトリ直下の `global.json` を単一の正本とし、workflow の `actions/setup-dotnet` は `global-json-file: global.json` を参照する。
 - `dev-latest` と `release-X.Y-latest` は固定版タグではなく移動タグ（floating tag）として運用し、各 workflow 成功時に実行コミットへ更新する。
 - `release/X.Y` ブランチの配布タグは `release-X.Y-latest`（例: `release/1.3` -> `release-1.3-latest`）。
-- Store 提出は通常 `version` のみで実行できる。採用候補コミットを厳密に固定したい場合のみ `source_ref`（タグ/sha）を追加指定する。
+- 正式版の固定タグは `X.Y.Z` で作成し、作成後は移動しない。
+- Store Publish は `source_ref` を省略すると `release/X.Y` 先頭で再ビルドする。正式提出では再現性のため `source_ref=X.Y.Z` を原則指定する（例外時は commit SHA）。
 - `PATCH` 更新規約は `Versioning.md` を正本とする。
 
 ## 実行前チェック
@@ -69,7 +70,8 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 2. `chore/bump-main-to-* -> main` の PR をレビューしてマージする。
 3. `release/X.Y` の安定化を PR で反映する。
 4. `release-X.Y-latest` と複数の公開候補（`release-package-*`）を比較し、採用コミットを決定する。
-5. 採用版 `X.Y.Z` を確定し、必要に応じて採用 ref（例: `release-X.Y-latest` または commit SHA）を記録する。
+5. 採用版 `X.Y.Z` を確定し、採用コミットに固定タグ `X.Y.Z` を作成する。
+6. Store 提出は `source_ref=X.Y.Z` を指定して実行する（例外時のみ commit SHA）。
 
 ### パッチリリース
 
@@ -77,12 +79,13 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 2. patch init PR（`chore/release-X.Y.(Z+1)-init -> release/X.Y`）をマージする。
 3. 不具合修正を `main` へマージする。
 4. `release/X.Y` をベースにした `fix/*` backport ブランチで必要コミットを `cherry-pick -x` し、PR で `release/X.Y` へ反映する。
-5. 候補ビルドから採用コミットを決定し、Store 提出対象版を確定する。
+5. 候補ビルドから採用コミットを決定し、Store 提出対象版 `X.Y.Z` を確定する。
+6. 採用コミットに固定タグ `X.Y.Z` を作成する。
 
 ### Store 提出
 
 1. `./scripts/store-checklist.ps1` を実行する。
-2. `Store Publish`（`version=X.Y.Z`、必要時のみ `source_ref=<tag|sha>`）または `./scripts/build-store-package.ps1` で `.msixupload` を生成する。
+2. `Store Publish`（`version=X.Y.Z`、原則: `source_ref=X.Y.Z`）または `./scripts/build-store-package.ps1` で `.msixupload` を生成する。
 3. Partner Center に提出する。
 
 ## ロールバック/取り下げ
@@ -124,6 +127,7 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 
 - [BranchStrategy](BranchStrategy.md) — ブランチ構成と統合方向
 - [Versioning](Versioning.md) — 版数規約
+- [ReleaseNotes](ReleaseNotes.md) — CHANGELOG 運用
 - [Signing](Signing.md) — 署名方針（チャネル別運用）
 - [IconAssets](../presentation/IconAssets.md) — アイコン運用
-- [RELEASE_NOTES](../../RELEASE_NOTES.md) — 変更履歴
+- [CHANGELOG](../../CHANGELOG.md) — 変更履歴

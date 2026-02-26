@@ -28,8 +28,7 @@ ClipSave は、コピーした内容を `Ctrl+Shift+V` で即保存する軽量�
 ## インストール
 
 - **Stable（一般ユーザー向け）**: Microsoft Store（公開後）
-- **Dev/Release artifacts**: `Releases`（`dev-latest` / `release-X.Y-latest`）の `*.msixbundle` は未署名の検証アーティファクトです。インストールする場合は、[検証アーティファクト導入手順](docs/ops/ArtifactInstallation.md) を参照してください
-- **開発・検証（推奨）**: ソースから実行
+- **開発（推奨）**: ソースから実行
 
 ```bash
 git clone https://github.com/tnagata012/ClipSave.git
@@ -37,6 +36,10 @@ cd ClipSave
 dotnet restore src/ClipSave/ClipSave.csproj
 dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 ```
+
+- **検証（任意）**: Dev/Release artifacts（`dev-latest` / `release-X.Y-latest`）の `*.msixbundle` を利用
+  - `*.msixbundle` は未署名の検証アーティファクトです。
+  - インストールする場合は、[検証アーティファクト導入手順](docs/ops/ArtifactInstallation.md) を参照してください。
 
 ## ドキュメント
 

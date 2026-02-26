@@ -37,7 +37,8 @@ PR 本文は [`.github/pull_request_template.md`](.github/pull_request_template.
 - `Summary`: 変更内容
 - `Why`: 変更理由
 - `Checklist`:
-  - `Quality` は各項目を満たす（不要な項目は理由を `Summary` または `Why` に明記）
+  - `Change Type` はどちらか 1 つをチェック
+  - `Quality` は該当する項目を満たす（不要な項目は理由を `Summary` または `Why` に明記）
   - `Related Issue` はどちらか 1 つをチェック
   - `Specs` はどちらか 1 つをチェック
   - `Changelog` はどちらか 1 つをチェック

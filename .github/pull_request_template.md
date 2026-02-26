@@ -6,8 +6,8 @@
 
 ## Checklist
 ### Change Type (choose one)
+- [ ] Docs/config only.
 - [ ] Includes code or spec changes.
-- [ ] Docs/config only
 
 ### Quality (as applicable)
 - [ ] Added/updated tests in the appropriate layer (Unit / Integration / UI), or documented why tests are not needed.
@@ -15,8 +15,8 @@
 - [ ] If `Specification.md` or `Spec` attributes changed: `./scripts/check-spec-coverage.ps1` succeeded locally.
 
 ### Related Issue (choose one)
+- [ ] No related issue.
 - [ ] Linked related issue.
-- [ ] No related issue (N/A).
 
 ### Specs (choose one)
 - [ ] No spec impact.

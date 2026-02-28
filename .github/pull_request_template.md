@@ -6,8 +6,8 @@
 
 ## Checklist
 ### Change Type (choose one)
-- [ ] Docs/config only.
-- [ ] Includes code or spec changes.
+- [ ] Docs/CI/repo config only.
+- [ ] Includes product code or spec changes.
 
 ### Quality (as applicable)
 - [ ] Added/updated tests in the appropriate layer (Unit / Integration / UI), or documented why tests are not needed.

@@ -27,6 +27,55 @@ $testsDir = Join-Path $ProjectRoot 'tests'
 $integrationTestsDir = Join-Path $testsDir 'ClipSave.IntegrationTests'
 $uiTestsDir = Join-Path $testsDir 'ClipSave.UiTests'
 
+function Write-StepSummaryIfAvailable {
+    param(
+        [int]$SpecCount,
+        [int]$CoveredCount,
+        [int]$UncoveredCount,
+        [double]$CoveragePercent,
+        [string[]]$UncoveredSpecs,
+        [string[]]$OrphanedSpecs
+    )
+
+    $summaryPath = $env:GITHUB_STEP_SUMMARY
+    if ([string]::IsNullOrWhiteSpace($summaryPath)) {
+        return
+    }
+
+    $status = if ($UncoveredCount -eq 0 -and $OrphanedSpecs.Count -eq 0) { "PASS" } else { "FAIL" }
+    $lines = @(
+        "## SPEC Coverage",
+        "",
+        "| Metric | Value |",
+        "|------|------:|",
+        "| Specifications defined | $SpecCount |",
+        "| Covered by tests | $CoveredCount |",
+        "| Not covered | $UncoveredCount |",
+        "| Orphaned in tests | $($OrphanedSpecs.Count) |",
+        "| Coverage | $CoveragePercent% |",
+        "",
+        "**Result:** $status"
+    )
+
+    if ($UncoveredSpecs.Count -gt 0) {
+        $lines += ""
+        $lines += "### Uncovered SPEC-IDs"
+        foreach ($id in $UncoveredSpecs) {
+            $lines += "- ``$id``"
+        }
+    }
+
+    if ($OrphanedSpecs.Count -gt 0) {
+        $lines += ""
+        $lines += "### Orphaned SPEC-IDs (in tests only)"
+        foreach ($id in $OrphanedSpecs) {
+            $lines += "- ``$id``"
+        }
+    }
+
+    Add-Content -Path $summaryPath -Value ($lines -join [Environment]::NewLine)
+}
+
 if (-not (Test-Path $specFile)) {
     Write-Error "Specification file not found: $specFile"
     exit 1
@@ -133,6 +182,14 @@ if ($orphaned.Count -gt 0) {
 }
 
 Write-Host ""
+
+Write-StepSummaryIfAvailable `
+    -SpecCount $specIds.Count `
+    -CoveredCount $covered.Count `
+    -UncoveredCount $uncovered.Count `
+    -CoveragePercent $coveragePercent `
+    -UncoveredSpecs $uncovered `
+    -OrphanedSpecs $orphaned
 
 # Exit with non-zero if uncovered/orphaned specs exist.
 # Uncovered specs indicate missing test traceability.

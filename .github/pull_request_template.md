@@ -6,14 +6,8 @@
 
 ## Checklist
 ### Change Type (choose one)
-- [ ] Docs/config only.
+- [ ] Docs/CI/repo config only.
 - [ ] Includes product code or spec changes.
-
-Docs/config only:
-docs, policies, CI/workflow, scripts, repo config. No app behavior/spec change.
-
-Product code or spec changes:
-`src/**`, behavior-affecting tests, `docs/dev/Specification.md`, `Spec` attributes.
 
 ### Quality (as applicable)
 - [ ] Added/updated tests in the appropriate layer (Unit / Integration / UI), or documented why tests are not needed.

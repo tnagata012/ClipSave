@@ -259,6 +259,6 @@ public partial class AboutViewModel : ObservableObject
         var copyrightAttr = assembly
             .GetCustomAttribute<AssemblyCopyrightAttribute>();
 
-        return copyrightAttr?.Copyright ?? "Copyright \u00a9 2026 TNagata012";
+        return copyrightAttr?.Copyright ?? "Copyright \u00a9 2026 tnagata012";
     }
 }

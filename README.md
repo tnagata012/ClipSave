@@ -70,4 +70,4 @@ dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 
 ---
 
-**Copyright (c) 2026 TNagata012**
+**Copyright (c) 2026 tnagata012**

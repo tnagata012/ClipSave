@@ -5,37 +5,37 @@
 [![Dev Channel](https://img.shields.io/badge/Dev%20Channel-dev--latest-2f6feb)](https://github.com/tnagata012/ClipSave/releases/tag/dev-latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> コピーしたものを `Ctrl+Shift+V` でそのまま使えるファイルに変える Windows 常駐アプリ
+> A lightweight Windows tray app that turns clipboard content into ready-to-use files with `Ctrl+Shift+V`
 
-ClipSave は、スクリーンショット、表、JSON、Markdown、メモを何度も保存する人のための軽量ツールです。`Ctrl+Shift+V` を押すだけでクリップボード内容を自動判別し、表は CSV に、JSON は整形して、デスクトップまたは今開いているエクスプローラーのフォルダーへ直接保存します。保存ダイアログを何度も開く必要はありません。ネットワーク通信やテレメトリもありません。
+ClipSave is a lightweight tool for people who repeatedly save screenshots, tables, JSON, Markdown, and notes. Press `Ctrl+Shift+V` and the app automatically detects clipboard content, converts tables to CSV, formats JSON, and saves the result directly to your desktop or the folder open in Explorer. You do not need to open a Save dialog every time. There is no network communication and no telemetry.
 
-こんな用途に向いています。
+ClipSave works well when you want to:
 
-- スクリーンショットやコピー画像をすぐファイル化したい
-- Web や Excel からコピーした表を CSV にしたい
-- JSON や Markdown やメモを保存先選択なしで残したい
+- Quickly save screenshots or copied images as files
+- Convert copied web or Excel tables into CSV
+- Save JSON, Markdown, or notes without choosing a destination every time
 
-## クイックスタート
+## Quick Start
 
-1. ClipSave をインストールして起動
-2. 保存したい内容をコピー
-3. `Ctrl+Shift+V` を押す
+1. Install and launch ClipSave
+2. Copy the content you want to save
+3. Press `Ctrl+Shift+V`
 
-対応コンテンツ: 画像 / CSV / JSON / Markdown / テキスト（自動判別）
-保存先: デスクトップまたはアクティブなエクスプローラーのフォルダー
+Supported content: images / CSV / JSON / Markdown / text (auto-detected)  
+Save destination: the desktop or the active Explorer folder
 
-自動起動はインストール直後は有効になります（Windows の「設定 > アプリ > スタートアップ」で変更可能）。
+Auto-start is enabled immediately after installation. You can change it in Windows under `Settings > Apps > Startup`.
 
-## 動作環境
+## System Requirements
 
 - **OS**: Windows 11
 - **Runtime**: .NET 10
 - **CPU**: AnyCPU
 
-## インストール
+## Installation
 
-- **Stable（一般ユーザー向け）**: Microsoft Store（公開後）
-- **開発（推奨）**: ソースから実行
+- **Stable (general users)**: Microsoft Store (after publication)
+- **Development (recommended)**: run from source
 
 ```bash
 git clone https://github.com/tnagata012/ClipSave.git
@@ -44,36 +44,38 @@ dotnet restore src/ClipSave/ClipSave.csproj
 dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 ```
 
-- **検証（任意）**: Dev/RC artifacts（`dev-latest` / `rc-X.Y-latest`）または確定版 GitHub Release（`X.Y.Z`）の `*.msixbundle` を利用
-  - `*.msixbundle` は未署名の検証アーティファクトです。
-  - インストールする場合は、[検証アーティファクト導入手順](docs/ops/ArtifactInstallation.md) を参照してください。
+- **Validation (optional)**: use Dev/RC artifacts (`dev-latest` / `rc-X.Y-latest`) or a versioned GitHub Release (`X.Y.Z`) `*.msixbundle`
+  - `*.msixbundle` files are unsigned validation artifacts.
+  - If you want to install one, see [Validation Artifact Installation](docs/ops/ArtifactInstallation.md).
 
-## ドキュメント
+## Documentation
 
-- [使い方ガイド](docs/UsageGuide.md) - 基本操作と設定
-- [製品コンセプト](docs/ProductConcept.md) - ビジョンと設計思想
-- [ランディングページ運用](docs/presentation/LandingPage.md) - `site/` の更新方針と確認手順
-- [Changelog](CHANGELOG.md) - 変更履歴
+Project documentation is written in Japanese.
 
-## 開発者向け
+- [Usage Guide](docs/UsageGuide.md) - Basic operations and settings
+- [Product Concept](docs/ProductConcept.md) - Vision and design principles
+- [Landing Page Operations](docs/presentation/LandingPage.md) - Update policy and verification steps for `site/`
+- [Changelog](CHANGELOG.md) - Change history
 
-開発に参加したい方は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+## For Contributors
 
-| カテゴリ | ドキュメント |
+If you want to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+| Category | Documents |
 |---------|-------------|
-| 設計 | [仕様](docs/dev/Specification.md) ・ [アーキテクチャ](docs/dev/Architecture.md) ・ [コーディングガイドライン](docs/dev/CodingGuidelines.md) |
-| テスト | [テスト戦略](docs/dev/TestingStrategy.md) |
-| 運用 | [デプロイ](docs/ops/Deployment.md) ・ [Store サブミッション運用](docs/store/Submission.md) ・ [署名運用](docs/ops/Signing.md) ・ [バージョニング](docs/ops/Versioning.md) ・ [ブランチ戦略](docs/ops/BranchStrategy.md) ・ [CHANGELOG 運用](docs/ops/ReleaseNotes.md) ・ [検証アーティファクト導入](docs/ops/ArtifactInstallation.md) ・ [アイコン運用](docs/presentation/IconAssets.md) |
+| Design | [Specification](docs/dev/Specification.md) ・ [Architecture](docs/dev/Architecture.md) ・ [Coding Guidelines](docs/dev/CodingGuidelines.md) |
+| Testing | [Testing Strategy](docs/dev/TestingStrategy.md) |
+| Operations | [Deployment](docs/ops/Deployment.md) ・ [Store Submission](docs/store/Submission.md) ・ [Signing](docs/ops/Signing.md) ・ [Versioning](docs/ops/Versioning.md) ・ [Branch Strategy](docs/ops/BranchStrategy.md) ・ [Release Notes Operations](docs/ops/ReleaseNotes.md) ・ [Validation Artifact Installation](docs/ops/ArtifactInstallation.md) ・ [Icon Asset Operations](docs/presentation/IconAssets.md) |
 
-## セキュリティ
+## Security
 
-セキュリティポリシーと脆弱性の報告方法については [SECURITY.md](SECURITY.md) を参照してください。
+See [SECURITY.md](SECURITY.md) for the security policy and how to report vulnerabilities.
 
-## ライセンス
+## License
 
-このプロジェクトは MIT ライセンスの下で公開されています。詳細は [LICENSE](LICENSE) を参照してください。
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
-サードパーティライブラリのライセンスについては [NOTICES](NOTICES) を参照してください。
+For third-party library licenses, see [NOTICES](NOTICES).
 
 ---
 

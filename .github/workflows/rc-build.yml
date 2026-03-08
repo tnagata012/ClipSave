@@ -1,4 +1,4 @@
-name: Release Build
+name: RC Build
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   attestations: write
 
 concurrency:
-  group: release-build-${{ github.ref }}
+  group: rc-build-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -48,11 +48,11 @@ jobs:
       run: |
         $branch = "${{ github.ref_name }}"
         if ($branch -notmatch '^release/\d+\.\d+$') {
-          Write-Error "Release Build can run only on release/X.Y branches. Current ref: $branch"
+          Write-Error "RC Build can run only on release/X.Y branches. Current ref: $branch"
           exit 1
         }
 
-    - name: Resolve release build versions
+    - name: Resolve RC build versions
       id: version
       shell: pwsh
       run: |
@@ -71,7 +71,7 @@ jobs:
         }
         $coreVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
         $releaseLine = "$($branchMatch.Groups['major'].Value).$($branchMatch.Groups['minor'].Value)"
-        $releaseChannelTag = "release-$releaseLine-latest"
+        $rcChannelTag = "rc-$releaseLine-latest"
         $shortSha = "${{ github.sha }}".Substring(0, 7)
         $segments = @(
           [int]$match.Groups['major'].Value,
@@ -94,13 +94,13 @@ jobs:
         echo "FILE_VERSION=$fileVersion" >> $env:GITHUB_OUTPUT
         echo "INFORMATIONAL_VERSION=$informationalVersion" >> $env:GITHUB_OUTPUT
         echo "MSIX_VERSION=$msixVersion" >> $env:GITHUB_OUTPUT
-        echo "RELEASE_CHANNEL_TAG=$releaseChannelTag" >> $env:GITHUB_OUTPUT
+        echo "RC_CHANNEL_TAG=$rcChannelTag" >> $env:GITHUB_OUTPUT
         echo "Version: $version"
         echo "AssemblyVersion: $assemblyVersion"
         echo "FileVersion: $fileVersion"
         echo "InformationalVersion: $informationalVersion"
         echo "MSIX version: $msixVersion"
-        echo "Release channel tag: $releaseChannelTag"
+        echo "RC channel tag: $rcChannelTag"
 
     - name: Validate version
       shell: pwsh
@@ -214,7 +214,7 @@ jobs:
     - name: Upload package artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: release-package-${{ steps.version.outputs.VERSION }}
+        name: rc-package-${{ steps.version.outputs.VERSION }}
         path: |
           output/**/*.msixbundle
           output/SHA256SUMS.txt
@@ -228,41 +228,45 @@ jobs:
           output/**/*.msixbundle
           output/SHA256SUMS.txt
 
-    - name: Cleanup old release assets
+    - name: Cleanup existing RC assets
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        $tag = "${{ steps.version.outputs.RELEASE_CHANNEL_TAG }}"
+        $tag = "${{ steps.version.outputs.RC_CHANNEL_TAG }}"
         $repo = "${{ github.repository }}"
 
         $assetNames = gh release view $tag --repo $repo --json assets --jq '.assets[].name' 2>$null
         if ($LASTEXITCODE -ne 0) {
-          Write-Host "Release '$tag' not found. Skipping asset cleanup."
+          Write-Host "RC channel '$tag' not found. Skipping asset cleanup."
           exit 0
         }
 
-        $assets = @($assetNames | Where-Object { $_ -and $_.Trim() -ne "" })
-        if ($assets.Count -eq 0) {
-          Write-Host "No assets to cleanup in '$tag'."
+        $managedAssets = @(
+          $assetNames |
+            Where-Object { $_ -and $_.Trim() -ne "" } |
+            Where-Object { $_ -eq "SHA256SUMS.txt" -or $_ -match '\.msixbundle$' }
+        )
+        if ($managedAssets.Count -eq 0) {
+          Write-Host "No managed RC assets to cleanup in '$tag'."
           exit 0
         }
 
-        foreach ($asset in $assets) {
+        foreach ($asset in $managedAssets) {
           gh release delete-asset $tag $asset --repo $repo --yes *> $null
           if ($LASTEXITCODE -ne 0) {
-            throw "Failed to delete old asset '$asset' from release '$tag'."
+            throw "Failed to delete managed RC asset '$asset' from RC channel '$tag'."
           }
-          Write-Host "Deleted old asset: $asset"
+          Write-Host "Deleted managed RC asset: $asset"
         }
 
-    - name: Create Release Channel
+    - name: Create RC Channel
       uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
       with:
-        tag_name: ${{ steps.version.outputs.RELEASE_CHANNEL_TAG }}
-        name: Release Candidate (${{ github.ref_name }})
+        tag_name: ${{ steps.version.outputs.RC_CHANNEL_TAG }}
+        name: RC (${{ github.ref_name }})
         body: |
-          ## Release Build (Unsigned)
+          ## RC Build (Unsigned)
 
           | Item | Value |
           |------|-------|
@@ -270,24 +274,26 @@ jobs:
           | **InformationalVersion** | `${{ steps.version.outputs.INFORMATIONAL_VERSION }}` |
           | **FileVersion** | `${{ steps.version.outputs.FILE_VERSION }}` |
           | **Package Version** | `${{ steps.version.outputs.MSIX_VERSION }}` |
-          | **Signing** | `unsigned (Release channel policy)` |
+          | **Signing** | `unsigned (RC channel policy)` |
           | **Checksum** | `SHA256SUMS.txt` |
           | **Provenance** | `GitHub Artifact Attestation` |
           | **Commit** | [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
           | **Build** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
           > Unsigned package by channel policy. Verify `SHA256SUMS.txt` and GitHub Artifact Attestation (`gh attestation verify`) before use.
+          > This floating release tag always points to the latest candidate for `${{ github.ref_name }}` and can be replaced by a newer build.
         files: |
           output/**/*.msixbundle
           output/SHA256SUMS.txt
-        prerelease: false
+        overwrite_files: true
+        prerelease: true
         make_latest: false
 
     - name: Summary
       shell: pwsh
       run: |
         @'
-        ## Release Build Complete (Unsigned)
+        ## RC Build Complete (Unsigned)
 
         | Item | Value |
         |------|-------|
@@ -295,18 +301,18 @@ jobs:
         | InformationalVersion | `${{ steps.version.outputs.INFORMATIONAL_VERSION }}` |
         | FileVersion | `${{ steps.version.outputs.FILE_VERSION }}` |
         | Package Version | `${{ steps.version.outputs.MSIX_VERSION }}` |
-        | Signing | `unsigned (Release channel policy)` |
+        | Signing | `unsigned (RC channel policy)` |
         | Checksum | `SHA256SUMS.txt` |
         | Provenance | `GitHub Artifact Attestation` |
-        | Artifact | `release-package-${{ steps.version.outputs.VERSION }}` |
+        | Artifact | `rc-package-${{ steps.version.outputs.VERSION }}` |
         | Branch | `${{ github.ref_name }}` |
         | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
         '@ >> $env:GITHUB_STEP_SUMMARY
 
-    - name: Move release channel tag to current commit
+    - name: Move RC channel tag to current commit
       if: ${{ success() }}
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
-      run: ./scripts/update-floating-tag.ps1 -Repo "${{ github.repository }}" -Tag "${{ steps.version.outputs.RELEASE_CHANNEL_TAG }}" -Sha "${{ github.sha }}"
+      run: ./scripts/update-floating-tag.ps1 -Repo "${{ github.repository }}" -Tag "${{ steps.version.outputs.RC_CHANNEL_TAG }}" -Sha "${{ github.sha }}"
 

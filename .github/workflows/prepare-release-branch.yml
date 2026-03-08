@@ -7,6 +7,10 @@ on:
         description: 'Release version (X.Y.0)'
         required: true
         type: string
+      next_main_version:
+        description: 'Next main version after branching (optional, defaults to next minor)'
+        required: false
+        type: string
       create_main_bump_pr:
         description: 'Create PR for main version bump branch'
         required: true
@@ -45,9 +49,15 @@ jobs:
     - name: Create release and main bump branches
       shell: pwsh
       run: |
-        ./scripts/create-release-branch.ps1 `
+        $extraArgs = @()
+        if ("${{ inputs.next_main_version }}".Trim()) {
+          $extraArgs += @("-NextMainVersion", "${{ inputs.next_main_version }}")
+        }
+
+        & ./scripts/create-release-branch.ps1 `
           -Version "${{ inputs.version }}" `
           -MainBranch "main" `
+          @extraArgs `
           -Push
 
     - name: Create PR for main version bump branch
@@ -63,7 +73,10 @@ jobs:
 
         $major = [int]$matches['major']
         $minor = [int]$matches['minor']
-        $nextMainVersion = "$major.$($minor + 1).0"
+        $nextMainVersion = "${{ inputs.next_main_version }}".Trim()
+        if (-not $nextMainVersion) {
+          $nextMainVersion = "$major.$($minor + 1).0"
+        }
         $head = "chore/bump-main-to-$nextMainVersion"
         $base = "main"
         $repo = "${{ github.repository }}"
@@ -122,7 +135,10 @@ jobs:
         }
         $major = [int]$matches['major']
         $minor = [int]$matches['minor']
-        $nextMainVersion = "$major.$($minor + 1).0"
+        $nextMainVersion = "${{ inputs.next_main_version }}".Trim()
+        if (-not $nextMainVersion) {
+          $nextMainVersion = "$major.$($minor + 1).0"
+        }
         $releaseBranch = "release/$major.$minor"
         $mainBumpBranch = "chore/bump-main-to-$nextMainVersion"
         $prCreated = "${{ inputs.create_main_bump_pr }}"
@@ -135,5 +151,6 @@ jobs:
         | Release Version | $version |
         | Release Branch | $releaseBranch |
         | Main Bump Branch | $mainBumpBranch |
+        | Next Main Version | $nextMainVersion |
         | PR Created | $prCreated |
         "@ >> $env:GITHUB_STEP_SUMMARY

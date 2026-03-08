@@ -6,6 +6,7 @@
 .DESCRIPTION
     Creates a patch-start branch from a release branch and bumps version once.
     - release/X.Y current version: X.Y.Z
+    - requires current HEAD to already be finalized as tag X.Y.Z and GitHub Release X.Y.Z
     - patch init branch: chore/release-X.Y.(Z+1)-init
     - updates Directory.Build.props and Package.appxmanifest to X.Y.(Z+1)
     - intended for PR: patch init branch -> release/X.Y
@@ -20,6 +21,9 @@
 .PARAMETER Push
     Push patch init branch to origin (default: false).
 
+.PARAMETER ProjectRoot
+    Override the repository root path when running the script from an external tooling checkout.
+
 .EXAMPLE
     .\create-patch-release-branch.ps1 -ReleaseBranch release/1.3
 
@@ -30,12 +34,24 @@
 param(
     [string]$ReleaseBranch = $null,
     [switch]$SkipPull = $false,
-    [switch]$Push = $false
+    [switch]$Push = $false,
+    [string]$ProjectRoot = $null
 )
 
 $ErrorActionPreference = "Stop"
 
-$projectRoot = Split-Path -Parent $PSScriptRoot
+if ($ProjectRoot) {
+    try {
+        $projectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
+    }
+    catch {
+        Write-Host "`n[ERROR] ProjectRoot not found: $ProjectRoot" -ForegroundColor Red
+        exit 1
+    }
+} else {
+    $projectRoot = Split-Path -Parent $PSScriptRoot
+}
+
 $releasePattern = '^release/(?<major>\d+)\.(?<minor>\d+)$'
 $semverPattern = '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$'
 $propsPath = Join-Path $projectRoot "Directory.Build.props"
@@ -44,6 +60,43 @@ $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifes
 function Fail([string]$Message) {
     Write-Host "`n[ERROR] $Message" -ForegroundColor Red
     exit 1
+}
+
+function Resolve-GitHubRepository {
+    $remoteUrl = git config --get remote.origin.url 2>$null
+    if (-not $remoteUrl) {
+        return $null
+    }
+
+    $pattern = 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$'
+    $match = [regex]::Match($remoteUrl.Trim(), $pattern)
+    if (-not $match.Success) {
+        return $null
+    }
+
+    return "$($match.Groups['owner'].Value)/$($match.Groups['repo'].Value)"
+}
+
+function Get-RemoteTagCommit([string]$Remote, [string]$TagName) {
+    $escapedTag = [regex]::Escape($TagName)
+    $lines = @(git ls-remote --tags $Remote "refs/tags/$TagName" "refs/tags/$TagName^{}" 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $lines.Count -eq 0) {
+        return $null
+    }
+
+    foreach ($line in $lines) {
+        if ($line -match "^(?<sha>[0-9a-f]{40})\s+refs/tags/$escapedTag\^\{\}$") {
+            return $matches['sha']
+        }
+    }
+
+    foreach ($line in $lines) {
+        if ($line -match "^(?<sha>[0-9a-f]{40})\s+refs/tags/$escapedTag$") {
+            return $matches['sha']
+        }
+    }
+
+    return $null
 }
 
 Write-Host "=== Create Patch Release Branch ===" -ForegroundColor Cyan
@@ -84,25 +137,25 @@ try {
 
     Write-Host "Release branch: $ReleaseBranch" -ForegroundColor White
 
-    Write-Host "[1/8] Switching to $ReleaseBranch..." -ForegroundColor Yellow
+    Write-Host "[1/9] Switching to $ReleaseBranch..." -ForegroundColor Yellow
     git checkout $ReleaseBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Failed to checkout $ReleaseBranch."
     }
 
     if ($SkipPull) {
-        Write-Host "[2/8] Skipping pull (use -SkipPull:`$false to enable)." -ForegroundColor Gray
+        Write-Host "[2/9] Skipping pull (use -SkipPull:`$false to enable)." -ForegroundColor Gray
     } elseif ($hasOrigin) {
-        Write-Host "[2/8] Pulling latest $ReleaseBranch..." -ForegroundColor Yellow
+        Write-Host "[2/9] Pulling latest $ReleaseBranch..." -ForegroundColor Yellow
         git pull origin $ReleaseBranch
         if ($LASTEXITCODE -ne 0) {
             Fail "Failed to pull from origin/$ReleaseBranch."
         }
     } else {
-        Write-Host "[2/8] Remote 'origin' not found. Skipping pull." -ForegroundColor Yellow
+        Write-Host "[2/9] Remote 'origin' not found. Skipping pull." -ForegroundColor Yellow
     }
 
-    Write-Host "[3/8] Validating release branch version policy..." -ForegroundColor Yellow
+    Write-Host "[3/9] Validating release branch version policy..." -ForegroundColor Yellow
     & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $ReleaseBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Version validation failed on $ReleaseBranch."
@@ -129,6 +182,40 @@ try {
         Fail "Release branch and version mismatch. Branch=$ReleaseBranch, File=$currentVersion"
     }
 
+    Write-Host "[4/9] Verifying current version finalization..." -ForegroundColor Yellow
+    if (-not $hasOrigin) {
+        Fail "Cannot verify current version finalization because remote 'origin' is not configured."
+    }
+
+    $tagCommit = Get-RemoteTagCommit -Remote "origin" -TagName $currentVersion
+    if (-not $tagCommit) {
+        Fail "Current version '$currentVersion' is not finalized yet. Create and push tag '$currentVersion', run Release Finalize, then start the next patch cycle."
+    }
+
+    $headCommit = (git rev-parse HEAD).Trim()
+    if (-not $headCommit -or $headCommit.Length -ne 40) {
+        Fail "Failed to resolve HEAD commit for $ReleaseBranch."
+    }
+    if ($headCommit -ne $tagCommit) {
+        Fail "Release branch HEAD ($headCommit) is not at finalized tag '$currentVersion' ($tagCommit). Start the next patch cycle only from the finalized commit."
+    }
+
+    $repo = Resolve-GitHubRepository
+    if (-not $repo) {
+        Fail "Cannot resolve GitHub repository from remote 'origin'. Use the workflow or configure a GitHub origin before starting the next patch cycle."
+    }
+
+    $ghAvailable = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $ghAvailable) {
+        Fail "GitHub CLI 'gh' is required to verify Release Finalize archive for '$currentVersion'. Install gh or use the Prepare Patch Release workflow."
+    }
+
+    gh release view $currentVersion --repo $repo *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Fail "GitHub Release '$currentVersion' was not found. Wait for Release Finalize to complete before starting the next patch cycle."
+    }
+    Write-Host "  [OK] Current version finalized: $currentVersion ($tagCommit)" -ForegroundColor Green
+
     if ($currentPatch -ge 65535) {
         Fail "Cannot increment patch. Current patch is $currentPatch (max supported 65535)."
     }
@@ -141,7 +228,7 @@ try {
     Write-Host "Next version   : $nextVersion" -ForegroundColor White
     Write-Host "Patch branch   : $patchInitBranch" -ForegroundColor White
 
-    Write-Host "[4/8] Checking branch existence..." -ForegroundColor Yellow
+    Write-Host "[5/9] Checking branch existence..." -ForegroundColor Yellow
     git show-ref --verify --quiet "refs/heads/$patchInitBranch"
     if ($LASTEXITCODE -eq 0) {
         Fail "Local branch '$patchInitBranch' already exists."
@@ -153,13 +240,13 @@ try {
         }
     }
 
-    Write-Host "[5/8] Creating patch init branch..." -ForegroundColor Yellow
+    Write-Host "[6/9] Creating patch init branch..." -ForegroundColor Yellow
     git checkout -b $patchInitBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Failed to create '$patchInitBranch'."
     }
 
-    Write-Host "[6/8] Updating version files to $nextVersion..." -ForegroundColor Yellow
+    Write-Host "[7/9] Updating version files to $nextVersion..." -ForegroundColor Yellow
     [xml]$props = Get-Content $propsPath
     $props.Project.PropertyGroup.Version = $nextVersion
     $props.Save($propsPath)
@@ -187,17 +274,17 @@ try {
     }
 
     if ($Push) {
-        Write-Host "[7/8] Pushing $patchInitBranch..." -ForegroundColor Yellow
+        Write-Host "[8/9] Pushing $patchInitBranch..." -ForegroundColor Yellow
         git push -u origin $patchInitBranch
         if ($LASTEXITCODE -ne 0) {
             Fail "Failed to push $patchInitBranch."
         }
         Write-Host "  [OK] Pushed $patchInitBranch" -ForegroundColor Green
     } else {
-        Write-Host "[7/8] Skipping push (use -Push to push automatically)" -ForegroundColor Gray
+        Write-Host "[8/9] Skipping push (use -Push to push automatically)" -ForegroundColor Gray
     }
 
-    Write-Host "[8/8] Completed patch init branch creation." -ForegroundColor Green
+    Write-Host "[9/9] Completed patch init branch creation." -ForegroundColor Green
     Write-Host ""
     Write-Host "Summary:" -ForegroundColor Cyan
     Write-Host "  Base branch : $ReleaseBranch" -ForegroundColor White

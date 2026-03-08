@@ -1,13 +1,14 @@
 # 検証アーティファクト導入手順
 
-`dev-latest` / `release-X.Y-latest` の `*.msixbundle` は、開発者向けの未署名成果物です。
+`dev-latest` / `rc-X.Y-latest` / 確定タグ `X.Y.Z` の `*.msixbundle` は、開発者向けの未署名成果物です。
 本番配布（一般ユーザー向け）は Store チャネルを利用してください。
 
 ## 対象
 
 - Dev チャネル: `dev-latest` / `dev-package-*`
-- Release チャネル: `release-X.Y-latest` / `release-package-*`
-- `release/X.Y` ブランチの最新候補タグは `release-X.Y-latest`（例: `release/1.3` -> `release-1.3-latest`）
+- RC チャネル: `rc-X.Y-latest` / `rc-package-*`
+- 確定版: GitHub Release `X.Y.Z` / `release-archive-*`
+- `release/X.Y` ブランチの最新候補タグは `rc-X.Y-latest`（例: `release/1.3` -> `rc-1.3-latest`）
 
 ## 事前準備
 
@@ -18,6 +19,8 @@
 ## 導入手順
 
 1. 公式チャネル（GitHub Releases / Actions artifacts）から `*.msixbundle`（1ファイル）と `SHA256SUMS.txt` を取得する。
+   - 最新候補を試す場合は `dev-latest` / `rc-X.Y-latest` を使う。
+   - 特定の確定版（例: `0.1.0`, `0.1.1`）を試す場合は GitHub Release `X.Y.Z` を使う。
 2. `SHA256` と GitHub Artifact Attestation を検証する（推奨: `scripts/verify-artifact.ps1`）。
 3. `Add-AppxPackage -AllowUnsigned` で導入する。
 
@@ -37,8 +40,10 @@ $bundlePath = $bundle[0].FullName
   -Channel dev `
   -SourceRef refs/heads/main
 
-# Release チャネルを検証する場合は -Channel release を使い、
+# RC を検証する場合は -Channel rc を使い、
 # 可能であれば -SourceRef refs/heads/release/X.Y も指定する。
+# 確定版アーカイブを検証する場合は -Channel archive を使い、
+# 可能であれば -SourceRef refs/tags/X.Y.Z も指定する。
 
 # 2) インストール（未署名）
 Add-AppxPackage -Path $bundlePath -AllowUnsigned
@@ -46,7 +51,11 @@ Add-AppxPackage -Path $bundlePath -AllowUnsigned
 
 ## チャネル切り替え時の注意
 
-Dev（例: `1.1.0.42`）の後に Release（`1.1.0.0`）を導入するとダウングレード判定になるため、先に Dev をアンインストールしてください。
+Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を導入するとダウングレード判定になるため、先に Dev をアンインストールしてください。
+
+確定タグ `X.Y.Z` に対応するアーカイブ版は Store 公開の有無と独立しているため、`0.1.0` や `0.1.1` のような試験リリースも同じ手順で導入できます。
+
+GitHub Release 側で `prerelease` 表示になっていても、導入手順や真正性確認の方法は変わりません。
 
 ```powershell
 Get-AppxPackage *ClipSave* | Remove-AppxPackage

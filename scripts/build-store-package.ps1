@@ -1,11 +1,12 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Build MSIX package for Microsoft Store submission
+    Build a local MSIX package for Store preflight verification
 
 .DESCRIPTION
-    Builds a Store upload package (.msixupload) for submission to Partner Center.
-    Validates version, runs security checks, and runs tests before building.
+    Builds a Store upload package (.msixupload) locally for preflight/debugging.
+    Final submission packages must be produced by the Release Finalize workflow
+    in Store package mode from a fixed X.Y.Z tag to preserve reproducibility.
 
 .PARAMETER Version
     Version to build (e.g., "1.0.0"). If not specified, reads from Directory.Build.props
@@ -24,6 +25,8 @@ $ErrorActionPreference = "Stop"
 
 # Get project root
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$manifestPath = Join-Path $projectRoot "src\ClipSave.Package\Package.appxmanifest"
+$manifestBackupPath = $null
 
 Push-Location $projectRoot
 try {
@@ -53,11 +56,44 @@ try {
         exit 1
     }
 
+    $versionMatch = [regex]::Match($Version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$')
+    $segments = @(
+        [int]$versionMatch.Groups['major'].Value,
+        [int]$versionMatch.Groups['minor'].Value,
+        [int]$versionMatch.Groups['patch'].Value,
+        0
+    )
+    if ($segments | Where-Object { $_ -lt 0 -or $_ -gt 65535 }) {
+        Write-Error "MSIX version segments must be within 0..65535. Resolved segments: $($segments -join '.')"
+        exit 1
+    }
+
+    $shortSha = (git rev-parse --short=7 HEAD 2>$null).Trim()
+    if (-not $shortSha -or $shortSha.Length -ne 7) {
+        Write-Error "Failed to resolve short SHA from current commit"
+        exit 1
+    }
+
+    $assemblyVersion = "$($versionMatch.Groups['major'].Value).$($versionMatch.Groups['minor'].Value).0.0"
+    $fileVersionValue = "$Version.0"
+    $informationalVersion = "$Version+sha.$shortSha"
+    $msixVersion = "$Version.0"
+
+    $tagsOnHead = @(
+        git tag --points-at HEAD 2>$null |
+        Where-Object { $_ -and $_.Trim() -ne "" }
+    )
+    if ($tagsOnHead -notcontains $Version) {
+        Write-Warning "Current HEAD is not tagged '$Version'. Final Store submission must use Release Finalize workflow with version=$Version and build_store_package=true from refs/tags/$Version."
+    }
+
     Write-Host "`n=== Building Store Package for ClipSave v$Version ===" -ForegroundColor Green
     Write-Host "Branch: $currentBranch" -ForegroundColor Cyan
+    Write-Host "InformationalVersion: $informationalVersion" -ForegroundColor Cyan
+    Write-Warning "This script is for local preflight only. Final submission packages must come from the Release Finalize workflow in Store package mode."
 
     # Verify version in both files
-    Write-Host "`n[1/7] Verifying version consistency..." -ForegroundColor Yellow
+    Write-Host "`nVerifying version consistency..." -ForegroundColor Yellow
     & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $currentBranch
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Version validation failed"
@@ -65,7 +101,7 @@ try {
     }
 
     # Restore dependencies
-    Write-Host "`n[2/7] Restoring dependencies..." -ForegroundColor Yellow
+    Write-Host "`nRestoring dependencies..." -ForegroundColor Yellow
     dotnet restore ClipSave.slnx
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to restore dependencies"
@@ -73,7 +109,7 @@ try {
     }
 
     # Run dependency/SAST checks
-    Write-Host "`n[3/7] Running security checks..." -ForegroundColor Yellow
+    Write-Host "`nRunning security checks..." -ForegroundColor Yellow
     & "$projectRoot\scripts\run-security-checks.ps1" -Configuration Release -NoRestore
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Security checks failed"
@@ -81,23 +117,50 @@ try {
     }
 
     # Build app project (avoid DesktopBridge dependency during dotnet build)
-    Write-Host "`n[4/7] Building app project..." -ForegroundColor Yellow
-    dotnet build src/ClipSave/ClipSave.csproj --configuration Release --no-restore
+    Write-Host "`nBuilding app project..." -ForegroundColor Yellow
+    dotnet build src/ClipSave/ClipSave.csproj --configuration Release --no-restore `
+        /p:Version="$Version" `
+        /p:AssemblyVersion="$assemblyVersion" `
+        /p:FileVersion="$fileVersionValue" `
+        /p:InformationalVersion="$informationalVersion"
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Build failed"
         exit 1
     }
 
     # Run tests
-    Write-Host "`n[5/7] Running tests..." -ForegroundColor Yellow
+    Write-Host "`nRunning tests..." -ForegroundColor Yellow
     & "$projectRoot\scripts\run-tests.ps1" -Configuration Release -Verbosity quiet
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Tests failed"
         exit 1
     }
 
+    # Desktop Bridge packaging restores/publishes the app as win-x86 internally.
+    # Keep this even when package platform is AnyCPU, otherwise NETSDK1047 occurs.
+    Write-Host "`nRestoring app assets for MSIX runtime..." -ForegroundColor Yellow
+    dotnet restore src/ClipSave/ClipSave.csproj --runtime win-x86
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to restore app assets for MSIX runtime"
+        exit 1
+    }
+
+    Write-Host "`nSetting Package.appxmanifest version..." -ForegroundColor Yellow
+    $manifestBackupPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ClipSave.Package.appxmanifest.{0}.bak" -f [guid]::NewGuid())
+    Copy-Item $manifestPath $manifestBackupPath -Force
+    [xml]$manifest = Get-Content $manifestPath
+    $ns = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
+    $ns.AddNamespace("appx", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
+    $identity = $manifest.SelectSingleNode("/appx:Package/appx:Identity", $ns)
+    if (-not $identity) {
+        throw "Identity node not found in $manifestPath"
+    }
+    $identity.SetAttribute("Version", $msixVersion)
+    $manifest.Save($manifestPath)
+    Write-Host "Updated Package.appxmanifest version to $msixVersion" -ForegroundColor Cyan
+
     # Build Store package
-    Write-Host "`n[6/7] Building Store upload package..." -ForegroundColor Yellow
+    Write-Host "`nBuilding Store upload package..." -ForegroundColor Yellow
     $outputDir = Join-Path $projectRoot "StorePackage"
     if (Test-Path $outputDir) {
         Remove-Item $outputDir -Recurse -Force
@@ -106,9 +169,16 @@ try {
     msbuild "$projectRoot\src\ClipSave.Package\ClipSave.Package.wapproj" `
         /p:Configuration=Release `
         /p:Platform=AnyCPU `
+        /p:Version="$Version" `
+        /p:AssemblyVersion="$assemblyVersion" `
+        /p:FileVersion="$fileVersionValue" `
+        /p:InformationalVersion="$informationalVersion" `
         /p:UapAppxPackageBuildMode=StoreUpload `
         /p:AppxBundle=Always `
         /p:AppxPackageDir="$outputDir\" `
+        /p:AppxPackageVersion=$msixVersion `
+        /p:AppxBundleManifestVersion=$msixVersion `
+        /p:AppxManifestIdentityVersion=$msixVersion `
         /p:AppxPackageSigningEnabled=false `
         /verbosity:minimal
 
@@ -118,10 +188,21 @@ try {
     }
 
     # Verify output
-    Write-Host "`n[7/7] Verifying output..." -ForegroundColor Yellow
-    $msixUpload = Get-ChildItem -Path $outputDir -Filter "*.msixupload" -Recurse | Select-Object -First 1
-    if (-not $msixUpload) {
+    Write-Host "`nVerifying output..." -ForegroundColor Yellow
+    $uploads = @(Get-ChildItem -Path $outputDir -Filter "*.msixupload" -Recurse -File)
+    if ($uploads.Count -eq 0) {
         Write-Error "No .msixupload file found in output directory"
+        exit 1
+    }
+    if ($uploads.Count -ne 1) {
+        $actual = ($uploads | Select-Object -ExpandProperty FullName) -join ", "
+        Write-Error "Expected exactly one .msixupload file, found $($uploads.Count): $actual"
+        exit 1
+    }
+    $msixUpload = $uploads[0]
+    $expectedPattern = "_$([regex]::Escape($msixVersion))_"
+    if ($msixUpload.Name -notmatch $expectedPattern) {
+        Write-Error "Store upload filename does not contain expected version '$msixVersion'. Found: $($msixUpload.Name)"
         exit 1
     }
 
@@ -131,14 +212,17 @@ try {
     Write-Host "`nFile size: $([math]::Round($msixUpload.Length / 1MB, 2)) MB" -ForegroundColor Cyan
 
     Write-Host "`n=== Next Steps ===" -ForegroundColor Green
-    Write-Host "1. Go to Partner Center: https://partner.microsoft.com/dashboard"
-    Write-Host "2. Create a new submission"
-    Write-Host "3. Upload the .msixupload file"
-    Write-Host "4. Update release notes and metadata"
-    Write-Host "5. Submit for review"
+    Write-Host "1. Use this local package only for preflight/debugging"
+    Write-Host "2. For final submission, run Release Finalize workflow with version=$Version and build_store_package=true"
+    Write-Host "3. Confirm workflow summary shows refs/tags/$Version, Store Package Mode=built, and the expected commit SHA"
+    Write-Host "4. Upload the workflow artifact .msixupload in Partner Center"
 
     Write-Host "`nTip: Run .\scripts\store-checklist.ps1 to verify pre-submission requirements" -ForegroundColor Yellow
 }
 finally {
+    if ($manifestBackupPath -and (Test-Path $manifestBackupPath)) {
+        Copy-Item $manifestBackupPath $manifestPath -Force
+        Remove-Item $manifestBackupPath -Force
+    }
     Pop-Location
 }

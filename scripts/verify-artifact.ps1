@@ -4,7 +4,7 @@
     Verify SHA256 checksum and GitHub Artifact Attestation for a ClipSave bundle.
 
 .DESCRIPTION
-    This script enforces two checks for an unsigned Dev/Release artifact:
+    This script enforces two checks for an unsigned Dev/RC/Archive artifact:
     1) SHA256 checksum validation using SHA256SUMS.txt.
     2) Provenance validation using gh attestation verify.
 
@@ -16,8 +16,9 @@
 
 .PARAMETER Channel
     Artifact channel. Determines expected signer workflow:
-    - dev     -> .github/workflows/dev-build.yml
-    - release -> .github/workflows/release-build.yml
+    - dev           -> .github/workflows/dev-build.yml
+    - rc            -> .github/workflows/rc-build.yml
+    - archive       -> .github/workflows/release-finalize.yml
 
 .PARAMETER Repo
     Repository in owner/name format (default: tnagata012/ClipSave).
@@ -32,7 +33,7 @@ param(
 
     [string]$ChecksumPath = ".\SHA256SUMS.txt",
 
-    [ValidateSet("dev", "release")]
+    [ValidateSet("dev", "rc", "archive")]
     [string]$Channel = "dev",
 
     [string]$Repo = "tnagata012/ClipSave",
@@ -48,10 +49,17 @@ function Fail([string]$Message) {
 }
 
 function Resolve-WorkflowPath([string]$Value) {
-    if ($Value -eq "dev") {
-        return ".github/workflows/dev-build.yml"
+    switch ($Value) {
+        "dev" {
+            return ".github/workflows/dev-build.yml"
+        }
+        "archive" {
+            return ".github/workflows/release-finalize.yml"
+        }
+        default {
+            return ".github/workflows/rc-build.yml"
+        }
     }
-    return ".github/workflows/release-build.yml"
 }
 
 if (-not (Test-Path $BundlePath)) {
@@ -125,8 +133,8 @@ if ($actualHash -ne $selected.Hash) {
 Write-Host "[OK] SHA256 verified: $bundleName" -ForegroundColor Green
 
 $workflowPath = Resolve-WorkflowPath -Value $Channel
+$ghCommand = (Get-Command gh).Source
 $signerWorkflow = "$Repo/$workflowPath"
-
 $verifyArgs = @(
     "attestation", "verify", $bundle.FullName,
     "--repo", $Repo,
@@ -139,10 +147,17 @@ if ($SourceRef -and $SourceRef.Trim() -ne "") {
     $verifyArgs += @("--source-ref", $SourceRef.Trim())
 }
 
-Write-Host "Running attestation verification..." -ForegroundColor Cyan
-gh @verifyArgs
+Write-Host "Running attestation verification via $workflowPath..." -ForegroundColor Cyan
+$verificationOutput = & $ghCommand @verifyArgs 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Fail "Attestation verification failed."
+    if ($verificationOutput) {
+        $verificationOutput | ForEach-Object { Write-Host $_ }
+    }
+    Fail "Attestation verification failed via $workflowPath"
+}
+
+if ($verificationOutput) {
+    $verificationOutput | ForEach-Object { Write-Host $_ }
 }
 
 Write-Host "[OK] Attestation verified via $workflowPath" -ForegroundColor Green

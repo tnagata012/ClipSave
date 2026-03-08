@@ -7,7 +7,7 @@
     Displays version information from:
     - Installed MSIX package (if any)
     - Project files (Directory.Build.props, Package.appxmanifest)
-    - GitHub distribution channels (dev release + release artifacts)
+    - GitHub distribution channels (dev/rc tags + archive artifacts)
 
 .EXAMPLE
     .\show-version-report.ps1
@@ -83,7 +83,7 @@ if ($package) {
     $revision = [int]$versionParts[3]
 
     if ($revision -eq 0) {
-        Write-Host "  Type    : Release Build" -ForegroundColor Green
+        Write-Host "  Type    : Non-Dev Build (RC/Archive/Store)" -ForegroundColor Green
     } else {
         Write-Host "  Type    : Dev Build (Build #$revision)" -ForegroundColor Yellow
     }
@@ -130,67 +130,53 @@ if ($ghAvailable) {
             Write-Host "  Dev Channel  : dev-latest not found" -ForegroundColor Gray
         }
 
-        # Release channel (branch-scoped floating tag: release-X.Y-latest)
+        # RC channel (branch-scoped floating tag: rc-X.Y-latest)
         $resolvedReleaseTag = $null
         $releaseBranchMatch = if ($currentBranch) { [regex]::Match($currentBranch, '^release/(?<major>\d+)\.(?<minor>\d+)$') } else { $null }
         if ($releaseBranchMatch -and $releaseBranchMatch.Success) {
-            $releaseTag = "release-$($releaseBranchMatch.Groups['major'].Value).$($releaseBranchMatch.Groups['minor'].Value)-latest"
+            $releaseTag = "rc-$($releaseBranchMatch.Groups['major'].Value).$($releaseBranchMatch.Groups['minor'].Value)-latest"
             $releaseChannel = gh release view $releaseTag --repo $repo --json tagName,publishedAt 2>$null | ConvertFrom-Json
             if ($releaseChannel) {
                 $publishedDate = [DateTime]::Parse($releaseChannel.publishedAt).ToString("yyyy-MM-dd HH:mm")
-                Write-Host "  Release Tag  : $($releaseChannel.tagName) ($publishedDate)" -ForegroundColor Green
+                Write-Host "  RC Tag       : $($releaseChannel.tagName) ($publishedDate)" -ForegroundColor Green
                 $resolvedReleaseTag = $releaseChannel.tagName
             } else {
-                $legacyRelease = gh release view release-latest --repo $repo --json tagName,publishedAt 2>$null | ConvertFrom-Json
-                if ($legacyRelease) {
-                    $publishedDate = [DateTime]::Parse($legacyRelease.publishedAt).ToString("yyyy-MM-dd HH:mm")
-                    Write-Host "  Release Tag  : $($legacyRelease.tagName) ($publishedDate, legacy)" -ForegroundColor Yellow
-                    $resolvedReleaseTag = $legacyRelease.tagName
-                } else {
-                    Write-Host "  Release Tag  : $releaseTag not found" -ForegroundColor Gray
-                }
+                Write-Host "  RC Tag       : $releaseTag not found" -ForegroundColor Gray
             }
         } else {
             $latestReleaseLineTag = gh api --paginate --slurp "repos/$repo/releases?per_page=100" `
-                --jq '([.[].[] | select(.tag_name | test("^release-[0-9]+\\.[0-9]+-latest$"))] | sort_by(.published_at) | reverse | .[0]? | [.tag_name, .published_at] | @tsv) // empty' 2>$null |
+                --jq '([.[].[] | select(.tag_name | test("^rc-[0-9]+\\.[0-9]+-latest$"))] | sort_by(.published_at) | reverse | .[0]? | [.tag_name, .published_at] | @tsv) // empty' 2>$null |
                 Select-Object -First 1
 
             if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($latestReleaseLineTag)) {
                 $parts = $latestReleaseLineTag -split "`t", 2
                 $tagName = $parts[0]
                 $publishedAt = if ($parts.Count -ge 2) { [DateTime]::Parse($parts[1]).ToString("yyyy-MM-dd HH:mm") } else { "unknown" }
-                Write-Host "  Release Tag  : $tagName ($publishedAt)" -ForegroundColor Green
+                Write-Host "  RC Tag       : $tagName ($publishedAt)" -ForegroundColor Green
                 $resolvedReleaseTag = $tagName
             } else {
-                $legacyRelease = gh release view release-latest --repo $repo --json tagName,publishedAt 2>$null | ConvertFrom-Json
-                if ($legacyRelease) {
-                    $publishedDate = [DateTime]::Parse($legacyRelease.publishedAt).ToString("yyyy-MM-dd HH:mm")
-                    Write-Host "  Release Tag  : $($legacyRelease.tagName) ($publishedDate, legacy)" -ForegroundColor Yellow
-                    $resolvedReleaseTag = $legacyRelease.tagName
-                } else {
-                    Write-Host "  Release Tag  : release-X.Y-latest not found" -ForegroundColor Gray
-                }
+                Write-Host "  RC Tag       : rc-X.Y-latest not found" -ForegroundColor Gray
             }
         }
 
-        # Release base (Actions artifacts)
+        # RC base (Actions artifacts)
         $latestReleaseArtifactLine = gh api --paginate --slurp "repos/$repo/actions/artifacts?per_page=100" `
-            --jq '([.[].artifacts[]? | select((.expired == false) and (.name | startswith("release-package-")))] | sort_by(.created_at) | reverse | .[0]? | [.name, .created_at] | @tsv) // empty' 2>$null |
+            --jq '([.[].artifacts[]? | select((.expired == false) and (.name | startswith("rc-package-")))] | sort_by(.created_at) | reverse | .[0]? | [.name, .created_at] | @tsv) // empty' 2>$null |
             Select-Object -First 1
 
         if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($latestReleaseArtifactLine)) {
             $parts = $latestReleaseArtifactLine -split "`t", 2
             $artifactName = $parts[0]
             $createdAt = if ($parts.Count -ge 2) { [DateTime]::Parse($parts[1]).ToString("yyyy-MM-dd HH:mm") } else { "unknown" }
-            Write-Host "  Release Base : $artifactName ($createdAt)" -ForegroundColor Green
+            Write-Host "  RC Base      : $artifactName ($createdAt)" -ForegroundColor Green
         } else {
-            Write-Host "  Release Base : release-package-* artifact not found" -ForegroundColor Gray
+            Write-Host "  RC Base      : rc-package-* artifact not found" -ForegroundColor Gray
         }
 
         if ($coreVersion) {
-            Write-Host "  Store Hint   : version=$coreVersion, source_ref=<X.Y.Z tag (recommended) or commit SHA>" -ForegroundColor Cyan
+            Write-Host "  Store Hint   : version=$coreVersion (workflow resolves refs/tags/$coreVersion)" -ForegroundColor Cyan
             if ($resolvedReleaseTag) {
-                Write-Host "                 Candidate channel tag: $resolvedReleaseTag (do not use as final source_ref)" -ForegroundColor Gray
+                Write-Host "                 Candidate channel tag: $resolvedReleaseTag (create finalized tag X.Y.Z from adopted commit)" -ForegroundColor Gray
             }
         }
     }

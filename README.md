@@ -50,7 +50,7 @@ dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 
 ## Documentation
 
-Some documents, including most files under [`docs/`](docs/) and a few top-level documents such as [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), are written in Japanese.
+Project documentation is written in Japanese.
 
 - [Usage Guide](docs/UsageGuide.md) - Basic operations and settings
 - [Product Concept](docs/ProductConcept.md) - Vision and design principles

@@ -6,6 +6,8 @@ on:
     paths-ignore:
       - 'docs/**'
       - '*.md'
+      - 'site/**'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:

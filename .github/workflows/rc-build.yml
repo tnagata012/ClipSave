@@ -3,6 +3,10 @@ name: RC Build
 on:
   push:
     branches: ['release/*']
+    paths-ignore:
+      - 'site/**'
+      - '.github/workflows/deploy-pages.yml'
+      - 'docs/presentation/LandingPage.md'
   workflow_dispatch:
 
 permissions:

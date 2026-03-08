@@ -226,11 +226,11 @@ dotnet test tests/ClipSave.UiTests/ClipSave.UiTests.csproj --filter "Category=UI
 
 ## CI 連携
 
-GitHub Actions では、すべてのビルド系ワークフローでテストを実行する。
+GitHub Actions では、アプリ本体をビルドする workflow でテストを実行する。`pr-check.yml` は website-only PR（`site/**`、`.github/workflows/deploy-pages.yml`、`docs/presentation/LandingPage.md` のみ変更）のとき、workflow lint と version validation を維持したまま restore / build / test を skip する。
 
 | Workflow            | 起動条件                       | テスト手順                                                                 |
 | ------------------- | -------------------------- | --------------------------------------------------------------------- |
-| `pr-check.yml`      | PR to `main` / `release/*` | `run-tests.ps1`（Debug） + `LocalizationResourceCompletenessTests` 先行実行 + `check-spec-coverage.ps1` |
+| `pr-check.yml`      | PR to `main` / `release/*` | `run-tests.ps1`（Debug） + `LocalizationResourceCompletenessTests` 先行実行 + `check-spec-coverage.ps1`（website-only PR では skip） |
 | `dev-build.yml`     | Push to `main`             | `run-tests.ps1`（Release）                                              |
 | `rc-build.yml`      | Push to `release/*`        | `run-tests.ps1`（Release）                                              |
 | `release-finalize.yml` | Tag push / Manual dispatch | `run-tests.ps1`（Release）                                              |

@@ -23,10 +23,11 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 | ワークフロー | トリガー | 用途 | 主な生成物 |
 |-------------|---------|------|-----------|
 | [pr-check.yml](../../.github/workflows/pr-check.yml) | PR（`main`, `release/*`） | 品質ゲート | `TestResults/**/*.trx` |
+| [deploy-pages.yml](../../.github/workflows/deploy-pages.yml) | `main` push（`site/**`, `.github/workflows/deploy-pages.yml`） / 手動 | GitHub Pages 公開 | GitHub Pages site artifact |
 | [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y.0`） | `release/X.Y` 作成 + main 側 bump ブランチ作成 | `release/X.Y`, `chore/bump-main-to-*` |
 | [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`） | patch init ブランチ作成 | `chore/release-X.Y.(Z+1)-init` |
-| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push（`docs/**`, `*.md` のみ変更時は除く） / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
-| [rc-build.yml](../../.github/workflows/rc-build.yml) | `release/*` push / 手動 | 公開候補生成（未署名） | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
+| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
+| [rc-build.yml](../../.github/workflows/rc-build.yml) | `release/*` push（`site/**`, `.github/workflows/deploy-pages.yml`, `docs/presentation/LandingPage.md` のみ変更時は除く） / 手動 | 公開候補生成（未署名） | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, `GitHub Artifact Attestation` |
 | [release-finalize.yml](../../.github/workflows/release-finalize.yml) | `X.Y.Z` タグ push / 手動 | 確定版アーカイブ生成（未署名）、GitHub Release メタデータ調整、任意の Store package 生成 | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, `GitHub Artifact Attestation`, 任意で `store-package-*` |
 
 補足:
@@ -34,6 +35,7 @@ ClipSave の CI/CD と配布実行手順（Runbook）を定義します。
 - 配布対象は `*.msixbundle`（未署名）、Store 提出対象は `.msixupload`。
 - Dev/RC 配布では `*.msixbundle` と `SHA256SUMS.txt` をセットで公開し、GitHub Artifact Attestation を記録する。
 - `.NET` SDK の解決はリポジトリ直下の `global.json` を単一の正本とし、workflow の `actions/setup-dotnet` は `global-json-file: global.json` を参照する。
+- `pr-check.yml` は workflow lint を常時実行し、website-only PR（`site/**`, `.github/workflows/deploy-pages.yml`, `docs/presentation/LandingPage.md` のみ変更）のときは restore / build / test を skip する。
 - `dev-latest` と `rc-X.Y-latest` は確定タグではなく移動タグ（floating tag）として運用し、各 workflow 成功時に実行コミットへ更新する。
 - `release/X.Y` ブランチの配布タグは `rc-X.Y-latest`（例: `release/1.3` -> `rc-1.3-latest`）。
 - `rc-X.Y-latest` の GitHub Release は候補版として常に `prerelease` 表示にする。

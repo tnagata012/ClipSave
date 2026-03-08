@@ -28,6 +28,7 @@ ClipSave のランディングページ（`site/`）の更新方針と確認手�
 2. `site/` 配下を変更
 3. ローカル確認を実施
 4. PR 作成（文言修正とデザイン変更は分離）
+5. `main` へマージ後、GitHub Pages への自動公開を確認
 
 ## ローカル確認手順
 
@@ -37,6 +38,15 @@ python -m http.server 4173 --directory site
 
 - ブラウザで `http://localhost:4173` を開く
 - 確認後は `Ctrl + C` でサーバー停止
+
+## 公開運用
+
+- 公開 URL は `https://tnagata012.github.io/ClipSave/`
+- GitHub Pages の公開元は `GitHub Actions`
+- `main` に対する `site/**` または `.github/workflows/deploy-pages.yml` の変更は `Deploy Pages` workflow（`.github/workflows/deploy-pages.yml`）で自動公開する
+- `Deploy Pages` の手動実行は再公開用途に限定し、`main` ブランチからのみ実行する
+- `site/**` と `docs/presentation/LandingPage.md` だけの変更ではアプリ本体の `Dev Build` / `RC Build` は起動しない
+- `PR Check` は必須チェックを維持したまま、website-only PR のときは restore / build / test を skip する
 
 ## 運用ルール
 
@@ -66,6 +76,7 @@ python -m http.server 4173 --directory site
 ### 変更単位
 
 - 1つの PR で目的を混在させない
+- サイト更新は原則としてアプリ実装変更と分離する
 - 推奨分割:
   - 文言修正 PR
   - デザイン修正 PR

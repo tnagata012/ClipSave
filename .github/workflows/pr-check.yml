@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: pr-check-${{ github.head_ref }}
@@ -24,12 +25,62 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Lint GitHub Actions workflows
+      uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2.1.2
+
+    - name: Detect website-only changes
+      id: changes
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const websiteOnlyPatterns = [
+            /^site\//,
+            /^\.github\/workflows\/deploy-pages\.yml$/,
+            /^docs\/presentation\/LandingPage\.md$/,
+          ];
+
+          const files = await github.paginate(github.rest.pulls.listFiles, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number,
+            per_page: 100,
+          });
+
+          const changedFiles = files.flatMap((file) => {
+            const paths = [file.filename];
+            if (file.status === "renamed" && file.previous_filename) {
+              paths.push(file.previous_filename);
+            }
+            return paths;
+          });
+          const changedFileLog = files.map((file) =>
+            file.status === "renamed" && file.previous_filename
+              ? `${file.previous_filename} -> ${file.filename}`
+              : file.filename
+          );
+          const websiteOnly =
+            changedFiles.length > 0 &&
+            changedFiles.every((filename) =>
+              websiteOnlyPatterns.some((pattern) => pattern.test(filename))
+            );
+
+          core.info(`Changed files:\n${changedFileLog.join("\n")}`);
+          core.setOutput("website_only", String(websiteOnly));
+
+    - name: Website-only PR shortcut
+      if: steps.changes.outputs.website_only == 'true'
+      shell: pwsh
+      run: |
+        Write-Host "Website-only PR detected. Skipping restore/build/test pipeline."
+
     - name: Setup .NET
+      if: steps.changes.outputs.website_only != 'true'
       uses: actions/setup-dotnet@v4
       with:
         global-json-file: global.json
 
     - name: Cache NuGet packages
+      if: steps.changes.outputs.website_only != 'true'
       uses: actions/cache@v4
       with:
         path: ~/.nuget/packages
@@ -37,24 +88,29 @@ jobs:
         restore-keys: ${{ runner.os }}-nuget-
 
     - name: Restore
+      if: steps.changes.outputs.website_only != 'true'
       run: dotnet restore ${{ env.SOLUTION_FILE }}
 
     - name: Security checks
+      if: steps.changes.outputs.website_only != 'true'
       shell: pwsh
       run: ./scripts/run-security-checks.ps1 -Configuration Debug -NoRestore
 
     - name: Build app
+      if: steps.changes.outputs.website_only != 'true'
       run: dotnet build ${{ env.APP_PROJECT }} --configuration Debug --no-restore
 
     - name: Localization resource guard
+      if: steps.changes.outputs.website_only != 'true'
       run: dotnet test tests/ClipSave.UnitTests/ClipSave.UnitTests.csproj --configuration Debug --filter "FullyQualifiedName~LocalizationResourceCompletenessTests"
 
     - name: Test
+      if: steps.changes.outputs.website_only != 'true'
       shell: pwsh
       run: ./scripts/run-tests.ps1 -Configuration Debug -Verbosity normal -EmitTrx -ResultsDirectory "${{ github.workspace }}/TestResults"
 
     - name: Upload test results
-      if: always()
+      if: always() && steps.changes.outputs.website_only != 'true'
       uses: actions/upload-artifact@v4
       with:
         name: pr-test-results
@@ -63,6 +119,7 @@ jobs:
         retention-days: 14
 
     - name: SPEC traceability guard
+      if: steps.changes.outputs.website_only != 'true'
       shell: pwsh
       run: ./scripts/check-spec-coverage.ps1
 

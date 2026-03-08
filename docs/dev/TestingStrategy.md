@@ -232,8 +232,8 @@ GitHub Actions では、すべてのビルド系ワークフローでテスト�
 | ------------------- | -------------------------- | --------------------------------------------------------------------- |
 | `pr-check.yml`      | PR to `main` / `release/*` | `run-tests.ps1`（Debug） + `LocalizationResourceCompletenessTests` 先行実行 + `check-spec-coverage.ps1` |
 | `dev-build.yml`     | Push to `main`             | `run-tests.ps1`（Release）                                              |
-| `release-build.yml` | Push to `release/*`        | `run-tests.ps1`（Release）                                              |
-| `store-publish.yml` | Manual dispatch            | `run-tests.ps1`（Release）                                              |
+| `rc-build.yml`      | Push to `release/*`        | `run-tests.ps1`（Release）                                              |
+| `release-finalize.yml` | Tag push / Manual dispatch | `run-tests.ps1`（Release）                                              |
 
 ---
 

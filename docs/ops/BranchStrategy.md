@@ -8,7 +8,7 @@ ClipSave のブランチ構成と統合方向を定義します。
 
 - ブランチ種別（`main` / `release/X.Y` / 作業ブランチ）
 - 統合方向（`main` 先行、`release/X.Y` への backport）
-- リリース系列の開始・保守・終了
+- リリース系列の開始・サポート・終了
 - ブランチ命名の制約
 
 この文書では、以下は扱いません。
@@ -23,13 +23,14 @@ ClipSave のブランチ構成と統合方向を定義します。
 2. 公開品質の安定化は `release/X.Y` で行う。
 3. 修正の正本は常に `main` とし、release 側は必要分のみ追従する。
 4. 作業ブランチは短命に保ち、PR で統合する。
+5. 履歴の正本は確定タグ `X.Y.Z` と GitHub Release とし、`release/X.Y` は現行系列の patch/re-run 判断と追跡のため remote に保持する。新しい系列が Finalize された時点で旧系列は `frozen / unsupported` とする。
 
 ## ブランチ種別
 
 | ブランチ | 寿命 | 用途 |
 |---------|------|------|
 | `main` | 永続 | 次期開発の幹 |
-| `release/X.Y` | 中期 | 公開安定化・パッチ保守 |
+| `release/X.Y` | 中長期 | 公開安定化・Store 提出・現行系列のパッチサポート |
 | `feature/*` | 短命 | 機能追加 |
 | `fix/*` | 短命 | 不具合修正・backport 作業 |
 | `docs/*` | 短命 | ドキュメント更新 |
@@ -67,23 +68,27 @@ ClipSave のブランチ構成と統合方向を定義します。
 - 安定した `main` から `release/X.Y` を作成する。
 - 同時に `main` は次開発系列（通常は次 `MINOR`）へ進める。
 
-### Maintenance
+### Patch
 
 - `release/X.Y` には公開品質に必要な変更のみを入れる。
 - 取り込み元は `main` を正とし、release 側は必要分のみ backport する。
+- 最新 finalized 系列である限り、必要時に patch release を再開できる。
 
 ### Support window
 
-- 標準は「最新 1 系列（直近 `release/X.Y`）」のみ同時保守する。
-- 旧系列の保守は、次の条件を満たす場合のみ例外許可する。
-  - 高緊急度のセキュリティ対応
-  - Store 審査/公開上の要請
-  - メンテナーの明示承認
+- 能動サポート対象は通常、最新の確定版を持つ `release/X.Y` 1 系列のみとする。まだ確定版がない期間のみ 0 系列を許容する。
+- ClipSave は latest-only 運用とし、運用上のサポート対象は常に最新 finalized 系列だけとする。切替基準は Store 公開有無ではなく Finalize 完了とする。
+- ただし、次系列 `release/A.B` の最初の確定タグ `A.B.Z` を作る前の安定化作業、RC 比較、PR は許可する。これは「次系列の準備」であり、旧系列の能動サポート継続とは区別する。
+- 新しい系列 `release/A.B` で最初の確定タグ `A.B.Z` を作成し Finalize した時点で、それ以前の `release/X.Y` は即時にサポート終了する。新系列が archive-only の段階でも旧系列へは戻さない。
+- 旧系列に対する例外サポート、追加 patch、Store 再提出は原則行わない。
+- latest-only は運用ルールとして扱い、PR / RC / patch init を workflow で一律停止しない。自動で hard gate を置くのは Store package 生成時だけとする。
 
 ### End of support
 
-- サポート終了後の `release/X.Y` は凍結し、履歴のみ保持する。
-- 凍結後は原則として追加コミットを行わない。
+- `release/X.Y` は履歴保存の正本ではないが、追跡と既存確定タグの archive/metadata maintenance を目的とした workflow 再実行余地のため remote に残す。
+- サポート終了後の `release/X.Y` は `frozen / unsupported` とし、原則として追加コミット、patch init、RC 更新、Store 再提出を行わない。
+- 既存の確定タグ `X.Y.Z` に対する `Release Finalize` の再実行は、アーカイブ成果物や GitHub Release メタデータの保守に限って例外的に許容する。これは旧系列サポートの再開を意味しない。
+- `rc-X.Y-latest` はサポート終了と同時に案内対象から外し、必要なら削除する。
 
 ## cherry-pick 競合時の方針
 

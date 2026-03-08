@@ -1,11 +1,12 @@
 # Assert version policy consistency between files.
-# Usage: .\assert-version-policy.ps1 [-BranchName <string>] [-ProjectRoot <path>]
+# Usage: .\assert-version-policy.ps1 [-BranchName <string>] [-ProjectRoot <path>] [-GitRef <ref>]
 #
 # Examples:
 #   .\assert-version-policy.ps1
 #   .\assert-version-policy.ps1 -BranchName "main"
 #   .\assert-version-policy.ps1 -BranchName "release/1.2"
 #   .\assert-version-policy.ps1 -ProjectRoot "C:\path\to\repo"
+#   .\assert-version-policy.ps1 -BranchName "release/1.2" -GitRef "refs/tags/1.2.0"
 #
 # Rules:
 # - Directory.Build.props: always X.Y.Z
@@ -16,6 +17,7 @@
 param(
     [string]$BranchName = $null,
     [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$GitRef = $null,
     [string]$MainBranchName = "main",
     [string]$ReleaseBranchPattern = '^release/(?<major>\d+)\.(?<minor>\d+)$'
 )
@@ -27,20 +29,57 @@ function Fail([string]$Message) {
     exit 1
 }
 
+function Get-TrackedFileContent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath,
+        [Parameter(Mandatory = $true)]
+        [string]$AbsolutePath
+    )
+
+    if (-not $GitRef) {
+        if (-not (Test-Path $AbsolutePath)) {
+            Fail "Required file not found: $AbsolutePath"
+        }
+
+        return Get-Content -LiteralPath $AbsolutePath -Raw
+    }
+
+    Push-Location $ProjectRoot
+    try {
+        git rev-parse --is-inside-work-tree *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Fail "Not inside a git repository: $ProjectRoot"
+        }
+
+        $objectSpec = "${GitRef}:$RelativePath"
+        git cat-file -e $objectSpec 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Fail "File '$RelativePath' was not found at git ref '$GitRef'. Fetch the ref locally and try again."
+        }
+
+        $content = git show $objectSpec 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Fail "Failed to read '$RelativePath' at git ref '$GitRef'."
+        }
+
+        return ($content -join [Environment]::NewLine)
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 Write-Host "Validating version consistency..." -ForegroundColor Cyan
 
 $propsPath = Join-Path $ProjectRoot "Directory.Build.props"
 $manifestPath = Join-Path $ProjectRoot "src/ClipSave.Package/Package.appxmanifest"
-
-if (-not (Test-Path $propsPath)) {
-    Fail "Directory.Build.props not found: $propsPath"
-}
-if (-not (Test-Path $manifestPath)) {
-    Fail "Package.appxmanifest not found: $manifestPath"
+if ($GitRef) {
+    Write-Host "Git ref              : $GitRef" -ForegroundColor White
 }
 
 # Read Directory.Build.props
-[xml]$props = Get-Content $propsPath
+[xml]$props = Get-TrackedFileContent -RelativePath "Directory.Build.props" -AbsolutePath $propsPath
 $version = $props.Project.PropertyGroup.Version
 if ($version) {
     $version = $version.Trim()
@@ -64,7 +103,7 @@ $patch = [int]$versionMatch.Groups['patch'].Value
 $coreVersion = "$major.$minor.$patch"
 
 # Read Package.appxmanifest
-[xml]$manifest = Get-Content $manifestPath
+[xml]$manifest = Get-TrackedFileContent -RelativePath "src/ClipSave.Package/Package.appxmanifest" -AbsolutePath $manifestPath
 $manifestVersion = $manifest.Package.Identity.Version
 if ($manifestVersion) {
     $manifestVersion = $manifestVersion.Trim()

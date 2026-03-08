@@ -1,8 +1,8 @@
 # ClipSave
 
 [![Dev Build](https://github.com/tnagata012/ClipSave/actions/workflows/dev-build.yml/badge.svg?branch=main)](https://github.com/tnagata012/ClipSave/actions/workflows/dev-build.yml)
-[![Release Build](https://github.com/tnagata012/ClipSave/actions/workflows/release-build.yml/badge.svg)](https://github.com/tnagata012/ClipSave/actions/workflows/release-build.yml)
-[![GitHub prerelease](https://img.shields.io/github/v/release/tnagata012/ClipSave?include_prereleases&label=dev%20prerelease)](https://github.com/tnagata012/ClipSave/releases/tag/dev-latest)
+[![RC Build](https://github.com/tnagata012/ClipSave/actions/workflows/rc-build.yml/badge.svg)](https://github.com/tnagata012/ClipSave/actions/workflows/rc-build.yml)
+[![Dev Channel](https://img.shields.io/badge/Dev%20Channel-dev--latest-2f6feb)](https://github.com/tnagata012/ClipSave/releases/tag/dev-latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > ホットキー一発でクリップボード内容をファイル保存できる Windows 常駐アプリ
@@ -37,7 +37,7 @@ dotnet restore src/ClipSave/ClipSave.csproj
 dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 ```
 
-- **検証（任意）**: Dev/Release artifacts（`dev-latest` / `release-X.Y-latest`）の `*.msixbundle` を利用
+- **検証（任意）**: Dev/RC artifacts（`dev-latest` / `rc-X.Y-latest`）または確定版 GitHub Release（`X.Y.Z`）の `*.msixbundle` を利用
   - `*.msixbundle` は未署名の検証アーティファクトです。
   - インストールする場合は、[検証アーティファクト導入手順](docs/ops/ArtifactInstallation.md) を参照してください。
 

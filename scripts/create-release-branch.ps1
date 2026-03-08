@@ -6,7 +6,7 @@
 .DESCRIPTION
     Creates a release branch from main and prepares a PR branch for main version bump.
     - release/X.Y: X.Y.0 (stable)
-    - chore/* branch from main: X.(Y+1).0 (next development line, PR required)
+    - chore/* branch from main: configurable next development line, PR required
     - Package.appxmanifest always keeps numeric X.Y.Z.0
 
 .PARAMETER Version
@@ -14,6 +14,10 @@
 
 .PARAMETER MainBranch
     Trunk branch name (default: main)
+
+.PARAMETER NextMainVersion
+    Explicit next development version for the PR branch (e.g., 0.5.0).
+    If omitted, defaults to the next minor version on the same major line.
 
 .PARAMETER SkipPull
     Skip pulling latest changes from origin before branching
@@ -26,6 +30,10 @@
     # Creates release/1.3 at 1.3.0 and creates a PR branch for main=1.4.0
 
 .EXAMPLE
+    .\create-release-branch.ps1 -Version 0.1.0 -NextMainVersion 0.5.0
+    # Creates release/0.1 at 0.1.0 and creates a PR branch for main=0.5.0
+
+.EXAMPLE
     .\create-release-branch.ps1 -Version 1.3.0 -Push
     # Same as above, then pushes release + PR branch
 #>
@@ -35,6 +43,7 @@ param(
     [string]$Version,
 
     [string]$MainBranch = "main",
+    [string]$NextMainVersion = $null,
     [switch]$SkipPull = $false,
     [switch]$Push = $false
 )
@@ -63,8 +72,37 @@ if ($patch -ne 0) {
 }
 
 $branchName = "release/$major.$minor"
-$nextMinor = $minor + 1
-$nextMainVersion = "$major.$nextMinor.0"
+$releaseVersionTuple = @($major, $minor, $patch)
+
+if ($NextMainVersion) {
+    if ($NextMainVersion -notmatch '^(?<nextMajor>\d+)\.(?<nextMinor>\d+)\.(?<nextPatch>\d+)$') {
+        Fail "Invalid NextMainVersion format. Use X.Y.Z (example: 0.5.0)."
+    }
+
+    $nextMajor = [int]$matches['nextMajor']
+    $nextMinor = [int]$matches['nextMinor']
+    $nextPatch = [int]$matches['nextPatch']
+
+    if ($nextPatch -ne 0) {
+        Fail "NextMainVersion must use a .0 patch version (example: 0.5.0)."
+    }
+
+    $nextVersionTuple = @($nextMajor, $nextMinor, $nextPatch)
+    $isGreater =
+        ($nextVersionTuple[0] -gt $releaseVersionTuple[0]) -or
+        ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -gt $releaseVersionTuple[1]) -or
+        ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -eq $releaseVersionTuple[1] -and $nextVersionTuple[2] -gt $releaseVersionTuple[2])
+
+    if (-not $isGreater) {
+        Fail "NextMainVersion must be greater than release version $Version. Actual: $NextMainVersion"
+    }
+
+    $nextMainVersion = "$nextMajor.$nextMinor.$nextPatch"
+} else {
+    $nextMinor = $minor + 1
+    $nextMainVersion = "$major.$nextMinor.0"
+}
+
 $mainBumpBranch = "chore/bump-$MainBranch-to-$nextMainVersion"
 
 $propsPath = Join-Path $projectRoot "Directory.Build.props"
@@ -258,17 +296,17 @@ try {
     Write-Host "  Main PR: $mainBumpBranch -> $nextMainVersion (target: $MainBranch)" -ForegroundColor White
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
-    Write-Host "1. Keep user-facing changes in CHANGELOG.md under [Unreleased]."
-    Write-Host "2. At release finalization, move shipped items to [$Version] - YYYY-MM-DD (see docs/ops/ReleaseNotes.md)."
+    Write-Host "1. Keep user-facing changes in CHANGELOG.md under [Unreleased] while release contents are still moving."
+    Write-Host "2. Before tagging, move shipped items in the last release-side PR (typically a stabilization/RC PR) to [$Version] - YYYY-MM-DD (see docs/ops/ReleaseNotes.md)."
     if (-not $Push) {
         Write-Host "3. Push both branches:"
         Write-Host "   git push -u origin $branchName"
         Write-Host "   git push -u origin $mainBumpBranch"
         Write-Host "4. Create PR: $mainBumpBranch -> $MainBranch"
-        Write-Host "5. Release Build triggers on push to release/*."
+        Write-Host "5. RC Build triggers on push to release/*."
     } else {
         Write-Host "3. Create PR: $mainBumpBranch -> $MainBranch"
-        Write-Host "4. Release Build will run automatically (already pushed)."
+        Write-Host "4. RC Build will run automatically (already pushed)."
     }
     Write-Host ""
     Write-Host "Patch release reminder:" -ForegroundColor Cyan

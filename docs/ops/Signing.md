@@ -25,12 +25,13 @@ ClipSave は運用コストと配布安全性のバランスを優先する。
 | チャネル | 主な利用者 | 配布物 | 署名方針 |
 |------|------|------|------|
 | Dev | 開発者/協力者 | `dev-package-*`（`*.msixbundle`） | 未署名を許容 |
-| Release | テスター/検証者 | `release-package-*`（`*.msixbundle`） | 未署名を許容 |
+| RC | テスター/検証者 | `rc-package-*`（`*.msixbundle`） | 未署名を許容 |
+| Archive | テスター/リリース担当 | `release-archive-*`（`*.msixbundle`） | 未署名を許容 |
 | Stable | 一般ユーザー | `store-package-*`（`.msixupload`）経由で Store 配布 | Store チャネルを利用 |
 
 補足:
 
-- `dev-build.yml` / `release-build.yml` には署名ステップを含めず、`SHA256SUMS.txt` を成果物に同梱し、GitHub Artifact Attestation を記録する。
+- `dev-build.yml` / `rc-build.yml` / `release-finalize.yml` には署名ステップを含めず、`SHA256SUMS.txt` を成果物に同梱し、GitHub Artifact Attestation を記録する。
 - `MSIX_SIGNING_CERT_BASE64` / `MSIX_SIGNING_CERT_PASSWORD` は現行運用の必須要件ではない。
 - `msix-signing-dev` / `msix-signing-release` Environment 承認は現行運用では不要。
 
@@ -64,7 +65,7 @@ ClipSave は運用コストと配布安全性のバランスを優先する。
 
 ## 署名導入時チェックリスト
 
-1. 配布チャネルごとの署名要件を明文化する（Dev/Release/Stable）。
+1. 配布チャネルごとの署名要件を明文化する（Dev/RC/Stable）。
 2. 署名主体と `Package.appxmanifest` の `Identity Publisher` を一致させる。
 3. CI に署名・検証・タイムスタンプ検証を組み込む。
 4. 鍵管理とローテーション手順（期限前更新、漏えい時失効）を定義する。

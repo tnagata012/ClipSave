@@ -12,7 +12,7 @@
     Used as a safety check against the origin remote URL.
 
 .PARAMETER Tag
-    Tag name to move (example: dev-latest, release-1.3-latest).
+    Tag name to move (example: dev-latest, rc-1.3-latest).
 
 .PARAMETER Sha
     Target full commit SHA (40 hex characters).

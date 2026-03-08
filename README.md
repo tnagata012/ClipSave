@@ -5,9 +5,15 @@
 [![Dev Channel](https://img.shields.io/badge/Dev%20Channel-dev--latest-2f6feb)](https://github.com/tnagata012/ClipSave/releases/tag/dev-latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> ホットキー一発でクリップボード内容をファイル保存できる Windows 常駐アプリ
+> コピーしたものを `Ctrl+Shift+V` でそのまま使えるファイルに変える Windows 常駐アプリ
 
-ClipSave は、コピーした内容を `Ctrl+Shift+V` で即保存する軽量ツールです。コンテンツをファイルとして保存します。ネットワーク通信やテレメトリはありません。
+ClipSave は、スクリーンショット、表、JSON、Markdown、メモを何度も保存する人のための軽量ツールです。`Ctrl+Shift+V` を押すだけでクリップボード内容を自動判別し、表は CSV に、JSON は整形して、デスクトップまたは今開いているエクスプローラーのフォルダーへ直接保存します。保存ダイアログを何度も開く必要はありません。ネットワーク通信やテレメトリもありません。
+
+こんな用途に向いています。
+
+- スクリーンショットやコピー画像をすぐファイル化したい
+- Web や Excel からコピーした表を CSV にしたい
+- JSON や Markdown やメモを保存先選択なしで残したい
 
 ## クイックスタート
 
@@ -16,6 +22,7 @@ ClipSave は、コピーした内容を `Ctrl+Shift+V` で即保存する軽量�
 3. `Ctrl+Shift+V` を押す
 
 対応コンテンツ: 画像 / CSV / JSON / Markdown / テキスト（自動判別）
+保存先: デスクトップまたはアクティブなエクスプローラーのフォルダー
 
 自動起動はインストール直後は有効になります（Windows の「設定 > アプリ > スタートアップ」で変更可能）。
 
@@ -56,7 +63,7 @@ dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 |---------|-------------|
 | 設計 | [仕様](docs/dev/Specification.md) ・ [アーキテクチャ](docs/dev/Architecture.md) ・ [コーディングガイドライン](docs/dev/CodingGuidelines.md) |
 | テスト | [テスト戦略](docs/dev/TestingStrategy.md) |
-| 運用 | [デプロイ](docs/ops/Deployment.md) ・ [署名運用](docs/ops/Signing.md) ・ [バージョニング](docs/ops/Versioning.md) ・ [ブランチ戦略](docs/ops/BranchStrategy.md) ・ [CHANGELOG 運用](docs/ops/ReleaseNotes.md) ・ [検証アーティファクト導入](docs/ops/ArtifactInstallation.md) ・ [アイコン運用](docs/presentation/IconAssets.md) |
+| 運用 | [デプロイ](docs/ops/Deployment.md) ・ [Store サブミッション運用](docs/store/Submission.md) ・ [署名運用](docs/ops/Signing.md) ・ [バージョニング](docs/ops/Versioning.md) ・ [ブランチ戦略](docs/ops/BranchStrategy.md) ・ [CHANGELOG 運用](docs/ops/ReleaseNotes.md) ・ [検証アーティファクト導入](docs/ops/ArtifactInstallation.md) ・ [アイコン運用](docs/presentation/IconAssets.md) |
 
 ## セキュリティ
 

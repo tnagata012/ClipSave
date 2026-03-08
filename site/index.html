@@ -6,19 +6,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ClipSave — クリップボードを、そのままファイルに。</title>
   <meta name="description"
-    content="Ctrl+Shift+V でクリップボード内容を自動判別し、デスクトップまたはアクティブな Explorer フォルダへ保存。画像・テキスト・JSON・CSV・Markdownに対応する Windows 常駐アプリ。">
+    content="コピーしたものを Ctrl+Shift+V でそのまま使えるファイルに変える Windows 11 常駐アプリ。画像・表・JSON・Markdown・テキストを自動判別し、デスクトップまたは今開いているエクスプローラーのフォルダーへ保存。">
   <!-- OGP -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="ClipSave — クリップボードを、そのままファイルに。">
   <meta property="og:description"
-    content="Ctrl+Shift+V でクリップボードの中身を自動判別して保存する Windows 常駐アプリ。画像・テキスト・JSON・CSV・Markdown に対応。">
+    content="コピーしたものを Ctrl+Shift+V でそのまま使えるファイルに変える Windows 常駐アプリ。画像・表・JSON・Markdown・テキストに対応。">
   <meta property="og:url" content="https://tnagata012.github.io/ClipSave/">
   <meta property="og:site_name" content="ClipSave">
   <meta property="og:locale" content="ja_JP">
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ClipSave — クリップボードを、そのままファイルに。">
-  <meta name="twitter:description" content="Ctrl+Shift+V でクリップボードの中身を自動判別して保存。画像・テキスト・JSON・CSV・Markdown 対応。">
+  <meta name="twitter:description" content="コピーしたものを Ctrl+Shift+V でそのまま使えるファイルに。画像・表・JSON・Markdown・テキスト対応。">
   <meta name="theme-color" content="#0B0F1A">
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="assets/ClipSave.ico">
@@ -57,8 +57,8 @@
             <span class="gradient-text">そのままファイルに。</span>
           </h1>
           <p class="hero-subtitle">
-            <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> ひとつで、クリップボードの中身を自動判別して保存。
-            デスクトップまたはアクティブな Explorer フォルダに、画像もテキストも JSON もワンアクションで残せます。
+            <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> だけで、スクリーンショット、表、JSON、Markdown、メモを自動判別して保存。
+            表は CSV に、JSON は整形して、デスクトップまたは今開いているエクスプローラーのフォルダーへ直接残せます。
           </p>
           <div class="hero-actions">
             <a href="#download" class="btn btn-primary btn-lg">
@@ -147,7 +147,7 @@
     <section id="features" class="features">
       <div class="container">
         <h2 class="section-title fade-in">主な機能</h2>
-        <p class="section-subtitle fade-in">コピーしたものを、自動で最適なフォーマットに。</p>
+        <p class="section-subtitle fade-in">保存ダイアログを何度も開かず、コピーしたものをそのまま使える形に。</p>
         <div class="features-grid">
           <div class="feature-card fade-in">
             <div class="feature-icon" style="--accent: #4FC3F7">
@@ -158,7 +158,7 @@
               </svg>
             </div>
             <h3>画像</h3>
-            <p>スクリーンショットやコピーした画像をPNG / JPGで保存。PNGは透過を維持し、JPGは白背景で保存。</p>
+            <p>スクリーンショットやコピーした画像を PNG / JPG で即保存。PNG は透過を維持し、JPG は白背景で保存します。</p>
           </div>
           <div class="feature-card fade-in">
             <div class="feature-icon" style="--accent: #81C784">
@@ -168,7 +168,7 @@
               </svg>
             </div>
             <h3>テキスト</h3>
-            <p>プレーンテキストをUTF-8 (BOMなし) で保存。コードスニペットの退避に。</p>
+            <p>プレーンテキストを UTF-8 (BOM なし) で保存。メモやコードスニペットをすばやく残せます。</p>
           </div>
           <div class="feature-card fade-in">
             <div class="feature-icon" style="--accent: #FFB74D">
@@ -178,7 +178,7 @@
               </svg>
             </div>
             <h3>JSON</h3>
-            <p>JSON文字列を自動検出し、インデント整形して保存。APIレスポンスの確認に。</p>
+            <p>JSON 文字列を自動検出し、インデント整形して .json で保存。API レスポンスや設定データの確認に便利です。</p>
           </div>
           <div class="feature-card fade-in">
             <div class="feature-icon" style="--accent: #F48FB1">
@@ -189,7 +189,7 @@
               </svg>
             </div>
             <h3>CSV</h3>
-            <p>タブ区切りの表データを検出し、CSV形式に変換して保存。Excel連携もスムーズ。</p>
+            <p>タブ区切りの表データを検出し、Excel で開きやすい CSV に変換して保存。表の持ち出しがすぐ終わります。</p>
           </div>
           <div class="feature-card fade-in">
             <div class="feature-icon" style="--accent: #B39DDB">
@@ -199,7 +199,7 @@
               </svg>
             </div>
             <h3>Markdown</h3>
-            <p>見出し・リスト・コードブロックを検出してMarkdownとして保存。メモの即時保存に。</p>
+            <p>見出し・リスト・コードブロックを検出して Markdown として保存。メモや下書きをそのまま残せます。</p>
           </div>
           <div class="feature-card fade-in">
             <div class="feature-icon" style="--accent: #4DD0E1">
@@ -210,7 +210,7 @@
               </svg>
             </div>
             <h3>自動判別</h3>
-            <p>クリップボードの中身を自動で解析し、最適な形式を選択。手動設定は不要。</p>
+            <p>クリップボードの中身に合わせて最適な形式を自動選択。保存前に形式を選び直す必要はありません。</p>
           </div>
         </div>
       </div>
@@ -220,7 +220,7 @@
     <section id="how-it-works" class="how-it-works">
       <div class="container">
         <h2 class="section-title fade-in">使い方</h2>
-        <p class="section-subtitle fade-in">たった3ステップ。設定すら不要。</p>
+        <p class="section-subtitle fade-in">コピーして、押して、そのまま作業を続けるだけ。</p>
         <div class="steps">
           <div class="step fade-in">
             <div class="step-number">1</div>
@@ -233,14 +233,14 @@
             <div class="step-number">2</div>
             <div class="step-content">
               <h3>ホットキーを押す</h3>
-              <p><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>を押すだけ。ClipSaveがバックグラウンドで即座に処理。</p>
+              <p><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> を押すだけ。ClipSave がバックグラウンドで自動判別して保存します。</p>
             </div>
           </div>
           <div class="step fade-in">
             <div class="step-number">3</div>
             <div class="step-content">
               <h3>保存完了</h3>
-              <p>デスクトップまたは Explorer フォルダに即保存。通知でお知らせ。</p>
+              <p>デスクトップまたは今開いているエクスプローラーのフォルダーに直接保存。必要なら通知で確認できます。</p>
             </div>
           </div>
         </div>
@@ -251,7 +251,7 @@
     <section id="details" class="details">
       <div class="container">
         <h2 class="section-title fade-in">詳細</h2>
-        <p class="section-subtitle fade-in">細部まで使いやすさにこだわった設計。</p>
+        <p class="section-subtitle fade-in">毎日使うための細かな配慮も揃えています。</p>
         <div class="details-grid">
           <div class="detail-item fade-in">
             <h3>
@@ -271,7 +271,7 @@
               </svg>
               保存先
             </h3>
-            <p>デスクトップがアクティブなときはデスクトップへ保存。Explorerがアクティブで実フォルダ表示中なら、そのフォルダへ保存（This PC・ごみ箱などの仮想フォルダは対象外）。</p>
+            <p>デスクトップがアクティブなときはデスクトップへ保存。エクスプローラーがアクティブで実フォルダー表示中なら、そのフォルダーへ保存します（This PC・ごみ箱などの仮想フォルダーは対象外）。</p>
           </div>
           <div class="detail-item fade-in">
             <h3>
@@ -281,7 +281,7 @@
               </svg>
               カスタマイズ
             </h3>
-            <p>画像形式 (PNG/JPG)、JPG品質、ファイル名プレフィックス、タイムスタンプ付与、ホットキー変更、コンテンツ種別の有効/無効、通知設定をGUIで。</p>
+            <p>画像形式 (PNG/JPG)、JPG 品質、ファイル名プレフィックス、タイムスタンプ付与、ホットキー変更、コンテンツ種別の有効/無効、通知設定を GUI で調整できます。</p>
           </div>
           <div class="detail-item fade-in">
             <h3>
@@ -291,7 +291,7 @@
               </svg>
               通知
             </h3>
-            <p>保存成功・空クリップボード・エラーの各通知を個別にオン/オフ可能。OS通知設定も尊重。</p>
+            <p>保存成功・空クリップボード・エラーの各通知を個別にオン/オフ可能。Windows の通知設定も尊重します。</p>
           </div>
           <div class="detail-item fade-in">
             <h3>
@@ -300,7 +300,7 @@
               </svg>
               プライバシー
             </h3>
-            <p>ネットワーク通信・テレメトリは一切なし。データはすべてローカルで完結。アンインストール時にアプリデータを完全削除。</p>
+            <p>クラウド送信・テレメトリは一切なし。データはすべてローカルで完結し、アンインストール時はアプリデータも完全削除します。</p>
           </div>
         </div>
       </div>
@@ -325,7 +325,7 @@
           </details>
           <details class="faq-item fade-in">
             <summary>保存先はどこになりますか？</summary>
-            <p>デスクトップがアクティブなときはデスクトップに、Explorer でフォルダを開いているときはそのフォルダに保存されます。</p>
+            <p>デスクトップがアクティブなときはデスクトップに、エクスプローラーで実フォルダーを開いているときはそのフォルダーに保存されます。</p>
           </details>
           <details class="faq-item fade-in">
             <summary>クリップボードが空のときはどうなりますか？</summary>
@@ -344,7 +344,7 @@
       <div class="container">
         <div class="download-card fade-in">
           <h2>ClipSave を始めよう</h2>
-          <p>インストールして、<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> を押すだけ。</p>
+          <p>インストールして、コピーして、<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> を押すだけ。</p>
           <div class="download-actions">
             <a href="https://github.com/tnagata012/ClipSave/releases" class="btn btn-primary btn-lg" target="_blank"
               rel="noopener noreferrer">

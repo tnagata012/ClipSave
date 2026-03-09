@@ -96,6 +96,11 @@ img {
   background: rgba(11, 15, 26, 0.85);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
+  transition: border-bottom-color var(--transition);
+}
+
+.header.scrolled {
+  border-bottom-color: rgba(30, 41, 59, 0.8);
 }
 
 .header-inner {
@@ -529,6 +534,7 @@ body::before {
   width: 48px;
   height: 48px;
   border-radius: var(--radius-sm);
+  background: rgba(66, 165, 245, 0.12);
   background: color-mix(in srgb, var(--accent, var(--blue-400)) 12%, transparent);
   color: var(--accent, var(--blue-400));
   margin-bottom: 16px;
@@ -537,6 +543,7 @@ body::before {
 
 .feature-card:hover .feature-icon {
   transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(66, 165, 245, 0.25);
   box-shadow: 0 0 20px color-mix(in srgb, var(--accent, var(--blue-400)) 25%, transparent);
 }
 
@@ -951,13 +958,15 @@ body.menu-open {
     top: 64px;
     left: 0;
     right: 0;
-    bottom: 0;
+    height: calc(100dvh - 64px);
+    overflow-y: auto;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 28px;
     background: rgba(11, 15, 26, 0.96);
     backdrop-filter: blur(16px);
+    z-index: 99;
   }
 
   .nav a {
@@ -1034,5 +1043,13 @@ body.menu-open {
     animation: none !important;
     transition-duration: 0.01ms !important;
     transition-delay: 0ms !important;
+  }
+
+  .feature-card:hover,
+  .feature-card:hover .feature-icon,
+  .btn-primary:hover,
+  .btn-outline:hover,
+  .detail-item:hover {
+    transform: none !important;
   }
 }

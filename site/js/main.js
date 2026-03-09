@@ -126,8 +126,7 @@
 
     // Header border
     if (header) {
-      header.style.borderBottomColor =
-        scrollY > 50 ? "rgba(30, 41, 59, 0.8)" : "";
+      header.classList.toggle("scrolled", scrollY > 50);
     }
 
     // Back to top visibility

@@ -73,15 +73,6 @@ python -m http.server 4173 --directory site
 - `og:title`・`og:description`・`twitter:card` を `<head>` に定義済み
 - タイトルや説明文を変更した場合は OGP メタも同時に更新する
 
-### 変更単位
-
-- 1つの PR で目的を混在させない
-- サイト更新は原則としてアプリ実装変更と分離する
-- 推奨分割:
-  - 文言修正 PR
-  - デザイン修正 PR
-  - 動作修正 PR
-
 ## 変更時チェック
 
 | 区分 | チェック内容 |

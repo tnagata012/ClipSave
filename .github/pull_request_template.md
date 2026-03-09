@@ -6,7 +6,7 @@
 
 ## Checklist
 ### Change Type (choose one)
-- [ ] Docs/CI/repo config only.
+- [ ] Docs/CI/site/repo config only.
 - [ ] Includes product code or spec changes.
 
 ### Quality (as applicable)

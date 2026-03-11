@@ -16,9 +16,9 @@ ClipSave は運用コストと配布安全性のバランスを優先する。
 
 この文書では、以下は扱わない。
 
-- ブランチ運用（`BranchStrategy.md`）
-- 版数規約（`Versioning.md`）
-- デプロイ実行手順（`Deployment.md`）
+- リリース系列やタグ運用（[../release/ReleaseProcess.md](../release/ReleaseProcess.md)）
+- 配布実行手順（[../release/ReleaseGuide.md](../release/ReleaseGuide.md)）
+- Store 提出の実務手順（[store/StoreSubmission.md](store/StoreSubmission.md)）
 
 ## チャネル別ポリシー
 
@@ -31,7 +31,8 @@ ClipSave は運用コストと配布安全性のバランスを優先する。
 
 補足:
 
-- `dev-build.yml` / `rc-build.yml` / `release-finalize.yml` には署名ステップを含めず、`SHA256SUMS.txt` を成果物に同梱し、GitHub Artifact Attestation を記録する。
+- `dev-build.yml` / `rc-build.yml` / `release-finalize.yml` には署名ステップを含めず、`SHA256SUMS.txt` を成果物に同梱し、同じ workflow 実行に対する GitHub Artifact Attestation を GitHub 上に記録する。
+- GitHub Artifact Attestation は配布 asset に添付せず、`gh attestation verify` により検証する。
 - `MSIX_SIGNING_CERT_BASE64` / `MSIX_SIGNING_CERT_PASSWORD` は現行運用の必須要件ではない。
 - `msix-signing-dev` / `msix-signing-release` Environment 承認は現行運用では不要。
 
@@ -41,8 +42,8 @@ ClipSave は運用コストと配布安全性のバランスを優先する。
 
 1. 配布対象を明示する（開発者向け・検証目的であることを明記）。
 2. バイナリの `SHA256` を併記する。
-3. `gh attestation verify` で確認可能な provenance（GitHub Artifact Attestation）を提供する（運用では `scripts/verify-artifact.ps1` の利用を推奨）。
-4. 取得元を公式チャネルに限定する（リポジトリ直下の Releases / Actions artifacts）。
+3. `gh attestation verify` で確認可能な provenance（GitHub Artifact Attestation）を GitHub 上で提供する。
+4. 取得元を公式チャネルに限定する（GitHub Releases / Actions artifacts）。
 5. 既知の制約（SmartScreen 警告、手動インストール手順）を案内する。
 
 ## 公開証明書導入の判断トリガー
@@ -69,10 +70,11 @@ ClipSave は運用コストと配布安全性のバランスを優先する。
 2. 署名主体と `Package.appxmanifest` の `Identity Publisher` を一致させる。
 3. CI に署名・検証・タイムスタンプ検証を組み込む。
 4. 鍵管理とローテーション手順（期限前更新、漏えい時失効）を定義する。
-5. `Deployment.md` と `README.md` の配布説明を更新する。
+5. [Release Guide](../release/ReleaseGuide.md) と [README](../../README.md) の配布説明を更新する。
 
 ## 関連ドキュメント
 
-- [Deployment](Deployment.md) — CI/CD と配布実行手順
-- [Versioning](Versioning.md) — 版数規約
-- [BranchStrategy](BranchStrategy.md) — ブランチ構成と統合方向
+- [ReleaseProcess](../release/ReleaseProcess.md) — 系列、タグ、latest-only の全体モデル
+- [ReleaseGuide](../release/ReleaseGuide.md) — CI/CD と配布実行手順
+- [ArtifactInstallation](ArtifactInstallation.md) — 未署名アーティファクトの検証・導入手順
+- [StoreSubmission](store/StoreSubmission.md) — Store 提出の実務手順

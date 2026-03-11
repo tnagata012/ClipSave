@@ -46,7 +46,7 @@ dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 
 - **Validation (optional)**: use Dev/RC artifacts (`dev-latest` / `rc-X.Y-latest`) or a versioned GitHub Release (`X.Y.Z`) `*.msixbundle`
   - `*.msixbundle` files are unsigned validation artifacts.
-  - If you want to install one, see [Validation Artifact Installation](docs/ops/ArtifactInstallation.md).
+  - If you want to install one, see [Validation Artifact Installation](docs/distribution/ArtifactInstallation.md).
 
 ## Documentation
 
@@ -65,7 +65,8 @@ If you want to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 |---------|-------------|
 | Design | [Specification](docs/dev/Specification.md) ・ [Architecture](docs/dev/Architecture.md) ・ [Coding Guidelines](docs/dev/CodingGuidelines.md) |
 | Testing | [Testing Strategy](docs/dev/TestingStrategy.md) |
-| Operations | [Deployment](docs/ops/Deployment.md) ・ [Store Submission](docs/store/Submission.md) ・ [Signing](docs/ops/Signing.md) ・ [Versioning](docs/ops/Versioning.md) ・ [Branch Strategy](docs/ops/BranchStrategy.md) ・ [Release Notes Operations](docs/ops/ReleaseNotes.md) ・ [Validation Artifact Installation](docs/ops/ArtifactInstallation.md) ・ [Icon Asset Operations](docs/presentation/IconAssets.md) |
+| Release | [Release Process](docs/release/ReleaseProcess.md) ・ [Release Guide](docs/release/ReleaseGuide.md) ・ [Release Notes Operations](docs/release/ReleaseNotes.md) |
+| Distribution | [Store Submission](docs/distribution/store/StoreSubmission.md) ・ [Signing](docs/distribution/Signing.md) ・ [Validation Artifact Installation](docs/distribution/ArtifactInstallation.md) ・ [Store Listing Assets](docs/distribution/store/listing/) ・ [Icon Asset Operations](docs/presentation/IconAssets.md) |
 
 ## Security
 

@@ -273,4 +273,4 @@ Clipboard ──Get(STA)──▶ BitmapSource(UI ownership)
 - [使い方ガイド](../UsageGuide.md) - 基本操作と設定
 - [仕様](Specification.md) - 詳細仕様（SPEC-ID）
 - [コーディングガイドライン](CodingGuidelines.md) - コメント・ログ・例外の規約
-- [バージョニング](../ops/Versioning.md) - バージョン管理規約
+- [リリースプロセス](../release/ReleaseProcess.md) - 版数・タグ・系列運用

@@ -43,8 +43,8 @@ python -m http.server 4173 --directory site
 
 - 公開 URL は `https://tnagata012.github.io/ClipSave/`
 - GitHub Pages の公開元は `GitHub Actions`
-- `main` に対する `site/**` または `.github/workflows/deploy-pages.yml` の変更は `Deploy Pages` workflow（`.github/workflows/deploy-pages.yml`）で自動公開する
-- `Deploy Pages` の手動実行は再公開用途に限定し、`main` ブランチからのみ実行する
+- `main` に対する `site/**` の変更は `Deploy Pages` workflow（`.github/workflows/deploy-pages.yml`）で自動公開する
+- `Deploy Pages` の手動実行は再公開や workflow 変更反映の用途に限定し、`main` ブランチからのみ実行する
 - `site/**` と `docs/presentation/LandingPage.md` だけの変更ではアプリ本体の `Dev Build` / `RC Build` は起動しない
 - `PR Check` は必須チェックを維持したまま、website-only PR のときは restore / build / test を skip する
 

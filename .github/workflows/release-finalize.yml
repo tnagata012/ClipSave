@@ -183,6 +183,12 @@ jobs:
         Write-Host "Build archive: $shouldBuildArchive"
         Write-Host "Build binaries: $shouldBuildBinaries"
 
+    - name: Checkout version tag
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ steps.target.outputs.CHECKOUT_REF }}
+        fetch-depth: 0
+
     - name: Checkout workflow tooling
       uses: actions/checkout@v4
       with:
@@ -203,12 +209,6 @@ jobs:
           -Repository "${{ github.repository }}" `
           -Version "${{ steps.target.outputs.VERSION }}" `
           -ReleaseBranch "${{ steps.target.outputs.RELEASE_BRANCH }}"
-
-    - name: Checkout version tag
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ steps.target.outputs.CHECKOUT_REF }}
-        fetch-depth: 0
 
     - name: Validate tagged commit is in target release branch
       shell: pwsh

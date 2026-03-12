@@ -261,6 +261,15 @@ function Get-BlockingFilesAheadOfFinalizedTag {
         throw "HeadCommit must be a full 40-character SHA. Actual: '$HeadCommit'"
     }
 
+    git merge-base --is-ancestor $TagCommit $HeadCommit
+    $mergeBaseExit = $LASTEXITCODE
+    if ($mergeBaseExit -eq 1) {
+        throw "Finalized tag commit '$TagCommit' is not an ancestor of release branch HEAD '$HeadCommit'."
+    }
+    if ($mergeBaseExit -ne 0) {
+        throw "Failed to verify whether finalized tag commit '$TagCommit' is an ancestor of release branch HEAD '$HeadCommit'."
+    }
+
     $changedFiles = @(git diff --name-only --find-renames "$TagCommit..$HeadCommit")
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to inspect changes between finalized tag commit '$TagCommit' and release branch HEAD '$HeadCommit'."

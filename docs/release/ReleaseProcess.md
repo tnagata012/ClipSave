@@ -1,6 +1,6 @@
 # リリースプロセス
 
-ClipSave のリリース系列、版数、タグ、配布チャネル、`Release Finalize`、Store 公開の関係を定義します。  
+ClipSave のリリース系列、版数、タグ、配布チャネル、`Release Finalize`、Store 公開の関係を定義します。
 `docs/release` 領域の正本はこの文書とし、実行手順は [Release Guide](ReleaseGuide.md)、CHANGELOG 記法は [ReleaseNotes](ReleaseNotes.md) に分離します。
 
 ## この文書の役割

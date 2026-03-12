@@ -92,7 +92,7 @@ Microsoft Store の Partner Center で行う提出実務を、再現可能な手
 | Import フォルダ | `docs/distribution/store/listing/import/` |
 | CSV | import フォルダ直下に `listingData.csv` を 1 つだけ置く |
 | Listing 素材 | import フォルダの `assets/` 配下 |
-| スクリーンショット | 各言語で `import/assets/screenshots/<lang>/...` を `DesktopScreenshot1` 以降へ設定 |
+| スクリーンショット | 各言語で `assets/screenshots/<lang>/...` を `DesktopScreenshot1` 以降へ設定 |
 | 画像パス | import 対象フォルダから解決できる相対パス、または Partner Center で解決できる URL のみ |
 
 ### 申請オプション
@@ -122,7 +122,7 @@ Store listing の投入物と編集用ソースを分離する。Partner Center 
 1. `docs/distribution/store/listing/import/` を開く。
 2. フォルダ直下に `listingData.csv` が 1 つだけあることを確認する。
 3. CSV ヘッダーが Partner Center の英語 export と同じ構成 (`Field`,`ID`,`Type (Type)`,`default`,`en`,`ja`) であることを確認する。
-4. CSV の画像フィールドが `import/assets/...` のように、ルートフォルダ名を含む相対パスになっていることを確認する。
+4. CSV の画像フィールドが `assets/...` のように、import 対象フォルダ直下から解決できる相対パスになっていることを確認する。
 5. Partner Center では `import` フォルダ自体を選んで import する。
 
 ## listingData 運用ルール
@@ -133,7 +133,7 @@ Store listing の投入物と編集用ソースを分離する。Partner Center 
 4. 文言や画像パスは `default` ではなく `en` / `ja` 列へ入力する。
 5. import 用 CSV は `docs/distribution/store/listing/import/listingData.csv` に 1 つだけ置く。
 6. listing 用画像は `docs/distribution/store/listing/import/assets/` 配下に置き、デザインソースは `docs/distribution/store/listing/design-source/` に分離する。
-7. 画像フィールドには import 対象フォルダのルート名を含む相対パスのみを入れ、絶対パスや repo ルート基準のパス（例: `src/...`）は入れない。
+7. 画像フィールドには import 対象フォルダ直下から解決できる相対パスのみを入れ、絶対パスや repo ルート基準のパス（例: `src/...`）は入れない。
 8. Partner Center から export した CSV や `listingassets/...` URL を保存する場合は `docs/distribution/store/listing/results/` を作成し、入力値の CSV を上書きしない。
 9. ファイル名は `clipsave-store-<用途>-<番号 or 内容>.ext` を基本とし、タイムスタンプ由来の名前を残さない。
 10. `ReleaseNotes` は提出版と整合する内容に更新する。

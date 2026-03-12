@@ -78,7 +78,7 @@
 
   ## 実運用手順
 
-  前提となる系列・タグ・チャネルの意味、latest-only、Finalize と Store 公開の関係は [ReleaseProcess](ReleaseProcess.md) を参照してください。  
+  前提となる系列・タグ・チャネルの意味、latest-only、Finalize と Store 公開の関係は [ReleaseProcess](ReleaseProcess.md) を参照してください。
   この章では実行手順だけを扱います。
 
   主要な実行経路だけを抜き出すと、全体像は次のとおりです。
@@ -142,7 +142,7 @@
 
   ### Store 提出
 
-  release 文書側で扱うのは `store-package-*` の生成までとする。  
+  release 文書側で扱うのは `store-package-*` の生成までとする。
   Partner Center への upload、listing CSV import、審査向け補足、submission ID 記録は [StoreSubmission](../distribution/store/StoreSubmission.md) を正本とする。
 
   ## ロールバック/取り下げ

@@ -1,6 +1,6 @@
 # 検証アーティファクト導入手順
 
-`dev-latest` / `rc-X.Y-latest` / 確定タグ `X.Y.Z` の `*.msixbundle` は、開発者向けの未署名成果物です。  
+`dev-latest` / `rc-X.Y-latest` / 確定タグ `X.Y.Z` の `*.msixbundle` は、開発者向けの未署名成果物です。
 本番配布（一般ユーザー向け）は Store チャネルを利用してください。
 
 ## 対象
@@ -53,7 +53,7 @@ Add-AppxPackage -Path $bundlePath -AllowUnsigned
 
 Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を導入するとダウングレード判定になるため、先に Dev をアンインストールしてください。
 
-確定タグ `X.Y.Z` に対応するアーカイブ版は Store 公開の有無と独立しているため、試験リリースも同じ手順で導入できます。  
+確定タグ `X.Y.Z` に対応するアーカイブ版は Store 公開の有無と独立しているため、試験リリースも同じ手順で導入できます。
 GitHub Release 側で `prerelease` 表示になっていても、導入手順や真正性確認の方法は変わりません。
 
 ```powershell

@@ -105,38 +105,9 @@ jobs:
           throw "Failed to resolve HEAD commit for $branch"
         }
         if ($headCommit -ne $tagCommit) {
-          $changedFiles = @(git diff --name-only --find-renames "$tagCommit..HEAD")
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to inspect changes between finalized tag '$version' ($tagCommit) and release branch HEAD ($headCommit)."
-          }
-
-          $changedFiles = @(
-            $changedFiles |
-              ForEach-Object { $_.Trim() } |
-              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-          )
-
-          $allowedPatterns = @(
-            '^docs/',
-            '^site/',
-            '^\.github/workflows/deploy-pages\.yml$',
-            '^[^/]+\.md$'
-          )
-          $blockingFiles = @()
-
-          foreach ($changedFile in $changedFiles) {
-            $isAllowed = $false
-            foreach ($pattern in $allowedPatterns) {
-              if ($changedFile -match $pattern) {
-                $isAllowed = $true
-                break
-              }
-            }
-
-            if (-not $isAllowed) {
-              $blockingFiles += $changedFile
-            }
-          }
+          $releaseSupport = Join-Path $env:GITHUB_WORKSPACE "tooling/scripts/release-support.ps1"
+          . $releaseSupport
+          $blockingFiles = Get-BlockingFilesAheadOfFinalizedTag -TagCommit $tagCommit -HeadCommit $headCommit
 
           if ($blockingFiles.Count -gt 0) {
             $blockingList = $blockingFiles -join ", "

@@ -59,6 +59,8 @@ $semverPattern = '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$'
 $propsPath = Join-Path $projectRoot "Directory.Build.props"
 $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifest"
 
+. (Join-Path $scriptRoot "release-support.ps1")
+
 function Fail([string]$Message) {
     Write-Host "`n[ERROR] $Message" -ForegroundColor Red
     exit 1
@@ -99,43 +101,6 @@ function Get-RemoteTagCommit([string]$Remote, [string]$TagName) {
     }
 
     return $null
-}
-
-function Get-BlockingFilesAheadOfFinalizedTag([string]$TagCommit, [string]$HeadCommit) {
-    $changedFiles = @(git diff --name-only --find-renames "$TagCommit..$HeadCommit")
-    if ($LASTEXITCODE -ne 0) {
-        Fail "Failed to inspect changes between finalized tag commit '$TagCommit' and release branch HEAD '$HeadCommit'."
-    }
-
-    $changedFiles = @(
-        $changedFiles |
-            ForEach-Object { $_.Trim() } |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-    )
-
-    $allowedPatterns = @(
-        '^docs/',
-        '^site/',
-        '^\.github/workflows/deploy-pages\.yml$',
-        '^[^/]+\.md$'
-    )
-    $blockingFiles = @()
-
-    foreach ($changedFile in $changedFiles) {
-        $isAllowed = $false
-        foreach ($pattern in $allowedPatterns) {
-            if ($changedFile -match $pattern) {
-                $isAllowed = $true
-                break
-            }
-        }
-
-        if (-not $isAllowed) {
-            $blockingFiles += $changedFile
-        }
-    }
-
-    return $blockingFiles
 }
 
 Write-Host "=== Create Patch Release Branch ===" -ForegroundColor Cyan

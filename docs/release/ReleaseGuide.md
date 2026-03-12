@@ -33,7 +33,7 @@
   | [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y.0`）                                              | `release/X.Y` 作成 + `main` 側 bump ブランチ作成、任意で PR 作成 | `release/X.Y`, `chore/bump-main-to-*`                        |
   | [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`）                                        | patch init ブランチ作成、任意で PR 作成                      | `chore/release-X.Y.(Z+1)-init`                               |
   | [dev-build.yml](../../.github/workflows/dev-build.yml)       | `main` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 開発成果物生成（未署名）                                     | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
-  | [rc-build.yml](../../.github/workflows/rc-build.yml)         | `release/*` push（`docs/**`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 公開候補生成（未署名）                                       | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
+  | [rc-build.yml](../../.github/workflows/rc-build.yml)         | `release/*` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 公開候補生成（未署名）                                       | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
   | [release-finalize.yml](../../.github/workflows/release-finalize.yml) | `X.Y.Z` タグ push / 手動                                     | 確定タグを固定参照して初回/不足時の archive 生成、GitHub Release メタデータ調整、任意の Store package 生成 | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation, 任意で `store-package-*` |
 
   補足:

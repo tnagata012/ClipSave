@@ -244,6 +244,59 @@ function Resolve-ReleaseSeriesTarget {
     }
 }
 
+function Get-BlockingFilesAheadOfFinalizedTag {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TagCommit,
+        [Parameter(Mandatory = $true)]
+        [string]$HeadCommit
+    )
+
+    if ([string]::IsNullOrWhiteSpace($TagCommit) -or $TagCommit -notmatch '^[0-9a-f]{40}$') {
+        throw "TagCommit must be a full 40-character SHA. Actual: '$TagCommit'"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($HeadCommit) -or $HeadCommit -notmatch '^[0-9a-f]{40}$') {
+        throw "HeadCommit must be a full 40-character SHA. Actual: '$HeadCommit'"
+    }
+
+    $changedFiles = @(git diff --name-only --find-renames "$TagCommit..$HeadCommit")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to inspect changes between finalized tag commit '$TagCommit' and release branch HEAD '$HeadCommit'."
+    }
+
+    $changedFiles = @(
+        $changedFiles |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+
+    $allowedPatterns = @(
+        '^docs/',
+        '^site/',
+        '^\.github/workflows/deploy-pages\.yml$',
+        '^[^/]+\.md$'
+    )
+
+    $blockingFiles = @()
+    foreach ($changedFile in $changedFiles) {
+        $isAllowed = $false
+        foreach ($pattern in $allowedPatterns) {
+            if ($changedFile -match $pattern) {
+                $isAllowed = $true
+                break
+            }
+        }
+
+        if (-not $isAllowed) {
+            $blockingFiles += $changedFile
+        }
+    }
+
+    return $blockingFiles
+}
+
 function Assert-LatestFinalizedVersion {
     [CmdletBinding()]
     param(

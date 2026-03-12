@@ -95,7 +95,45 @@ jobs:
           throw "Failed to resolve HEAD commit for $branch"
         }
         if ($headCommit -ne $tagCommit) {
-          throw "Release branch HEAD ($headCommit) is not at finalized tag '$version' ($tagCommit). Start the next patch cycle only from the finalized commit."
+          $changedFiles = @(git diff --name-only --find-renames "$tagCommit..HEAD")
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to inspect changes between finalized tag '$version' ($tagCommit) and release branch HEAD ($headCommit)."
+          }
+
+          $changedFiles = @(
+            $changedFiles |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          )
+
+          $allowedPatterns = @(
+            '^docs/',
+            '^site/',
+            '^\.github/workflows/deploy-pages\.yml$',
+            '^[^/]+\.md$'
+          )
+          $blockingFiles = @()
+
+          foreach ($changedFile in $changedFiles) {
+            $isAllowed = $false
+            foreach ($pattern in $allowedPatterns) {
+              if ($changedFile -match $pattern) {
+                $isAllowed = $true
+                break
+              }
+            }
+
+            if (-not $isAllowed) {
+              $blockingFiles += $changedFile
+            }
+          }
+
+          if ($blockingFiles.Count -gt 0) {
+            $blockingList = $blockingFiles -join ", "
+            throw "Release branch HEAD ($headCommit) is ahead of finalized tag '$version' ($tagCommit) with product-affecting changes: $blockingList. Start the next patch cycle only from the finalized commit or after removing those changes."
+          }
+
+          Write-Warning "Release branch HEAD is ahead of finalized tag '$version' only by non-product files. Continuing from HEAD."
         }
 
         $encodedRef = [Uri]::EscapeDataString("tags/$version")

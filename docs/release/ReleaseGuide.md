@@ -33,8 +33,8 @@
   | [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y.0`）                                              | `release/X.Y` 作成 + `main` 側 bump ブランチ作成、任意で PR 作成 | `release/X.Y`, `chore/bump-main-to-*`                        |
   | [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`）                                        | patch init ブランチ作成、任意で PR 作成                      | `chore/release-X.Y.(Z+1)-init`                               |
   | [dev-build.yml](../../.github/workflows/dev-build.yml)       | `main` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 開発成果物生成（未署名）                                     | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
-  | [rc-build.yml](../../.github/workflows/rc-build.yml)         | `release/*` push（`site/**`, `.github/workflows/deploy-pages.yml`, `docs/presentation/LandingPage.md` のみ変更時は除く） / 手動 | 公開候補生成（未署名）                                       | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
-  | [release-finalize.yml](../../.github/workflows/release-finalize.yml) | `X.Y.Z` タグ push / 手動                                     | 確定タグを固定参照してアーカイブ再生成、GitHub Release メタデータ調整、任意の Store package 生成 | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation, 任意で `store-package-*` |
+  | [rc-build.yml](../../.github/workflows/rc-build.yml)         | `release/*` push（`docs/**`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 公開候補生成（未署名）                                       | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
+  | [release-finalize.yml](../../.github/workflows/release-finalize.yml) | `X.Y.Z` タグ push / 手動                                     | 確定タグを固定参照して初回/不足時の archive 生成、GitHub Release メタデータ調整、任意の Store package 生成 | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation, 任意で `store-package-*` |
 
   補足:
 
@@ -48,10 +48,11 @@
   - `release/X.Y` ブランチの配布タグは `rc-X.Y-latest`（例: `release/1.3` → `rc-1.3-latest`）。
   - `rc-X.Y-latest` の GitHub Release は候補版として常に `prerelease` 表示にする。
   - 確定タグは `X.Y.Z` で作成し、作成後は移動しない。
-  - `Release Finalize` は確定タグを固定参照してアーカイブ成果物を再生成し、GitHub Release `X.Y.Z` を更新する。
+  - `Release Finalize` は確定タグを固定参照し、archive が未作成または欠落している場合にアーカイブ成果物を生成して GitHub Release `X.Y.Z` を更新する。
   - `Release Finalize` は既存の確定タグ `X.Y.Z` に対しても `workflow_dispatch` で後追い実行できる。
-  - `Release Finalize` を手動再実行すると、アーカイブ assets を再生成したうえで `prerelease` / タイトル / `Operator Notes` を調整できる。`Store Submission Log` は本文中で保持する。
+  - 既存 archive が揃っている状態の `Release Finalize` 手動再実行は、アーカイブ assets を再生成せず `prerelease` / タイトル / `Operator Notes` を調整する。`Store Submission Log` は本文中で保持する。
   - `Release Finalize` に `build_store_package=true` を指定した場合のみ `.msixupload` を生成する。
+  - RC 候補と同版 archive は同一 Identity / `X.Y.Z.0` を共有するため、候補切り替えや RC から同版 archive への切り替えではアンインストールが必要になることがある。導入手順は [../distribution/ArtifactInstallation.md](../distribution/ArtifactInstallation.md) を参照する。
   - `PATCH` 更新規約は [ReleaseProcess](ReleaseProcess.md) を正本とする。
   - `store-package-*` 生成後の Partner Center 実務は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) を正本とする。
 
@@ -102,7 +103,7 @@
   ### Release Finalize 後の後処理
 
   1. `Release Finalize` の成功を確認し、GitHub Release `X.Y.Z` に `*.msixbundle` と `SHA256SUMS.txt` が揃っていること、同じ workflow 実行に対する GitHub Artifact Attestation が `gh attestation verify` で検証可能であることを確認する。
-  2. GitHub Release の見せ方を調整する必要がある場合のみ、`Release Finalize` を手動再実行する。手動再実行は metadata だけでなくアーカイブ assets も確定タグから再生成するため、`prerelease` / タイトル / `Operator Notes` の調整と asset refresh を同時に行う操作として扱う。
+  2. GitHub Release の見せ方を調整する必要がある場合のみ、`Release Finalize` を手動再実行する。既存 archive が揃っている場合、手動再実行は assets を再生成せず `prerelease` / タイトル / `Operator Notes` を更新する。既存タグに GitHub Release や archive assets が無い場合のみ、確定タグから backfill する。
   3. その版が repository 全体の最新 finalized version であり、かつ一般ユーザー向けに出す場合のみ、`Release Finalize` を `build_store_package=true` で再実行し、以後は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) のガイドに従う。Store へ出さない版は「Archive のみ」で完結してよい。
   4. 公開直後の短い監視期間を終えたら、通常の RC 更新は止めてよい。次の変更が必要になるまでは branch を静置する。
   5. 現行系列判定や旧系列の扱いは [ReleaseProcess](ReleaseProcess.md) に従う。
@@ -114,10 +115,11 @@
   3. `chore/bump-main-to-* -> main` の PR をレビューしてマージする。`Prepare Release Branch` workflow は既定でこの PR を自動作成する。
   4. `release/X.Y` の安定化を PR で反映する。
   5. `rc-X.Y-latest` と複数の公開候補（`rc-package-*`）を比較し、確定対象コミットを決定する。
+     - RC 候補の切り替え時は、同一 Identity / `X.Y.Z.0` の都合でアンインストールが必要になることがある。詳細は [../distribution/ArtifactInstallation.md](../distribution/ArtifactInstallation.md) を参照する。
   6. tag 前に最後にマージする `release/X.Y` 側 PR（通常は最終安定化 PR または RC 用 PR）で、`CHANGELOG.md` の今回出荷分を `[Unreleased]` から `## [X.Y.Z] - YYYY-MM-DD` へ移す。
   7. 確定版を決め、その commit に確定タグ `X.Y.Z` を作成する。
   8. タグ push で `Release Finalize` が走り、GitHub Release `X.Y.Z` にアーカイブ成果物が保存されたことを確認する。
-  9. GitHub Release の見せ方を調整したい場合は、`Release Finalize` を手動再実行して `prerelease` / タイトル / `Operator Notes` を更新する。再実行時はアーカイブ assets も確定タグから再生成される。
+  9. GitHub Release の見せ方を調整したい場合は、`Release Finalize` を手動再実行して `prerelease` / タイトル / `Operator Notes` を更新する。既存 archive がある場合、assets は保持される。
   10. その版が repository 全体の最新 finalized version であり、一般ユーザー向けに出す場合のみ、`Release Finalize` を `build_store_package=true` で実行して Store package を作成する。
   11. Store 提出は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) の手順に従って実行する。
 
@@ -126,7 +128,7 @@
   対象は [ReleaseProcess](ReleaseProcess.md) で定義した現行サポート系列のみとする。
 
   1. `Prepare Patch Release`（推奨）または `create-patch-release-branch.ps1` で patch init ブランチを作成する。
-     - この時点で現行版 `X.Y.Z` の確定タグと、`*.msixbundle` / `SHA256SUMS.txt` が揃った GitHub Release `X.Y.Z` が存在し、`release/X.Y` HEAD がその確定コミットにあることを確認する。
+     - この時点で現行版 `X.Y.Z` の確定タグと、`*.msixbundle` / `SHA256SUMS.txt` が揃った GitHub Release `X.Y.Z` が存在し、`release/X.Y` HEAD がその確定コミットにあるか、差分が `docs/**`, `site/**`, `.github/workflows/deploy-pages.yml`, repo ルートの `*.md` に限られることを確認する。
      - 既存タグに GitHub Release が無い、または archive 成果物が揃っていない場合は、先に `Release Finalize` を `version=X.Y.Z`, `build_store_package=false` で手動実行する。
   2. patch init PR（`chore/release-X.Y.(Z+1)-init -> release/X.Y`）をマージする。`Prepare Patch Release` workflow は既定でこの PR を自動作成する。
   3. 不具合修正を `main` へマージする。
@@ -136,7 +138,7 @@
   6. tag 前に最後にマージする `release/X.Y` 側 PR（通常は patch init PR または最終 backport PR）で、`CHANGELOG.md` の今回出荷分だけを `[Unreleased]` から `## [X.Y.Z] - YYYY-MM-DD` へ移す。
   7. その commit に確定タグ `X.Y.Z` を作成する。
   8. タグ push で `Release Finalize` が走り、GitHub Release `X.Y.Z` にアーカイブ成果物が保存されたことを確認する。
-  9. 必要なら `Release Finalize` を手動再実行して GitHub Release の表示メタデータを更新する。再実行時はアーカイブ assets も確定タグから再生成される。
+  9. 必要なら `Release Finalize` を手動再実行して GitHub Release の表示メタデータを更新する。既存 archive がある場合、assets は保持される。
   10. その版が repository 全体の最新 finalized version である場合のみ、`Release Finalize` を `build_store_package=true` で実行する。
   11. Store 提出へ進む。
 

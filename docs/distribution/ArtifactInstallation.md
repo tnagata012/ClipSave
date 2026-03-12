@@ -53,6 +53,8 @@ Add-AppxPackage -Path $bundlePath -AllowUnsigned
 
 Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を導入するとダウングレード判定になるため、先に Dev をアンインストールしてください。
 
+RC 候補同士、および RC 候補から同版 Archive への切り替えでも、同一 Identity / 同一 package version（`X.Y.Z.0`）のため上書き導入できないことがあります。別候補へ切り替える場合も、必要に応じて既存の ClipSave パッケージを削除してから導入してください。
+
 確定タグ `X.Y.Z` に対応するアーカイブ版は Store 公開の有無と独立しているため、試験リリースも同じ手順で導入できます。
 GitHub Release 側で `prerelease` 表示になっていても、導入手順や真正性確認の方法は変わりません。
 

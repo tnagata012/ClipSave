@@ -108,6 +108,7 @@ flowchart LR
 - 確定対象コミットを決め、固定タグ `X.Y.Z` を付与する。
 - タグ push または手動実行で `Release Finalize` を実行する。
 - `Release Finalize` 完了により、その系列は finalized 系列として扱う。
+- 既存 archive が揃っている版に対する `workflow_dispatch` の再実行は、archive を再生成せず GitHub Release metadata を調整する。archive が無い/不足している場合だけ backfill する。
 
 ### 4. Distribute
 
@@ -215,6 +216,7 @@ Store 提出へ進める条件は release 文書側で定義し、Partner Center
 - 前回確定版が `X.Y.Z` の場合、次回は `X.Y.(Z+1)` とする。
 - `PATCH` を更新する PR は当該サイクルで 1 回のみとする。
 - patch init 開始には、現行版 `X.Y.Z` の確定タグと、archive 成果物（`*.msixbundle`, `SHA256SUMS.txt`）が揃った GitHub Release `X.Y.Z` が存在し、`release/X.Y` HEAD がその確定コミットを指していることを要件とする。
+- ただし `release/X.Y` HEAD が確定コミットの先に進んでいても、差分が `docs/**`, `site/**`, `.github/workflows/deploy-pages.yml`, repo ルートの `*.md` に限られる場合は patch init を許容する。
 - 既存タグに GitHub Release がない、または archive 成果物が揃っていない場合は、先に `Release Finalize` を手動実行して補完する。
 - 実行手順は [Release Guide](ReleaseGuide.md) を参照する。
 
@@ -229,6 +231,7 @@ Dev と RC/Archive は同一 Identity（`Identity Name` / `Publisher`）を採�
 
 - 利点: 設定とデータの引き継ぎ、サポート手順を単純化できる。
 - 注意: Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を入れるとダウングレード判定になるため、先に Dev をアンインストールする。
+- 注意: RC 候補間、および RC 候補から同版 Archive への切り替えでも、同一 Identity / 同一 package version（`X.Y.Z.0`）のためアンインストールが必要になることがある。
 
 再検討トリガー:
 

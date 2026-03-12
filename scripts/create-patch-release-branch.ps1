@@ -6,7 +6,8 @@
 .DESCRIPTION
     Creates a patch-start branch from a release branch and bumps version once.
     - release/X.Y current version: X.Y.Z
-    - requires current HEAD to already be finalized as tag X.Y.Z and GitHub Release X.Y.Z with archive assets
+    - requires finalized tag X.Y.Z and GitHub Release X.Y.Z with archive assets
+    - release/X.Y HEAD may be ahead of the finalized tag only by docs/site/docs-only workflow files
     - patch init branch: chore/release-X.Y.(Z+1)-init
     - updates Directory.Build.props and Package.appxmanifest to X.Y.(Z+1)
     - intended for PR: patch init branch -> release/X.Y
@@ -97,6 +98,43 @@ function Get-RemoteTagCommit([string]$Remote, [string]$TagName) {
     }
 
     return $null
+}
+
+function Get-BlockingFilesAheadOfFinalizedTag([string]$TagCommit, [string]$HeadCommit) {
+    $changedFiles = @(git diff --name-only --find-renames "$TagCommit..$HeadCommit")
+    if ($LASTEXITCODE -ne 0) {
+        Fail "Failed to inspect changes between finalized tag commit '$TagCommit' and release branch HEAD '$HeadCommit'."
+    }
+
+    $changedFiles = @(
+        $changedFiles |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+
+    $allowedPatterns = @(
+        '^docs/',
+        '^site/',
+        '^\.github/workflows/deploy-pages\.yml$',
+        '^[^/]+\.md$'
+    )
+    $blockingFiles = @()
+
+    foreach ($changedFile in $changedFiles) {
+        $isAllowed = $false
+        foreach ($pattern in $allowedPatterns) {
+            if ($changedFile -match $pattern) {
+                $isAllowed = $true
+                break
+            }
+        }
+
+        if (-not $isAllowed) {
+            $blockingFiles += $changedFile
+        }
+    }
+
+    return $blockingFiles
 }
 
 Write-Host "=== Create Patch Release Branch ===" -ForegroundColor Cyan
@@ -197,7 +235,13 @@ try {
         Fail "Failed to resolve HEAD commit for $ReleaseBranch."
     }
     if ($headCommit -ne $tagCommit) {
-        Fail "Release branch HEAD ($headCommit) is not at finalized tag '$currentVersion' ($tagCommit). Start the next patch cycle only from the finalized commit."
+        $blockingFiles = Get-BlockingFilesAheadOfFinalizedTag -TagCommit $tagCommit -HeadCommit $headCommit
+        if ($blockingFiles.Count -gt 0) {
+            $blockingList = $blockingFiles -join ", "
+            Fail "Release branch HEAD ($headCommit) is ahead of finalized tag '$currentVersion' ($tagCommit) with product-affecting changes: $blockingList. Start the next patch cycle only from the finalized commit or after removing those changes."
+        }
+
+        Write-Warning "Release branch HEAD is ahead of finalized tag '$currentVersion' only by non-product files. Continuing from HEAD."
     }
 
     $repo = Resolve-GitHubRepository

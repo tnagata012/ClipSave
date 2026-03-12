@@ -29,7 +29,7 @@ function Get-ReleaseAssetSummary {
         BundleAssets      = $bundleAssets
         BundleCount       = $bundleAssets.Count
         HasChecksum       = $hasChecksum
-        HasArchiveAssets  = ($bundleAssets.Count -ge 1 -and $hasChecksum)
+        HasArchiveAssets  = ($bundleAssets.Count -eq 1 -and $hasChecksum)
     }
 }
 
@@ -97,7 +97,7 @@ function Assert-FinalizedReleaseArchive {
     }
     if (-not $status.HasArchiveAssets) {
         $assetList = if ($status.AssetNames.Count -gt 0) { $status.AssetNames -join ", " } else { "(none)" }
-        throw "GitHub Release '$Version' does not have the finalized archive assets yet. Expected at least one .msixbundle and SHA256SUMS.txt. Assets: $assetList"
+        throw "GitHub Release '$Version' does not have the finalized archive assets yet. Expected exactly one .msixbundle and SHA256SUMS.txt. Assets: $assetList"
     }
 
     if (-not $Quiet) {

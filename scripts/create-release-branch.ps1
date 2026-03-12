@@ -297,7 +297,7 @@ try {
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "1. Keep user-facing changes in CHANGELOG.md under [Unreleased] while release contents are still moving."
-    Write-Host "2. Before tagging, move shipped items in the last release-side PR (typically a stabilization/RC PR) to [$Version] - YYYY-MM-DD (see docs/ops/ReleaseNotes.md)."
+    Write-Host "2. Before tagging, move shipped items in the last release-side PR (typically a stabilization/RC PR) to [$Version] - YYYY-MM-DD (see docs/release/ReleaseNotes.md)."
     if (-not $Push) {
         Write-Host "3. Push both branches:"
         Write-Host "   git push -u origin $branchName"

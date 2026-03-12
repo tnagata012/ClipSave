@@ -6,7 +6,8 @@
 .DESCRIPTION
     Creates a patch-start branch from a release branch and bumps version once.
     - release/X.Y current version: X.Y.Z
-    - requires current HEAD to already be finalized as tag X.Y.Z and GitHub Release X.Y.Z
+    - requires finalized tag X.Y.Z and GitHub Release X.Y.Z with archive assets
+    - release/X.Y HEAD may be ahead of the finalized tag only by docs/site/docs-only workflow files
     - patch init branch: chore/release-X.Y.(Z+1)-init
     - updates Directory.Build.props and Package.appxmanifest to X.Y.(Z+1)
     - intended for PR: patch init branch -> release/X.Y
@@ -52,10 +53,13 @@ if ($ProjectRoot) {
     $projectRoot = Split-Path -Parent $PSScriptRoot
 }
 
+$scriptRoot = $PSScriptRoot
 $releasePattern = '^release/(?<major>\d+)\.(?<minor>\d+)$'
 $semverPattern = '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$'
 $propsPath = Join-Path $projectRoot "Directory.Build.props"
 $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifest"
+
+. (Join-Path $scriptRoot "release-support.ps1")
 
 function Fail([string]$Message) {
     Write-Host "`n[ERROR] $Message" -ForegroundColor Red
@@ -156,7 +160,7 @@ try {
     }
 
     Write-Host "[3/9] Validating release branch version policy..." -ForegroundColor Yellow
-    & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $ReleaseBranch
+    & (Join-Path $scriptRoot "assert-version-policy.ps1") -ProjectRoot $projectRoot -BranchName $ReleaseBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Version validation failed on $ReleaseBranch."
     }
@@ -197,7 +201,13 @@ try {
         Fail "Failed to resolve HEAD commit for $ReleaseBranch."
     }
     if ($headCommit -ne $tagCommit) {
-        Fail "Release branch HEAD ($headCommit) is not at finalized tag '$currentVersion' ($tagCommit). Start the next patch cycle only from the finalized commit."
+        $blockingFiles = Get-BlockingFilesAheadOfFinalizedTag -TagCommit $tagCommit -HeadCommit $headCommit
+        if ($blockingFiles.Count -gt 0) {
+            $blockingList = $blockingFiles -join ", "
+            Fail "Release branch HEAD ($headCommit) is ahead of finalized tag '$currentVersion' ($tagCommit) with product-affecting changes: $blockingList. Start the next patch cycle only from the finalized commit or after removing those changes."
+        }
+
+        Write-Warning "Release branch HEAD is ahead of finalized tag '$currentVersion' only by non-product files. Continuing from HEAD."
     }
 
     $repo = Resolve-GitHubRepository
@@ -210,9 +220,11 @@ try {
         Fail "GitHub CLI 'gh' is required to verify Release Finalize archive for '$currentVersion'. Install gh or use the Prepare Patch Release workflow."
     }
 
-    gh release view $currentVersion --repo $repo *> $null
+    & (Join-Path $scriptRoot "assert-finalized-release-archive.ps1") `
+        -Repository $repo `
+        -Version $currentVersion
     if ($LASTEXITCODE -ne 0) {
-        Fail "GitHub Release '$currentVersion' was not found. Wait for Release Finalize to complete before starting the next patch cycle."
+        Fail "Release Finalize archive verification failed for '$currentVersion'."
     }
     Write-Host "  [OK] Current version finalized: $currentVersion ($tagCommit)" -ForegroundColor Green
 
@@ -268,7 +280,7 @@ try {
         Fail "Failed to commit version update on $patchInitBranch."
     }
 
-    & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $ReleaseBranch
+    & (Join-Path $scriptRoot "assert-version-policy.ps1") -ProjectRoot $projectRoot -BranchName $ReleaseBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Version validation failed after update."
     }

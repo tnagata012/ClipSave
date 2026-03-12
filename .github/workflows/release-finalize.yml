@@ -49,6 +49,7 @@ env:
 jobs:
   finalize:
     runs-on: windows-latest
+    timeout-minutes: 75
 
     steps:
     - name: Resolve release finalization target
@@ -115,6 +116,79 @@ jobs:
         }
         echo "Verified release branch: $branch"
 
+    - name: Read existing GitHub Release metadata
+      id: existing_release
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $version = "${{ steps.target.outputs.VERSION }}"
+        $repo = "${{ github.repository }}"
+        $bodyPath = Join-Path $env:RUNNER_TEMP "existing-release-body.md"
+
+        $json = gh release view $version --repo $repo --json name,body,isPrerelease,assets 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $json) {
+          echo "HAS_RELEASE=false" >> $env:GITHUB_OUTPUT
+          echo "HAS_ARCHIVE_ASSETS=false" >> $env:GITHUB_OUTPUT
+          exit 0
+        }
+
+        $release = $json | ConvertFrom-Json
+        $name = ""
+        if ($release.name) {
+          $name = [string]$release.name
+        }
+        $body = ""
+        if ($release.body) {
+          $body = [string]$release.body
+        }
+        $isPrerelease = ([string]$release.isPrerelease).ToLowerInvariant()
+
+        $assetNames = @($release.assets | ForEach-Object { [string]$_.name } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        $bundleAssets = @($assetNames | Where-Object { $_ -match '\.msixbundle$' })
+        $hasChecksum = $assetNames -contains "SHA256SUMS.txt"
+        $hasArchiveAssets = ($bundleAssets.Count -eq 1 -and $hasChecksum).ToString().ToLowerInvariant()
+
+        Set-Content -Path $bodyPath -Value $body -Encoding utf8
+        echo "HAS_RELEASE=true" >> $env:GITHUB_OUTPUT
+        echo "HAS_ARCHIVE_ASSETS=$hasArchiveAssets" >> $env:GITHUB_OUTPUT
+        echo "NAME=$name" >> $env:GITHUB_OUTPUT
+        echo "IS_PRERELEASE=$isPrerelease" >> $env:GITHUB_OUTPUT
+        echo "BODY_PATH=$bodyPath" >> $env:GITHUB_OUTPUT
+
+    - name: Resolve archive handling mode
+      id: archive_mode
+      shell: pwsh
+      run: |
+        $hasArchiveAssets = "${{ steps.existing_release.outputs.HAS_ARCHIVE_ASSETS }}" -eq "true"
+        $buildStorePackage = "${{ steps.target.outputs.BUILD_STORE_PACKAGE }}" -eq "true"
+
+        if ("${{ github.event_name }}" -eq "push") {
+          $shouldBuildArchive = $true
+          $archiveMode = "tag_push_archive_build"
+        } elseif (-not $hasArchiveAssets) {
+          $shouldBuildArchive = $true
+          $archiveMode = "missing_archive_backfill"
+        } else {
+          $shouldBuildArchive = $false
+          $archiveMode = "preserve_existing_archive"
+        }
+
+        $shouldBuildBinaries = ($shouldBuildArchive -or $buildStorePackage)
+
+        echo "SHOULD_BUILD_ARCHIVE=$($shouldBuildArchive.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+        echo "SHOULD_BUILD_BINARIES=$($shouldBuildBinaries.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+        echo "ARCHIVE_MODE=$archiveMode" >> $env:GITHUB_OUTPUT
+        Write-Host "Archive mode: $archiveMode"
+        Write-Host "Build archive: $shouldBuildArchive"
+        Write-Host "Build binaries: $shouldBuildBinaries"
+
+    - name: Checkout version tag
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ steps.target.outputs.CHECKOUT_REF }}
+        fetch-depth: 0
+
     - name: Checkout workflow tooling
       uses: actions/checkout@v4
       with:
@@ -135,12 +209,6 @@ jobs:
           -Repository "${{ github.repository }}" `
           -Version "${{ steps.target.outputs.VERSION }}" `
           -ReleaseBranch "${{ steps.target.outputs.RELEASE_BRANCH }}"
-
-    - name: Checkout version tag
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ steps.target.outputs.CHECKOUT_REF }}
-        fetch-depth: 0
 
     - name: Validate tagged commit is in target release branch
       shell: pwsh
@@ -170,14 +238,17 @@ jobs:
         echo "Tagged commit verified: $ref -> $head (ancestor of origin/$branch @ $branchHead)"
 
     - name: Setup .NET
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       uses: actions/setup-dotnet@v4
       with:
         global-json-file: global.json
 
     - name: Setup MSBuild
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       uses: microsoft/setup-msbuild@v2
 
     - name: Cache NuGet packages
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       uses: actions/cache@v4
       with:
         path: ~/.nuget/packages
@@ -248,13 +319,16 @@ jobs:
         echo "MSIX version: $msixVersion"
 
     - name: Restore
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       run: dotnet restore ${{ env.SOLUTION_FILE }}
 
     - name: Security checks
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       shell: pwsh
       run: ./scripts/run-security-checks.ps1 -Configuration Release -NoRestore
 
     - name: Build app
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       shell: pwsh
       run: |
         dotnet build ${{ env.APP_PROJECT }} --configuration Release --no-restore `
@@ -264,13 +338,16 @@ jobs:
           /p:InformationalVersion="${{ steps.version.outputs.INFORMATIONAL_VERSION }}"
 
     - name: Test
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       shell: pwsh
       run: ./scripts/run-tests.ps1 -Configuration Release -Verbosity normal
 
     - name: Restore app assets for MSIX runtime
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       run: dotnet restore ${{ env.APP_PROJECT }} --runtime win-x86
 
     - name: Set MSIX manifest version
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       shell: pwsh
       run: |
         $manifestPath = "src/ClipSave.Package/Package.appxmanifest"
@@ -286,6 +363,7 @@ jobs:
         Write-Host "Updated Package.appxmanifest version to ${{ steps.version.outputs.MSIX_VERSION }}"
 
     - name: Build release archive package
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
       shell: pwsh
       run: |
         msbuild src/ClipSave.Package/ClipSave.Package.wapproj `
@@ -301,6 +379,8 @@ jobs:
           /p:AppxPackageSigningEnabled=false
 
     - name: Validate release archive bundle version
+      id: archive_bundle
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
       shell: pwsh
       run: |
         $outputDir = "${{ github.workspace }}/output"
@@ -319,9 +399,11 @@ jobs:
         if ($bundle.Name -notmatch $pattern) {
           throw "Bundle filename does not contain expected version '$expectedVersion'. Found: $($bundle.Name)"
         }
+        echo "BUNDLE_NAME=$($bundle.Name)" >> $env:GITHUB_OUTPUT
         Write-Host "Unsigned bundle version validated: $($bundle.Name)"
 
     - name: Generate SHA256 checksums
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
       shell: pwsh
       run: |
         $outputDir = "${{ github.workspace }}/output"
@@ -344,6 +426,7 @@ jobs:
         Write-Host "Generated checksum file: $checksumFile (subject: $relativePath)"
 
     - name: Upload release archive artifact
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
       uses: actions/upload-artifact@v4
       with:
         name: release-archive-${{ steps.version.outputs.VERSION }}
@@ -354,44 +437,12 @@ jobs:
         retention-days: 30
 
     - name: Generate artifact attestation
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
       uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
       with:
         subject-path: |
           output/**/*.msixbundle
           output/SHA256SUMS.txt
-
-    - name: Read existing GitHub Release metadata
-      id: existing_release
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        $version = "${{ steps.version.outputs.VERSION }}"
-        $repo = "${{ github.repository }}"
-        $bodyPath = Join-Path $env:RUNNER_TEMP "existing-release-body.md"
-
-        $json = gh release view $version --repo $repo --json name,body,isPrerelease 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $json) {
-          echo "HAS_RELEASE=false" >> $env:GITHUB_OUTPUT
-          exit 0
-        }
-
-        $release = $json | ConvertFrom-Json
-        $name = ""
-        if ($release.name) {
-          $name = [string]$release.name
-        }
-        $body = ""
-        if ($release.body) {
-          $body = [string]$release.body
-        }
-        $isPrerelease = ([string]$release.isPrerelease).ToLowerInvariant()
-
-        Set-Content -Path $bodyPath -Value $body -Encoding utf8
-        echo "HAS_RELEASE=true" >> $env:GITHUB_OUTPUT
-        echo "NAME=$name" >> $env:GITHUB_OUTPUT
-        echo "IS_PRERELEASE=$isPrerelease" >> $env:GITHUB_OUTPUT
-        echo "BODY_PATH=$bodyPath" >> $env:GITHUB_OUTPUT
 
     - name: Resolve GitHub Release presentation
       id: presentation
@@ -423,6 +474,7 @@ jobs:
         $msixVersion = "${{ steps.version.outputs.MSIX_VERSION }}"
         $commitSha = "${{ steps.version.outputs.COMMIT_SHA }}"
         $defaultTitle = "Version $version (Release Archive)"
+        $shouldBuildArchive = "${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE }}" -eq "true"
 
         $hasExistingRelease = "${{ steps.existing_release.outputs.HAS_RELEASE }}" -eq "true"
         $existingName = "${{ steps.existing_release.outputs.NAME }}".Trim()
@@ -468,9 +520,9 @@ jobs:
           $storeSubmissionLog = "None yet."
         }
 
-        $body = @"
-        ## Release Archive (Unsigned)
-
+        $archiveSection = Get-MarkdownSection -Body $existingBody -Heading "Release Archive (Unsigned)"
+        if ($shouldBuildArchive -or -not $archiveSection) {
+          $archiveSection = @"
         | Item | Value |
         |------|-------|
         | **Version** | ``$($version)`` |
@@ -486,6 +538,14 @@ jobs:
         | **Build** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
         > This GitHub Release archives an immutable verification artifact. Store package generation, if needed, is a separate mode of this workflow.
+        "@
+        }
+        $archiveSection = $archiveSection.Trim()
+
+        $body = @"
+        ## Release Archive (Unsigned)
+
+        $archiveSection
 
         ## Operator Notes
         $operatorNotes
@@ -501,39 +561,8 @@ jobs:
         echo "PRERELEASE=$prerelease" >> $env:GITHUB_OUTPUT
         echo "BODY_PATH=$bodyPath" >> $env:GITHUB_OUTPUT
 
-    - name: Cleanup existing release archive assets
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        $tag = "${{ steps.version.outputs.VERSION }}"
-        $repo = "${{ github.repository }}"
-
-        $assetNames = gh release view $tag --repo $repo --json assets --jq '.assets[].name' 2>$null
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "Release '$tag' not found. Skipping archive asset cleanup."
-          exit 0
-        }
-
-        $managedAssets = @(
-          $assetNames |
-            Where-Object { $_ -and $_.Trim() -ne "" } |
-            Where-Object { $_ -eq "SHA256SUMS.txt" -or $_ -match '\.msixbundle$' }
-        )
-        if ($managedAssets.Count -eq 0) {
-          Write-Host "No managed archive assets to cleanup in '$tag'."
-          exit 0
-        }
-
-        foreach ($asset in $managedAssets) {
-          gh release delete-asset $tag $asset --repo $repo --yes *> $null
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to delete managed archive asset '$asset' from release '$tag'."
-          }
-          Write-Host "Deleted managed archive asset: $asset"
-        }
-
     - name: Publish GitHub Release archive
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
       uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
       with:
         tag_name: ${{ steps.version.outputs.VERSION }}
@@ -545,6 +574,28 @@ jobs:
         overwrite_files: true
         prerelease: ${{ steps.presentation.outputs.PRERELEASE }}
         make_latest: false
+
+    - name: Update GitHub Release metadata only
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE != 'true' }}
+      uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: ${{ steps.presentation.outputs.RELEASE_TITLE }}
+        body_path: ${{ steps.presentation.outputs.BODY_PATH }}
+        prerelease: ${{ steps.presentation.outputs.PRERELEASE }}
+        make_latest: false
+
+    - name: Cleanup stale archive assets
+      if: ${{ success() && steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        ./tooling/scripts/cleanup-managed-release-assets.ps1 `
+          -Repository "${{ github.repository }}" `
+          -Tag "${{ steps.version.outputs.VERSION }}" `
+          -RetainAssetNames @("${{ steps.archive_bundle.outputs.BUNDLE_NAME }}", "SHA256SUMS.txt") `
+          -IgnoreDeleteFailures
 
     - name: Build Store package
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}
@@ -601,6 +652,22 @@ jobs:
     - name: Summary
       shell: pwsh
       run: |
+        $archiveMode = "${{ steps.archive_mode.outputs.ARCHIVE_MODE }}"
+        switch ($archiveMode) {
+          "tag_push_archive_build" {
+            $archiveModeLabel = "built from tag push"
+            $archiveArtifact = "release-archive-${{ steps.version.outputs.VERSION }}"
+          }
+          "missing_archive_backfill" {
+            $archiveModeLabel = "backfilled missing archive"
+            $archiveArtifact = "release-archive-${{ steps.version.outputs.VERSION }}"
+          }
+          default {
+            $archiveModeLabel = "preserved existing archive"
+            $archiveArtifact = "not rebuilt"
+          }
+        }
+
         $buildStorePackage = "${{ steps.target.outputs.BUILD_STORE_PACKAGE }}"
         if ($buildStorePackage -eq "true") {
           $storeMode = "built"
@@ -623,7 +690,8 @@ jobs:
         | Package Version | `${{ steps.version.outputs.MSIX_VERSION }}` |
         | Release Title | `${{ steps.presentation.outputs.RELEASE_TITLE }}` |
         | Prerelease | `${{ steps.presentation.outputs.PRERELEASE }}` |
-        | Release Archive | `release-archive-${{ steps.version.outputs.VERSION }}` |
+        | Archive Mode | ``$($archiveModeLabel)`` |
+        | Release Archive Artifact | ``$($archiveArtifact)`` |
         | Store Package Mode | ``$($storeMode)`` |
         | Store Artifact | ``$($storeArtifact)`` |
         | Checksum | `SHA256SUMS.txt` |
@@ -631,5 +699,5 @@ jobs:
         | Commit SHA | `${{ steps.version.outputs.COMMIT_SHA }}` |
         | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
-        The GitHub Release archive is always refreshed from the version tag. `Operator Notes` and `Store Submission Log` are preserved across reruns unless explicitly overridden.
+        Existing archive assets are preserved on manual reruns once a finalized archive already exists. `Operator Notes` and `Store Submission Log` are preserved across reruns unless explicitly overridden.
         "@ >> $env:GITHUB_STEP_SUMMARY

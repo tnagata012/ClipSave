@@ -1,5 +1,118 @@
 # Shared helpers for release support policy checks.
 
+function Get-ReleaseAssetSummary {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        $Assets
+    )
+
+    $assetNames = @()
+    foreach ($asset in @($Assets)) {
+        if ($null -eq $asset) {
+            continue
+        }
+
+        $name = [string]$asset.name
+        if ([string]::IsNullOrWhiteSpace($name)) {
+            continue
+        }
+
+        $assetNames += $name.Trim()
+    }
+
+    $bundleAssets = @($assetNames | Where-Object { $_ -match '\.msixbundle$' })
+    $hasChecksum = $assetNames -contains "SHA256SUMS.txt"
+
+    return [PSCustomObject]@{
+        AssetNames        = $assetNames
+        BundleAssets      = $bundleAssets
+        BundleCount       = $bundleAssets.Count
+        HasChecksum       = $hasChecksum
+        HasArchiveAssets  = ($bundleAssets.Count -eq 1 -and $hasChecksum)
+    }
+}
+
+function Get-ReleaseArchiveStatus {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository,
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Repository) -or $Repository -notmatch '^[^/\s]+/[^/\s]+$') {
+        throw "Repository must be in 'owner/name' format. Actual: '$Repository'"
+    }
+
+    $versionPattern = '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$'
+    $versionMatch = [regex]::Match($Version.Trim(), $versionPattern)
+    if (-not $versionMatch.Success) {
+        throw "Invalid version format: '$Version' (expected X.Y.Z)."
+    }
+
+    $ghAvailable = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $ghAvailable) {
+        throw "GitHub CLI 'gh' is required to query finalized GitHub Releases."
+    }
+
+    $releaseJson = gh release view $Version --repo $Repository --json tagName,isDraft,assets 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseJson)) {
+        throw "GitHub Release '$Version' was not found in '$Repository'."
+    }
+
+    try {
+        $release = $releaseJson | ConvertFrom-Json -Depth 100
+    }
+    catch {
+        throw "Failed to parse GitHub Release metadata for '$Version' in '$Repository'."
+    }
+
+    $assetSummary = Get-ReleaseAssetSummary -Assets $release.assets
+
+    return [PSCustomObject]@{
+        TagName          = [string]$release.tagName
+        IsDraft          = ($release.isDraft -eq $true)
+        HasChecksum      = $assetSummary.HasChecksum
+        BundleCount      = $assetSummary.BundleCount
+        AssetNames       = $assetSummary.AssetNames
+        HasArchiveAssets = $assetSummary.HasArchiveAssets
+    }
+}
+
+function Assert-FinalizedReleaseArchive {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository,
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [switch]$Quiet = $false
+    )
+
+    $status = Get-ReleaseArchiveStatus -Repository $Repository -Version $Version
+    if ($status.IsDraft) {
+        throw "GitHub Release '$Version' exists but is still a draft."
+    }
+    if (-not $status.HasArchiveAssets) {
+        $assetList = if ($status.AssetNames.Count -gt 0) { $status.AssetNames -join ", " } else { "(none)" }
+        throw "GitHub Release '$Version' does not have the finalized archive assets yet. Expected exactly one .msixbundle and SHA256SUMS.txt. Assets: $assetList"
+    }
+
+    if (-not $Quiet) {
+        Write-Host "[OK] $Version has finalized archive assets." -ForegroundColor Green
+    }
+
+    return [PSCustomObject]@{
+        TagName          = $status.TagName
+        HasChecksum      = $status.HasChecksum
+        BundleCount      = $status.BundleCount
+        HasArchiveAssets = $status.HasArchiveAssets
+        Status           = "finalized_archive"
+    }
+}
+
 function Get-LatestFinalizedReleaseVersion {
     [CmdletBinding()]
     param(
@@ -51,6 +164,11 @@ function Get-LatestFinalizedReleaseVersion {
                 continue
             }
 
+            $assetSummary = Get-ReleaseAssetSummary -Assets $entry.assets
+            if (-not $assetSummary.HasArchiveAssets) {
+                continue
+            }
+
             $finalizedReleases += [PSCustomObject]@{
                 TagName = $tagName
                 Major   = [int]$versionMatch.Groups['major'].Value
@@ -65,7 +183,7 @@ function Get-LatestFinalizedReleaseVersion {
             return $null
         }
 
-        throw "No finalized GitHub Releases (X.Y.Z) found for '$Repository'."
+        throw "No finalized GitHub Releases (X.Y.Z with archive assets) found for '$Repository'."
     }
 
     $latestVersion = $finalizedReleases |
@@ -124,6 +242,68 @@ function Resolve-ReleaseSeriesTarget {
         Series = $targetSeries
         Label  = $targetLabel
     }
+}
+
+function Get-BlockingFilesAheadOfFinalizedTag {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TagCommit,
+        [Parameter(Mandatory = $true)]
+        [string]$HeadCommit
+    )
+
+    if ([string]::IsNullOrWhiteSpace($TagCommit) -or $TagCommit -notmatch '^[0-9a-f]{40}$') {
+        throw "TagCommit must be a full 40-character SHA. Actual: '$TagCommit'"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($HeadCommit) -or $HeadCommit -notmatch '^[0-9a-f]{40}$') {
+        throw "HeadCommit must be a full 40-character SHA. Actual: '$HeadCommit'"
+    }
+
+    git merge-base --is-ancestor $TagCommit $HeadCommit
+    $mergeBaseExit = $LASTEXITCODE
+    if ($mergeBaseExit -eq 1) {
+        throw "Finalized tag commit '$TagCommit' is not an ancestor of release branch HEAD '$HeadCommit'."
+    }
+    if ($mergeBaseExit -ne 0) {
+        throw "Failed to verify whether finalized tag commit '$TagCommit' is an ancestor of release branch HEAD '$HeadCommit'."
+    }
+
+    $changedFiles = @(git diff --name-only --find-renames "$TagCommit..$HeadCommit")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to inspect changes between finalized tag commit '$TagCommit' and release branch HEAD '$HeadCommit'."
+    }
+
+    $changedFiles = @(
+        $changedFiles |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+
+    $allowedPatterns = @(
+        '^docs/',
+        '^site/',
+        '^\.github/workflows/deploy-pages\.yml$',
+        '^[^/]+\.md$'
+    )
+
+    $blockingFiles = @()
+    foreach ($changedFile in $changedFiles) {
+        $isAllowed = $false
+        foreach ($pattern in $allowedPatterns) {
+            if ($changedFile -match $pattern) {
+                $isAllowed = $true
+                break
+            }
+        }
+
+        if (-not $isAllowed) {
+            $blockingFiles += $changedFile
+        }
+    }
+
+    return $blockingFiles
 }
 
 function Assert-LatestFinalizedVersion {

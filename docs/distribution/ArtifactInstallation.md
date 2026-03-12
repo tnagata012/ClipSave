@@ -8,7 +8,7 @@
 - Dev チャネル: `dev-latest` / `dev-package-*`
 - RC チャネル: `rc-X.Y-latest` / `rc-package-*`
 - 確定版: GitHub Release `X.Y.Z` / `release-archive-*`
-- `release/X.Y` ブランチの最新候補タグは `rc-X.Y-latest`（例: `release/1.3` -> `rc-1.3-latest`）
+- `release/X.Y` ブランチの最新候補タグは `rc-X.Y-latest`（例: `release/1.3` → `rc-1.3-latest`）
 
 ## 事前準備
 
@@ -18,10 +18,10 @@
 
 ## 導入手順
 
-1. 公式チャネル（GitHub Releases / Actions artifacts）から `*.msixbundle`（1ファイル）と `SHA256SUMS.txt` を取得する。
+1. 公式チャネル（GitHub Releases / Actions artifacts）から `*.msixbundle` と `SHA256SUMS.txt` を取得する。
    - 最新候補を試す場合は `dev-latest` / `rc-X.Y-latest` を使う。
-   - 特定の確定版（例: `0.1.0`, `0.1.1`）を試す場合は GitHub Release `X.Y.Z` を使う。
-2. `SHA256` と GitHub Artifact Attestation を検証する（推奨: `scripts/verify-artifact.ps1`）。
+   - 特定の確定版を試す場合は GitHub Release `X.Y.Z` を使う。
+2. `SHA256` と GitHub Artifact Attestation を検証する（attestation の別途ダウンロードは不要。推奨: `scripts/verify-artifact.ps1`）。
 3. `Add-AppxPackage -AllowUnsigned` で導入する。
 
 以下の例はリポジトリルートで実行し、成果物を `$artifactDir` に置く想定です。
@@ -53,8 +53,9 @@ Add-AppxPackage -Path $bundlePath -AllowUnsigned
 
 Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を導入するとダウングレード判定になるため、先に Dev をアンインストールしてください。
 
-確定タグ `X.Y.Z` に対応するアーカイブ版は Store 公開の有無と独立しているため、`0.1.0` や `0.1.1` のような試験リリースも同じ手順で導入できます。
+RC 候補同士、および RC 候補から同版 Archive への切り替えでも、同一 Identity / 同一 package version（`X.Y.Z.0`）のため上書き導入できないことがあります。別候補へ切り替える場合も、必要に応じて既存の ClipSave パッケージを削除してから導入してください。
 
+確定タグ `X.Y.Z` に対応するアーカイブ版は Store 公開の有無と独立しているため、試験リリースも同じ手順で導入できます。
 GitHub Release 側で `prerelease` 表示になっていても、導入手順や真正性確認の方法は変わりません。
 
 ```powershell
@@ -63,7 +64,7 @@ Get-AppxPackage *ClipSave* | Remove-AppxPackage
 
 ## 関連ドキュメント
 
-- [UsageGuide](../UsageGuide.md) - 一般利用者向けの使い方
-- [Signing](Signing.md) - 署名方針
-- [Deployment](Deployment.md) - 配布 Runbook
-- [Versioning](Versioning.md) - 版数規約
+- [UsageGuide](../UsageGuide.md) — 一般利用者向けの使い方
+- [ReleaseProcess](../release/ReleaseProcess.md) — 系列、タグ、チャネルの全体像
+- [ReleaseGuide](../release/ReleaseGuide.md) — 配布ガイド
+- [Signing](Signing.md) — 署名方針

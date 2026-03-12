@@ -28,6 +28,7 @@ env:
 jobs:
   prepare:
     runs-on: windows-latest
+    timeout-minutes: 20
 
     steps:
     - name: Validate input
@@ -57,7 +58,17 @@ jobs:
         fetch-depth: 0
         path: repo
 
-    - name: Verify current release version is finalized
+    - name: Checkout workflow tooling
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.repository.default_branch }}
+        path: tooling
+        fetch-depth: 1
+        sparse-checkout: |
+          scripts
+        sparse-checkout-cone-mode: true
+
+    - name: Verify current release version has finalized archive
       id: current
       shell: pwsh
       working-directory: repo
@@ -94,7 +105,16 @@ jobs:
           throw "Failed to resolve HEAD commit for $branch"
         }
         if ($headCommit -ne $tagCommit) {
-          throw "Release branch HEAD ($headCommit) is not at finalized tag '$version' ($tagCommit). Start the next patch cycle only from the finalized commit."
+          $releaseSupport = Join-Path $env:GITHUB_WORKSPACE "tooling/scripts/release-support.ps1"
+          . $releaseSupport
+          $blockingFiles = Get-BlockingFilesAheadOfFinalizedTag -TagCommit $tagCommit -HeadCommit $headCommit
+
+          if ($blockingFiles.Count -gt 0) {
+            $blockingList = $blockingFiles -join ", "
+            throw "Release branch HEAD ($headCommit) is ahead of finalized tag '$version' ($tagCommit) with product-affecting changes: $blockingList. Start the next patch cycle only from the finalized commit or after removing those changes."
+          }
+
+          Write-Warning "Release branch HEAD is ahead of finalized tag '$version' only by non-product files. Continuing from HEAD."
         }
 
         $encodedRef = [Uri]::EscapeDataString("tags/$version")
@@ -103,9 +123,12 @@ jobs:
           throw "Current version tag '$version' is not available on GitHub. Push the tag before starting the next patch cycle."
         }
 
-        gh release view $version --repo "${{ github.repository }}" *> $null
+        $assertScript = Join-Path $env:GITHUB_WORKSPACE "tooling/scripts/assert-finalized-release-archive.ps1"
+        & $assertScript `
+          -Repository "${{ github.repository }}" `
+          -Version $version
         if ($LASTEXITCODE -ne 0) {
-          throw "GitHub Release '$version' was not found. Wait for Release Finalize to complete before starting the next patch cycle."
+          throw "Release Finalize archive verification failed for '$version'."
         }
 
         echo "CURRENT_VERSION=$version" >> $env:GITHUB_OUTPUT
@@ -126,7 +149,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         $projectRoot = Join-Path $env:GITHUB_WORKSPACE "repo"
-        $scriptPath = Join-Path $projectRoot "scripts/create-patch-release-branch.ps1"
+        $scriptPath = Join-Path $env:GITHUB_WORKSPACE "tooling/scripts/create-patch-release-branch.ps1"
 
         & $scriptPath `
           -ProjectRoot $projectRoot `

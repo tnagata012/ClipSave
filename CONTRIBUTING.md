@@ -95,11 +95,10 @@ feat: Add OCR support for clipboard images
 - [テスト戦略](docs/dev/TestingStrategy.md)
 - [仕様](docs/dev/Specification.md)
 - [アーキテクチャ](docs/dev/Architecture.md)
-- [ブランチ戦略](docs/ops/BranchStrategy.md)
-- [デプロイ手順](docs/ops/Deployment.md)
-- [署名運用](docs/ops/Signing.md)
-- [バージョニング規約](docs/ops/Versioning.md)
-- [CHANGELOG 運用](docs/ops/ReleaseNotes.md)
+- [リリースプロセス](docs/release/ReleaseProcess.md)
+- [リリースガイド](docs/release/ReleaseGuide.md)
+- [署名運用](docs/distribution/Signing.md)
+- [CHANGELOG 運用](docs/release/ReleaseNotes.md)
 
 ## Questions?
 

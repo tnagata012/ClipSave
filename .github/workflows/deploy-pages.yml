@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  deployments: write
   pages: write
   id-token: write
 
@@ -20,6 +21,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
     - name: Guard main branch
@@ -45,6 +47,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -53,3 +56,76 @@ jobs:
     - name: Deploy to GitHub Pages
       id: deployment
       uses: actions/deploy-pages@v4
+
+    - name: Clean up stale Pages deployments
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $repo = "${{ github.repository }}"
+        $environment = "github-pages"
+        $maxAttempts = 6
+        $sleepSeconds = 10
+
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+          $deploymentsJson = gh api "repos/$repo/deployments?environment=$environment&per_page=100"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to list deployments for environment '$environment'."
+          }
+
+          $deployments = @($deploymentsJson | ConvertFrom-Json)
+          if ($deployments.Count -le 1) {
+            Write-Host "No stale Pages deployments found."
+            break
+          }
+
+          $orderedDeployments = @(
+            $deployments | Sort-Object { [DateTimeOffset]::Parse($_.created_at) } -Descending
+          )
+          $staleDeployments = @($orderedDeployments | Select-Object -Skip 1)
+          $pendingDeploymentStates = New-Object System.Collections.Generic.List[string]
+          $deletedDeployments = 0
+
+          foreach ($staleDeployment in $staleDeployments) {
+            $deploymentId = [string]$staleDeployment.id
+            $statusesJson = gh api "repos/$repo/deployments/$deploymentId/statuses?per_page=1"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to read statuses for deployment '$deploymentId'."
+            }
+
+            $statuses = @($statusesJson | ConvertFrom-Json)
+            $latestState = ""
+            if ($statuses.Count -gt 0 -and $null -ne $statuses[0].state) {
+              $latestState = [string]$statuses[0].state
+            }
+
+            if ($latestState -eq "inactive") {
+              gh api --method DELETE "repos/$repo/deployments/$deploymentId" *> $null
+              if ($LASTEXITCODE -ne 0) {
+                throw "Failed to delete inactive deployment '$deploymentId'."
+              }
+
+              $deletedDeployments++
+              Write-Host "Deleted inactive Pages deployment: $deploymentId"
+              continue
+            }
+
+            $pendingDeploymentStates.Add("${deploymentId}:${latestState}")
+            Write-Host "Keeping deployment $deploymentId until it becomes inactive (latest state: '$latestState')."
+          }
+
+          if ($pendingDeploymentStates.Count -eq 0) {
+            if ($deletedDeployments -eq 0) {
+              Write-Host "No stale Pages deployments required deletion."
+            }
+            break
+          }
+
+          if ($attempt -eq $maxAttempts) {
+            Write-Warning "Some stale Pages deployments were not deleted because they never became inactive: $($pendingDeploymentStates -join ', ')"
+            break
+          }
+
+          Write-Host "Waiting $sleepSeconds seconds for stale deployments to become inactive..."
+          Start-Sleep -Seconds $sleepSeconds
+        }

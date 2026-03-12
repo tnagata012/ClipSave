@@ -6,7 +6,7 @@
 .DESCRIPTION
     Creates a patch-start branch from a release branch and bumps version once.
     - release/X.Y current version: X.Y.Z
-    - requires current HEAD to already be finalized as tag X.Y.Z and GitHub Release X.Y.Z
+    - requires current HEAD to already be finalized as tag X.Y.Z and GitHub Release X.Y.Z with archive assets
     - patch init branch: chore/release-X.Y.(Z+1)-init
     - updates Directory.Build.props and Package.appxmanifest to X.Y.(Z+1)
     - intended for PR: patch init branch -> release/X.Y
@@ -210,9 +210,11 @@ try {
         Fail "GitHub CLI 'gh' is required to verify Release Finalize archive for '$currentVersion'. Install gh or use the Prepare Patch Release workflow."
     }
 
-    gh release view $currentVersion --repo $repo *> $null
+    & "$projectRoot\scripts\assert-finalized-release-archive.ps1" `
+        -Repository $repo `
+        -Version $currentVersion
     if ($LASTEXITCODE -ne 0) {
-        Fail "GitHub Release '$currentVersion' was not found. Wait for Release Finalize to complete before starting the next patch cycle."
+        Fail "Release Finalize archive verification failed for '$currentVersion'."
     }
     Write-Host "  [OK] Current version finalized: $currentVersion ($tagCommit)" -ForegroundColor Green
 

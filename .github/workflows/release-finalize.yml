@@ -49,6 +49,7 @@ env:
 jobs:
   finalize:
     runs-on: windows-latest
+    timeout-minutes: 75
 
     steps:
     - name: Resolve release finalization target
@@ -301,6 +302,7 @@ jobs:
           /p:AppxPackageSigningEnabled=false
 
     - name: Validate release archive bundle version
+      id: archive_bundle
       shell: pwsh
       run: |
         $outputDir = "${{ github.workspace }}/output"
@@ -319,6 +321,7 @@ jobs:
         if ($bundle.Name -notmatch $pattern) {
           throw "Bundle filename does not contain expected version '$expectedVersion'. Found: $($bundle.Name)"
         }
+        echo "BUNDLE_NAME=$($bundle.Name)" >> $env:GITHUB_OUTPUT
         Write-Host "Unsigned bundle version validated: $($bundle.Name)"
 
     - name: Generate SHA256 checksums
@@ -501,38 +504,6 @@ jobs:
         echo "PRERELEASE=$prerelease" >> $env:GITHUB_OUTPUT
         echo "BODY_PATH=$bodyPath" >> $env:GITHUB_OUTPUT
 
-    - name: Cleanup existing release archive assets
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        $tag = "${{ steps.version.outputs.VERSION }}"
-        $repo = "${{ github.repository }}"
-
-        $assetNames = gh release view $tag --repo $repo --json assets --jq '.assets[].name' 2>$null
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "Release '$tag' not found. Skipping archive asset cleanup."
-          exit 0
-        }
-
-        $managedAssets = @(
-          $assetNames |
-            Where-Object { $_ -and $_.Trim() -ne "" } |
-            Where-Object { $_ -eq "SHA256SUMS.txt" -or $_ -match '\.msixbundle$' }
-        )
-        if ($managedAssets.Count -eq 0) {
-          Write-Host "No managed archive assets to cleanup in '$tag'."
-          exit 0
-        }
-
-        foreach ($asset in $managedAssets) {
-          gh release delete-asset $tag $asset --repo $repo --yes *> $null
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to delete managed archive asset '$asset' from release '$tag'."
-          }
-          Write-Host "Deleted managed archive asset: $asset"
-        }
-
     - name: Publish GitHub Release archive
       uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
       with:
@@ -545,6 +516,18 @@ jobs:
         overwrite_files: true
         prerelease: ${{ steps.presentation.outputs.PRERELEASE }}
         make_latest: false
+
+    - name: Cleanup stale archive assets
+      if: ${{ success() }}
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        ./scripts/cleanup-managed-release-assets.ps1 `
+          -Repository "${{ github.repository }}" `
+          -Tag "${{ steps.version.outputs.VERSION }}" `
+          -RetainAssetNames @("${{ steps.archive_bundle.outputs.BUNDLE_NAME }}", "SHA256SUMS.txt") `
+          -IgnoreDeleteFailures
 
     - name: Build Store package
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}

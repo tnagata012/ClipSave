@@ -1,5 +1,118 @@
 # Shared helpers for release support policy checks.
 
+function Get-ReleaseAssetSummary {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        $Assets
+    )
+
+    $assetNames = @()
+    foreach ($asset in @($Assets)) {
+        if ($null -eq $asset) {
+            continue
+        }
+
+        $name = [string]$asset.name
+        if ([string]::IsNullOrWhiteSpace($name)) {
+            continue
+        }
+
+        $assetNames += $name.Trim()
+    }
+
+    $bundleAssets = @($assetNames | Where-Object { $_ -match '\.msixbundle$' })
+    $hasChecksum = $assetNames -contains "SHA256SUMS.txt"
+
+    return [PSCustomObject]@{
+        AssetNames        = $assetNames
+        BundleAssets      = $bundleAssets
+        BundleCount       = $bundleAssets.Count
+        HasChecksum       = $hasChecksum
+        HasArchiveAssets  = ($bundleAssets.Count -ge 1 -and $hasChecksum)
+    }
+}
+
+function Get-ReleaseArchiveStatus {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository,
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Repository) -or $Repository -notmatch '^[^/\s]+/[^/\s]+$') {
+        throw "Repository must be in 'owner/name' format. Actual: '$Repository'"
+    }
+
+    $versionPattern = '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$'
+    $versionMatch = [regex]::Match($Version.Trim(), $versionPattern)
+    if (-not $versionMatch.Success) {
+        throw "Invalid version format: '$Version' (expected X.Y.Z)."
+    }
+
+    $ghAvailable = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $ghAvailable) {
+        throw "GitHub CLI 'gh' is required to query finalized GitHub Releases."
+    }
+
+    $releaseJson = gh release view $Version --repo $Repository --json tagName,draft,assets 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseJson)) {
+        throw "GitHub Release '$Version' was not found in '$Repository'."
+    }
+
+    try {
+        $release = $releaseJson | ConvertFrom-Json -Depth 100
+    }
+    catch {
+        throw "Failed to parse GitHub Release metadata for '$Version' in '$Repository'."
+    }
+
+    $assetSummary = Get-ReleaseAssetSummary -Assets $release.assets
+
+    return [PSCustomObject]@{
+        TagName          = [string]$release.tagName
+        IsDraft          = ($release.draft -eq $true)
+        HasChecksum      = $assetSummary.HasChecksum
+        BundleCount      = $assetSummary.BundleCount
+        AssetNames       = $assetSummary.AssetNames
+        HasArchiveAssets = $assetSummary.HasArchiveAssets
+    }
+}
+
+function Assert-FinalizedReleaseArchive {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository,
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [switch]$Quiet = $false
+    )
+
+    $status = Get-ReleaseArchiveStatus -Repository $Repository -Version $Version
+    if ($status.IsDraft) {
+        throw "GitHub Release '$Version' exists but is still a draft."
+    }
+    if (-not $status.HasArchiveAssets) {
+        $assetList = if ($status.AssetNames.Count -gt 0) { $status.AssetNames -join ", " } else { "(none)" }
+        throw "GitHub Release '$Version' does not have the finalized archive assets yet. Expected at least one .msixbundle and SHA256SUMS.txt. Assets: $assetList"
+    }
+
+    if (-not $Quiet) {
+        Write-Host "[OK] $Version has finalized archive assets." -ForegroundColor Green
+    }
+
+    return [PSCustomObject]@{
+        TagName          = $status.TagName
+        HasChecksum      = $status.HasChecksum
+        BundleCount      = $status.BundleCount
+        HasArchiveAssets = $status.HasArchiveAssets
+        Status           = "finalized_archive"
+    }
+}
+
 function Get-LatestFinalizedReleaseVersion {
     [CmdletBinding()]
     param(
@@ -51,6 +164,11 @@ function Get-LatestFinalizedReleaseVersion {
                 continue
             }
 
+            $assetSummary = Get-ReleaseAssetSummary -Assets $entry.assets
+            if (-not $assetSummary.HasArchiveAssets) {
+                continue
+            }
+
             $finalizedReleases += [PSCustomObject]@{
                 TagName = $tagName
                 Major   = [int]$versionMatch.Groups['major'].Value
@@ -65,7 +183,7 @@ function Get-LatestFinalizedReleaseVersion {
             return $null
         }
 
-        throw "No finalized GitHub Releases (X.Y.Z) found for '$Repository'."
+        throw "No finalized GitHub Releases (X.Y.Z with archive assets) found for '$Repository'."
     }
 
     $latestVersion = $finalizedReleases |

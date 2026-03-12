@@ -214,8 +214,8 @@ Store 提出へ進める条件は release 文書側で定義し、Partner Center
 - patch release は現行サポート系列でのみ行う。
 - 前回確定版が `X.Y.Z` の場合、次回は `X.Y.(Z+1)` とする。
 - `PATCH` を更新する PR は当該サイクルで 1 回のみとする。
-- patch init 開始には、現行版 `X.Y.Z` の確定タグと GitHub Release `X.Y.Z` が存在し、`release/X.Y` HEAD がその確定コミットを指していることを要件とする。
-- 既存タグに GitHub Release がない場合は、先に `Release Finalize` を手動実行して補完する。
+- patch init 開始には、現行版 `X.Y.Z` の確定タグと、archive 成果物（`*.msixbundle`, `SHA256SUMS.txt`）が揃った GitHub Release `X.Y.Z` が存在し、`release/X.Y` HEAD がその確定コミットを指していることを要件とする。
+- 既存タグに GitHub Release がない、または archive 成果物が揃っていない場合は、先に `Release Finalize` を手動実行して補完する。
 - 実行手順は [Release Guide](ReleaseGuide.md) を参照する。
 
 ### Dev Build

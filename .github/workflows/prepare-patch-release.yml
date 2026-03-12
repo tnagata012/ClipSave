@@ -28,6 +28,7 @@ env:
 jobs:
   prepare:
     runs-on: windows-latest
+    timeout-minutes: 20
 
     steps:
     - name: Validate input
@@ -57,7 +58,7 @@ jobs:
         fetch-depth: 0
         path: repo
 
-    - name: Verify current release version is finalized
+    - name: Verify current release version has finalized archive
       id: current
       shell: pwsh
       working-directory: repo
@@ -103,9 +104,11 @@ jobs:
           throw "Current version tag '$version' is not available on GitHub. Push the tag before starting the next patch cycle."
         }
 
-        gh release view $version --repo "${{ github.repository }}" *> $null
+        ./scripts/assert-finalized-release-archive.ps1 `
+          -Repository "${{ github.repository }}" `
+          -Version $version
         if ($LASTEXITCODE -ne 0) {
-          throw "GitHub Release '$version' was not found. Wait for Release Finalize to complete before starting the next patch cycle."
+          throw "Release Finalize archive verification failed for '$version'."
         }
 
         echo "CURRENT_VERSION=$version" >> $env:GITHUB_OUTPUT

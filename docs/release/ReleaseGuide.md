@@ -126,8 +126,8 @@
   対象は [ReleaseProcess](ReleaseProcess.md) で定義した現行サポート系列のみとする。
 
   1. `Prepare Patch Release`（推奨）または `create-patch-release-branch.ps1` で patch init ブランチを作成する。
-     - この時点で現行版 `X.Y.Z` の確定タグと GitHub Release `X.Y.Z` が存在し、`release/X.Y` HEAD がその確定コミットにあることを確認する。
-     - 既存タグに GitHub Release が無い場合は、先に `Release Finalize` を `version=X.Y.Z`, `build_store_package=false` で手動実行する。
+     - この時点で現行版 `X.Y.Z` の確定タグと、`*.msixbundle` / `SHA256SUMS.txt` が揃った GitHub Release `X.Y.Z` が存在し、`release/X.Y` HEAD がその確定コミットにあることを確認する。
+     - 既存タグに GitHub Release が無い、または archive 成果物が揃っていない場合は、先に `Release Finalize` を `version=X.Y.Z`, `build_store_package=false` で手動実行する。
   2. patch init PR（`chore/release-X.Y.(Z+1)-init -> release/X.Y`）をマージする。`Prepare Patch Release` workflow は既定でこの PR を自動作成する。
   3. 不具合修正を `main` へマージする。
   4. `release/X.Y` をベースにした `fix/*` backport ブランチで必要コミットを `cherry-pick -x` し、PR で `release/X.Y` へ反映する。

@@ -44,6 +44,7 @@
   - `.NET` SDK の解決はリポジトリ直下の `global.json` を単一の正本とし、workflow の `actions/setup-dotnet` は `global-json-file: global.json` を参照する。
   - `pr-check.yml` は workflow lint を常時実行し、website-only PR（`site/**`, `.github/workflows/deploy-pages.yml`, `docs/presentation/LandingPage.md` のみ変更）のときは restore / build / test を skip する。
   - `deploy-pages.yml` は `workflow_dispatch` でも `main` 以外では失敗するため、手動実行は `main` を前提とする。
+  - `deploy-pages.yml` は公開成功後、`github-pages` 環境の古い inactive deployment を cleanup する。
   - `dev-latest` と `rc-X.Y-latest` は確定タグではなく移動タグ（floating tag）として運用し、各 workflow 成功時に実行コミットへ更新する。
   - `release/X.Y` ブランチの配布タグは `rc-X.Y-latest`（例: `release/1.3` → `rc-1.3-latest`）。
   - `rc-X.Y-latest` の GitHub Release は候補版として常に `prerelease` 表示にする。

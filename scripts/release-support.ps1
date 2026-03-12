@@ -57,7 +57,7 @@ function Get-ReleaseArchiveStatus {
         throw "GitHub CLI 'gh' is required to query finalized GitHub Releases."
     }
 
-    $releaseJson = gh release view $Version --repo $Repository --json tagName,draft,assets 2>$null
+    $releaseJson = gh release view $Version --repo $Repository --json tagName,isDraft,assets 2>$null
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseJson)) {
         throw "GitHub Release '$Version' was not found in '$Repository'."
     }
@@ -73,7 +73,7 @@ function Get-ReleaseArchiveStatus {
 
     return [PSCustomObject]@{
         TagName          = [string]$release.tagName
-        IsDraft          = ($release.draft -eq $true)
+        IsDraft          = ($release.isDraft -eq $true)
         HasChecksum      = $assetSummary.HasChecksum
         BundleCount      = $assetSummary.BundleCount
         AssetNames       = $assetSummary.AssetNames

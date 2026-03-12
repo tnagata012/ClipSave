@@ -53,6 +53,7 @@ if ($ProjectRoot) {
     $projectRoot = Split-Path -Parent $PSScriptRoot
 }
 
+$scriptRoot = $PSScriptRoot
 $releasePattern = '^release/(?<major>\d+)\.(?<minor>\d+)$'
 $semverPattern = '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$'
 $propsPath = Join-Path $projectRoot "Directory.Build.props"
@@ -194,7 +195,7 @@ try {
     }
 
     Write-Host "[3/9] Validating release branch version policy..." -ForegroundColor Yellow
-    & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $ReleaseBranch
+    & (Join-Path $scriptRoot "assert-version-policy.ps1") -ProjectRoot $projectRoot -BranchName $ReleaseBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Version validation failed on $ReleaseBranch."
     }
@@ -254,7 +255,7 @@ try {
         Fail "GitHub CLI 'gh' is required to verify Release Finalize archive for '$currentVersion'. Install gh or use the Prepare Patch Release workflow."
     }
 
-    & "$projectRoot\scripts\assert-finalized-release-archive.ps1" `
+    & (Join-Path $scriptRoot "assert-finalized-release-archive.ps1") `
         -Repository $repo `
         -Version $currentVersion
     if ($LASTEXITCODE -ne 0) {
@@ -314,7 +315,7 @@ try {
         Fail "Failed to commit version update on $patchInitBranch."
     }
 
-    & "$projectRoot\scripts\assert-version-policy.ps1" -ProjectRoot $projectRoot -BranchName $ReleaseBranch
+    & (Join-Path $scriptRoot "assert-version-policy.ps1") -ProjectRoot $projectRoot -BranchName $ReleaseBranch
     if ($LASTEXITCODE -ne 0) {
         Fail "Version validation failed after update."
     }

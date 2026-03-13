@@ -1,24 +1,24 @@
 # Store 提出実務
 
-Microsoft Store の Partner Center で行う提出実務を、再現可能な手順として定義する。
+**このドキュメントの目的**: Microsoft Store の Partner Center で行う提出実務を、再現可能な手順として定義します。
 
-## この文書の責務
+## このドキュメントの役割
 
-この文書では、以下を扱う。
+このドキュメントでは、以下を扱う。
 
 - `store-package-*` 取得後の Partner Center 操作
 - Store metadata / listing / 審査向け補足の入力方針
 - listing CSV と画像素材の運用
 - 提出記録と証跡の残し方
 
-この文書では、以下は扱わない。
+このドキュメントでは、以下は扱わない。
 
 - latest-only や finalized version の判定（[../../release/ReleaseProcess.md](../../release/ReleaseProcess.md)）
 - `Release Finalize` の実行や `store-package-*` 生成（[../../release/ReleaseGuide.md](../../release/ReleaseGuide.md)）
 
 ## 開始条件
 
-この文書の手順を始める前に、次を満たしていること。
+このドキュメントの手順を始める前に、次を満たしていること。
 
 - 対象版が [../../release/ReleaseProcess.md](../../release/ReleaseProcess.md) の Store チャネル進行条件を満たしている。
 - [../../release/ReleaseGuide.md](../../release/ReleaseGuide.md) に従って `Release Finalize` の Store package mode が成功している。

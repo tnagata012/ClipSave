@@ -1,9 +1,9 @@
 # リリースプロセス
 
-ClipSave のリリース系列、版数、タグ、配布チャネル、`Release Finalize`、Store 公開の関係を定義します。
-`docs/release` 領域の正本はこの文書とし、実行手順は [Release Guide](ReleaseGuide.md)、CHANGELOG 記法は [ReleaseNotes](ReleaseNotes.md) に分離します。
+**このドキュメントの目的**: ClipSave のリリース系列、版数、タグ、配布チャネル、`Release Finalize`、Store 公開の関係を定義します。
+`docs/release` 領域の正本はこのドキュメントとし、実行手順は [Release Guide](ReleaseGuide.md)、CHANGELOG 記法は [ReleaseNotes](ReleaseNotes.md) に分離します。
 
-## この文書の役割
+## このドキュメントの役割
 
 - `main` / `release/X.Y` / 確定タグ `X.Y.Z` の関係を定義する
 - ブランチ種別、統合方向、版数とタグのルールをまとめる
@@ -11,17 +11,17 @@ ClipSave のリリース系列、版数、タグ、配布チャネル、`Release
 - latest-only 運用とサポート終了の判定基準を明文化する
 - `Release Finalize` と Store 公開の関係、Store への handoff 条件を整理する
 
-この文書では、workflow の実行手順、Partner Center 入力手順、CHANGELOG の具体的な記法までは扱いません。
+このドキュメントでは、workflow の実行手順、Partner Center 入力手順、CHANGELOG の具体的な記法までは扱いません。
 
 ## 全体像
 
 | 要素                   | 役割                     | 正本                                                         |
 | ---------------------- | ------------------------ | ------------------------------------------------------------ |
-| `main`                 | 次期開発の幹             | この文書                                                     |
-| `release/X.Y`          | 安定化と現行系列サポート | この文書                                                     |
-| `dev-latest`           | `main` の最新検証成果物  | この文書 / [Release Guide](ReleaseGuide.md)                  |
-| `rc-X.Y-latest`        | `release/X.Y` の最新候補 | この文書 / [Release Guide](ReleaseGuide.md)                  |
-| `X.Y.Z`                | 確定版を指す固定タグ     | この文書                                                     |
+| `main`                 | 次期開発の幹             | このドキュメント                                             |
+| `release/X.Y`          | 安定化と現行系列サポート | このドキュメント                                             |
+| `dev-latest`           | `main` の最新検証成果物  | このドキュメント / [Release Guide](ReleaseGuide.md)          |
+| `rc-X.Y-latest`        | `release/X.Y` の最新候補 | このドキュメント / [Release Guide](ReleaseGuide.md)          |
+| `X.Y.Z`                | 確定版を指す固定タグ     | このドキュメント                                             |
 | GitHub Release `X.Y.Z` | 確定版アーカイブの保存先 | [Release Guide](ReleaseGuide.md)                             |
 | Store package          | 一般ユーザー向け公開物   | [Release Guide](ReleaseGuide.md) / [Store Submission](../distribution/store/StoreSubmission.md) |
 

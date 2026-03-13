@@ -1,5 +1,6 @@
 # 検証アーティファクト導入手順
 
+**このドキュメントの目的**: `dev-latest` / `rc-X.Y-latest` / 確定タグ `X.Y.Z` の `*.msixbundle` を検証し、導入する手順を定義します。
 `dev-latest` / `rc-X.Y-latest` / 確定タグ `X.Y.Z` の `*.msixbundle` は、開発者向けの未署名成果物です。
 本番配布（一般ユーザー向け）は Store チャネルを利用してください。
 

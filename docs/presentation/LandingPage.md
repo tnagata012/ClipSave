@@ -1,6 +1,6 @@
 # ランディングページ運用
 
-ClipSave のランディングページ（`site/`）の更新方針と確認手順を定義します。
+**このドキュメントの目的**: ClipSave のランディングページ（`site/`）の更新方針と確認手順を定義します。
 
 ## 対象ファイル
 
@@ -46,7 +46,7 @@ python -m http.server 4173 --directory site
 - `main` に対する `site/**` の変更は `Deploy Pages` workflow（`.github/workflows/deploy-pages.yml`）で自動公開する
 - `Deploy Pages` の手動実行は再公開や workflow 変更反映の用途に限定し、`main` ブランチからのみ実行する
 - `site/**` と `docs/presentation/LandingPage.md` だけの変更ではアプリ本体の `Dev Build` / `RC Build` は起動しない
-- `PR Check` は必須チェックを維持したまま、website-only PR のときは restore / build / test を skip する
+- `PR Check` は必須チェックを維持したまま、website-only PR のときはアプリ本体の restore / security / build / test / spec coverage を skip する
 
 ## 運用ルール
 

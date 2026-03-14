@@ -74,7 +74,8 @@ flowchart TB
 - **HotkeyService**: グローバルホットキーの登録・解除・イベント
 - **SavePipeline**: 保存処理のオーケストレーション、排他制御
 - **ActiveWindowService**: アクティブウィンドウ判定、保存先フォルダ決定
-- **ClipboardService**: クリップボードからコンテンツ取得、種別判別、リトライ
+- **ClipboardService**: クリップボードからコンテンツ取得、STA 制約の管理、リトライ
+- **ClipboardTextClassifier**: テキストの種別判別（CSV / JSON / Markdown / Text）
 - **ContentEncodingService**: コンテンツ種別に応じたエンコード処理
 - **ImageEncodingService**: PNG/JPG エンコード、透過処理
 - **FileStorageService**: ファイル保存、重複対応、原子的書き込み
@@ -90,7 +91,7 @@ flowchart TB
 - `Infrastructure/Startup`: 起動時の DI 構築、ライフサイクルオーケストレーション、ウィンドウ/ホットキー協調、ホットキー受信用ウィンドウ生成
 - `ViewModels/About`, `ViewModels/Settings`: 画面機能単位の ViewModel
 - `Views/About`, `Views/Settings`: 画面機能単位の WPF ビュー
-- `Services/Encoding`: コンテンツ/画像エンコード、区切り文字テキスト変換
+- `Services/Encoding`: コンテンツ/画像エンコード、区切り文字テキスト変換、テキスト種別判別
 - `Services/Platform`: OS 連携（クリップボード、ホットキー、トレイ、単一起動、アクティブウィンドウ）
 - `Services/Persistence`: 設定・ファイル保存・クラッシュダンプなど永続化
 - `Services/Pipeline`: 保存オーケストレーション（`SavePipeline`）
@@ -194,7 +195,7 @@ ClipSave は WPF アプリケーションとして実装されており、以下
 - **実行内容**:
   - `TrayService`: NotifyIcon の操作、コンテキストメニュー表示
   - `HotkeyService`: WM_HOTKEY メッセージの受信、RegisterHotKey API 呼び出し
-  - `ClipboardService`: Clipboard API の呼び出し（STA 必須要件）
+  - `ClipboardService`: Clipboard API の呼び出し、テキストスナップショット取得（STA 必須要件）
   - `ActiveWindowService`: Shell COM を用いたエクスプローラーパス取得
   - `SavePipeline`: 画像をバックグラウンド処理可能な `BitmapSource` にデタッチ（`CopyPixels`）
   - `SettingsWindow`: XAML ビューの表示、データバインディング
@@ -202,6 +203,7 @@ ClipSave は WPF アプリケーションとして実装されており、以下
 #### バックグラウンドスレッド
 - **責務**: 非同期 I/O 処理、プロセス間通信
 - **主な実行内容**:
+  - `ClipboardTextClassifier`: 取得済みテキストの種別判別（CSV / JSON / Markdown / Text）
   - `ContentEncodingService`: 画像スナップショットのエンコード処理（画像経路）
   - `FileStorageService.SaveFileAsync()`: ファイル書き込み処理
   - `SingleInstanceService`: Named Pipe サーバー（二重起動検出用）

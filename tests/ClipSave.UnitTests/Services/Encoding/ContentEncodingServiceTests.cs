@@ -4,6 +4,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System.Text;
+using System.Threading;
 using System.Windows.Media.Imaging;
 
 namespace ClipSave.UnitTests;
@@ -279,5 +280,78 @@ public class ContentEncodingServiceTests
         // Assert
         extension.Should().Be("jpg");
         data.Take(3).Should().Equal(new byte[] { 0xFF, 0xD8, 0xFF }); // JPEG header
+    }
+
+    [Fact]
+    public void Encode_TextContent_OnMtaThread_Succeeds()
+    {
+        var (data, extension) = RunOnMtaThread(() => _service.Encode(
+            new TextContent("Hello from MTA"),
+            _defaultSettings));
+
+        extension.Should().Be("txt");
+        Encoding.UTF8.GetString(data).Should().Be("Hello from MTA");
+    }
+
+    [Fact]
+    public void Encode_MarkdownContent_OnMtaThread_Succeeds()
+    {
+        var markdown = "# Title\n\n- Item";
+        var (data, extension) = RunOnMtaThread(() => _service.Encode(
+            new MarkdownContent(markdown),
+            _defaultSettings));
+
+        extension.Should().Be("md");
+        Encoding.UTF8.GetString(data).Should().Be(markdown);
+    }
+
+    [Fact]
+    public void Encode_JsonContent_OnMtaThread_Succeeds()
+    {
+        var formattedJson = """
+            {
+              "name": "test"
+            }
+            """;
+        var (data, extension) = RunOnMtaThread(() => _service.Encode(
+            new JsonContent("""{"name":"test"}""", formattedJson),
+            _defaultSettings));
+
+        extension.Should().Be("json");
+        Encoding.UTF8.GetString(data).Should().Be(formattedJson);
+    }
+
+    [Fact]
+    public void Encode_CsvContent_OnMtaThread_Succeeds()
+    {
+        var (data, extension) = RunOnMtaThread(() => _service.Encode(
+            new CsvContent("Name\tAge\nAlice\t30", 2, 2),
+            _defaultSettings));
+
+        extension.Should().Be("csv");
+        Encoding.UTF8.GetString(data.Skip(3).ToArray()).Should().Contain("Name,Age");
+    }
+
+    private static T RunOnMtaThread<T>(Func<T> action)
+    {
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                tcs.SetResult(action());
+            }
+            catch (Exception ex)
+            {
+                tcs.SetException(ex);
+            }
+        });
+
+        thread.IsBackground = true;
+        thread.SetApartmentState(ApartmentState.MTA);
+        thread.Start();
+
+        return tcs.Task.GetAwaiter().GetResult();
     }
 }

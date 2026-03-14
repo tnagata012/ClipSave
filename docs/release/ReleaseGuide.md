@@ -19,7 +19,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | [pr-check.yml](../../.github/workflows/pr-check.yml) | PR（`main`, `release/*`） | 品質ゲート | `TestResults/**/*.trx` |
 | [deploy-pages.yml](../../.github/workflows/deploy-pages.yml) | `main` push（`site/**`） / 手動（`main` のみ） | GitHub Pages 公開 | GitHub Pages site artifact |
-| [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y.0`） | `release/X.Y` 作成 + `main` 側 bump ブランチ作成、任意で PR 作成 | `release/X.Y`, `chore/bump-main-to-*` |
+| [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y`。内部で `X.Y.0` に展開） | `release/X.Y` 作成 + `main` 側 bump ブランチ作成、任意で PR 作成 | `release/X.Y`, `chore/bump-main-to-*` |
 | [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`） | patch init ブランチ作成、任意で PR 作成 | `chore/release-X.Y.(Z+1)-init` |
 | [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
 | [rc-build.yml](../../.github/workflows/rc-build.yml) | `release/*` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 公開候補生成（未署名） | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
@@ -70,7 +70,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 
 ### メジャー/マイナーリリース
 
-1. `Prepare Release Branch`（推奨）または `create-release-branch.ps1` で `release/X.Y` を作成する。
+1. `Prepare Release Branch`（推奨、workflow 入力は `X.Y`。内部で `X.Y.0` に展開）または `create-release-branch.ps1`（`-Version X.Y`）で `release/X.Y` を作成する。
 2. 必要に応じて `next_main_version` / `-NextMainVersion` を指定し、`main` を次の近接系列ではなく将来系列（例: `0.5.0`）へ進める。
 3. `chore/bump-main-to-* -> main` の PR をレビューしてマージする。`Prepare Release Branch` workflow は既定でこの PR を自動作成する。
 4. `release/X.Y` の安定化を PR で反映する。

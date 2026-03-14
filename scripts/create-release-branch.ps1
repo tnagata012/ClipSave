@@ -10,7 +10,7 @@
     - Package.appxmanifest always keeps numeric X.Y.Z.0
 
 .PARAMETER Version
-    Target release version (e.g., 1.3.0)
+    Target release series (e.g., 1.3)
 
 .PARAMETER MainBranch
     Trunk branch name (default: main)
@@ -26,15 +26,15 @@
     Push branches to origin (default: false)
 
 .EXAMPLE
-    .\create-release-branch.ps1 -Version 1.3.0
+    .\create-release-branch.ps1 -Version 1.3
     # Creates release/1.3 at 1.3.0 and creates a PR branch for main=1.4.0
 
 .EXAMPLE
-    .\create-release-branch.ps1 -Version 0.1.0 -NextMainVersion 0.5.0
+    .\create-release-branch.ps1 -Version 0.1 -NextMainVersion 0.5.0
     # Creates release/0.1 at 0.1.0 and creates a PR branch for main=0.5.0
 
 .EXAMPLE
-    .\create-release-branch.ps1 -Version 1.3.0 -Push
+    .\create-release-branch.ps1 -Version 1.3 -Push
     # Same as above, then pushes release + PR branch
 #>
 
@@ -58,21 +58,17 @@ function Fail([string]$Message) {
     exit 1
 }
 
-# Validate target release version format (X.Y.Z)
-if ($Version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
-    Fail "Invalid version format. Use X.Y.Z (example: 1.3.0)."
+# Validate target release series format (X.Y)
+if ($Version -notmatch '^(?<major>\d+)\.(?<minor>\d+)$') {
+    Fail "Invalid version format. Use X.Y (example: 1.3)."
 }
 
 $major = [int]$matches['major']
 $minor = [int]$matches['minor']
-$patch = [int]$matches['patch']
-
-if ($patch -ne 0) {
-    Fail "Release branch creation only supports .0 versions (example: 1.3.0). Use release branch updates for patch releases."
-}
+$releaseVersion = "$major.$minor.0"
 
 $branchName = "release/$major.$minor"
-$releaseVersionTuple = @($major, $minor, $patch)
+$releaseVersionTuple = @($major, $minor, 0)
 
 if ($NextMainVersion) {
     if ($NextMainVersion -notmatch '^(?<nextMajor>\d+)\.(?<nextMinor>\d+)\.(?<nextPatch>\d+)$') {
@@ -94,7 +90,7 @@ if ($NextMainVersion) {
         ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -eq $releaseVersionTuple[1] -and $nextVersionTuple[2] -gt $releaseVersionTuple[2])
 
     if (-not $isGreater) {
-        Fail "NextMainVersion must be greater than release version $Version. Actual: $NextMainVersion"
+        Fail "NextMainVersion must be greater than release version $releaseVersion. Actual: $NextMainVersion"
     }
 
     $nextMainVersion = "$nextMajor.$nextMinor.$nextPatch"
@@ -109,7 +105,7 @@ $propsPath = Join-Path $projectRoot "Directory.Build.props"
 $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifest"
 
 Write-Host "=== Create Release Branch (Trunk-Based Development) ===" -ForegroundColor Cyan
-Write-Host "Release branch: $branchName (version $Version)" -ForegroundColor White
+Write-Host "Release branch: $branchName (version $releaseVersion)" -ForegroundColor White
 Write-Host "Main branch   : $MainBranch (target version $nextMainVersion via PR branch)" -ForegroundColor White
 Write-Host "PR branch     : $mainBumpBranch" -ForegroundColor White
 Write-Host ""
@@ -172,7 +168,7 @@ try {
     $mainMajor = [int]$matches['major']
     $mainMinor = [int]$matches['minor']
     if ($mainMajor -ne $major -or $mainMinor -ne $minor) {
-        Fail "Target release version $Version does not match current $MainBranch line $mainVersion. Use a matching X.Y.0 version."
+        Fail "Target release series $Version does not match current $MainBranch line $mainVersion. Use a matching X.Y series."
     }
 
     # 4. Check if target branches already exist (local or remote)
@@ -205,21 +201,21 @@ try {
     }
 
     # 6. Update and commit release branch versions
-    Write-Host "[6/9] Updating release branch version to $Version..." -ForegroundColor Yellow
+    Write-Host "[6/9] Updating release branch version to $releaseVersion..." -ForegroundColor Yellow
     [xml]$props = Get-Content $propsPath
-    $props.Project.PropertyGroup.Version = $Version
+    $props.Project.PropertyGroup.Version = $releaseVersion
     $props.Save($propsPath)
-    Write-Host "  [OK] Directory.Build.props = $Version" -ForegroundColor Green
+    Write-Host "  [OK] Directory.Build.props = $releaseVersion" -ForegroundColor Green
 
     [xml]$manifest = Get-Content $manifestPath
-    $manifest.Package.Identity.Version = "$Version.0"
+    $manifest.Package.Identity.Version = "$releaseVersion.0"
     $manifest.Save($manifestPath)
-    Write-Host "  [OK] Package.appxmanifest = $Version.0" -ForegroundColor Green
+    Write-Host "  [OK] Package.appxmanifest = $releaseVersion.0" -ForegroundColor Green
 
     git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
     git diff --staged --quiet
     if ($LASTEXITCODE -ne 0) {
-        git commit -m "chore: set release version to $Version"
+        git commit -m "chore: set release version to $releaseVersion"
         if ($LASTEXITCODE -ne 0) {
             Fail "Failed to commit version update on release branch."
         }
@@ -292,12 +288,12 @@ try {
     Write-Host "[OK] Release branch workflow completed." -ForegroundColor Green
     Write-Host ""
     Write-Host "Summary:" -ForegroundColor Cyan
-    Write-Host "  Release: $branchName -> $Version" -ForegroundColor White
+    Write-Host "  Release: $branchName -> $releaseVersion" -ForegroundColor White
     Write-Host "  Main PR: $mainBumpBranch -> $nextMainVersion (target: $MainBranch)" -ForegroundColor White
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "1. Keep user-facing changes in CHANGELOG.md under [Unreleased] while release contents are still moving."
-    Write-Host "2. Before tagging, move shipped items in the last release-side PR (typically a stabilization/RC PR) to [$Version] - YYYY-MM-DD (see docs/release/ReleaseNotes.md)."
+    Write-Host "2. Before tagging, move shipped items in the last release-side PR (typically a stabilization/RC PR) to [$releaseVersion] - YYYY-MM-DD (see docs/release/ReleaseNotes.md)."
     if (-not $Push) {
         Write-Host "3. Push both branches:"
         Write-Host "   git push -u origin $branchName"

@@ -204,12 +204,10 @@ ClipSave は WPF アプリケーションとして実装されており、以下
 - **責務**: 非同期 I/O 処理、プロセス間通信
 - **主な実行内容**:
   - `ClipboardTextClassifier`: 取得済みテキストの種別判別（CSV / JSON / Markdown / Text）
-  - `ContentEncodingService`: 画像スナップショットのエンコード処理（画像経路）
+  - `ContentEncodingService`: 画像スナップショットとテキスト系コンテンツのエンコード処理
   - `FileStorageService.SaveFileAsync()`: ファイル書き込み処理
   - `SingleInstanceService`: Named Pipe サーバー（二重起動検出用）
   - ディスク容量チェック（保存直前）
-
-※ 非画像コンテンツのエンコードは呼び出しコンテキストで実行される場合がある
 
 #### UI スレッドとの同期
 - **同期方式**: `SynchronizationContext` による UI スレッドへの投稿（バルーン通知表示時）

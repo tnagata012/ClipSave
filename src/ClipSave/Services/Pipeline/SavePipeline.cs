@@ -222,29 +222,25 @@ public class SavePipeline : IDisposable
         SaveSettings settings,
         string savePath)
     {
-        if (content is not ImageContent)
+        var processingPlan = PrepareContentProcessing(content);
+        if (!processingPlan.CanRunOnBackground)
         {
-            return await EncodeAndSaveAsync(content, settings, savePath);
-        }
-
-        var (canRunOnBackground, contentForProcessing) = PrepareForBackgroundProcessing(content);
-        if (!canRunOnBackground)
-        {
-            return await EncodeAndSaveAsync(contentForProcessing, settings, savePath);
+            return await EncodeAndSaveAsync(processingPlan.Content, settings, savePath);
         }
 
         try
         {
-            return await Task.Run(() => EncodeAndSaveAsync(contentForProcessing, settings, savePath));
+            _logger.LogDebug("Processing {ContentType} on a background thread", processingPlan.Content.Type);
+            return await Task.Run(() => EncodeAndSaveAsync(processingPlan.Content, settings, savePath));
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException ex) when (processingPlan.AllowUiThreadFallback)
         {
             _logger.LogWarning(ex, "Background image processing failed; retrying on the UI thread");
-            return await EncodeAndSaveAsync(contentForProcessing, settings, savePath);
+            return await EncodeAndSaveAsync(processingPlan.Content, settings, savePath);
         }
     }
 
-    private (bool CanRunOnBackground, ClipboardContent Content) PrepareForBackgroundProcessing(ClipboardContent content)
+    private ContentProcessingPlan PrepareContentProcessing(ClipboardContent content)
     {
         if (content is ImageContent imageContent)
         {
@@ -253,16 +249,16 @@ public class SavePipeline : IDisposable
                 var detachedImage = CreateThreadSafeImageSnapshot(imageContent.Image);
                 _logger.LogDebug("Detached image for background processing ({Width}x{Height}, {Format})",
                     detachedImage.PixelWidth, detachedImage.PixelHeight, detachedImage.Format);
-                return (true, new ImageContent(detachedImage));
+                return ContentProcessingPlan.ForBackground(new ImageContent(detachedImage), allowUiThreadFallback: true);
             }
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "Failed to detach image; processing on the UI thread");
-                return (false, content);
+                return ContentProcessingPlan.ForCurrentThread(content);
             }
         }
 
-        return (true, content);
+        return ContentProcessingPlan.ForBackground(content);
     }
 
     private bool TryGetSaveDirectory(ActiveWindowResult activeWindow, out string savePath)
@@ -420,5 +416,18 @@ public class SavePipeline : IDisposable
     private bool IsDisposeRequested()
     {
         return Volatile.Read(ref _disposeRequested) == 1;
+    }
+
+    private sealed record ContentProcessingPlan(ClipboardContent Content, bool CanRunOnBackground, bool AllowUiThreadFallback)
+    {
+        public static ContentProcessingPlan ForBackground(ClipboardContent content, bool allowUiThreadFallback = false)
+        {
+            return new ContentProcessingPlan(content, CanRunOnBackground: true, AllowUiThreadFallback: allowUiThreadFallback);
+        }
+
+        public static ContentProcessingPlan ForCurrentThread(ClipboardContent content)
+        {
+            return new ContentProcessingPlan(content, CanRunOnBackground: false, AllowUiThreadFallback: false);
+        }
     }
 }

@@ -3,13 +3,11 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Windows.Media.Imaging;
 
 namespace ClipSave.Services;
 
-public partial class ClipboardService
+public class ClipboardService
 {
     private readonly ILogger<ClipboardService> _logger;
     private const int MaxRetries = 3;
@@ -17,13 +15,9 @@ public partial class ClipboardService
     private const int TotalTimeoutMs = 300;
     private const int ClipbrdECantOpen = unchecked((int)0x800401D0);
 
-    // Heuristic matcher used for lightweight Markdown detection.
-    [GeneratedRegex(@"^(#{1,6}\s|[-*+]\s|\d+\.\s|```|>\s|\[.+\]\(.+\)|\*\*.+\*\*|__.+__)", RegexOptions.Multiline)]
-    private static partial Regex MarkdownRegex();
-
     public ClipboardService(ILogger<ClipboardService> logger)
     {
-        _logger = logger;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<ClipboardContent?> GetContentAsync()
@@ -34,7 +28,11 @@ public partial class ClipboardService
         {
             try
             {
-                var content = GetContentInternal();
+                var payload = GetClipboardPayloadInternal();
+                var content = payload == null
+                    ? null
+                    : await CreateClipboardContentAsync(payload).ConfigureAwait(true);
+
                 if (content != null)
                 {
                     var elapsed = stopwatch.ElapsedMilliseconds;
@@ -73,17 +71,14 @@ public partial class ClipboardService
         return content is ImageContent imageContent ? imageContent.Image : null;
     }
 
-    private ClipboardContent? GetContentInternal()
+    private ClipboardPayload? GetClipboardPayloadInternal()
     {
-        if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
-        {
-            throw new InvalidOperationException("ClipboardService must run on an STA thread.");
-        }
+        EnsureStaThread();
 
         var image = GetImageInternal();
         if (image != null)
         {
-            return new ImageContent(image);
+            return ClipboardPayload.FromImage(image);
         }
 
         if (System.Windows.Clipboard.ContainsText())
@@ -91,102 +86,62 @@ public partial class ClipboardService
             var text = System.Windows.Clipboard.GetText();
             if (!string.IsNullOrWhiteSpace(text))
             {
-                var csvContent = TryParseAsCsv(text);
-                if (csvContent != null)
-                {
-                    _logger.LogDebug("Detected as tabular text/CSV");
-                    return csvContent;
-                }
-
-                var jsonContent = TryParseAsJson(text);
-                if (jsonContent != null)
-                {
-                    _logger.LogDebug("Detected as JSON");
-                    return jsonContent;
-                }
-
-                if (IsMarkdown(text))
-                {
-                    _logger.LogDebug("Detected as Markdown");
-                    return new MarkdownContent(text);
-                }
-
-                _logger.LogDebug("Detected as plain text");
-                return new TextContent(text);
+                return ClipboardPayload.FromText(text);
             }
         }
 
         return null;
     }
 
-    private bool IsMarkdown(string text)
+    private async Task<ClipboardContent> CreateClipboardContentAsync(ClipboardPayload payload)
     {
-        return MarkdownRegex().IsMatch(text);
+        if (payload.Image != null)
+        {
+            return new ImageContent(payload.Image);
+        }
+
+        if (payload.Text == null)
+        {
+            throw new InvalidOperationException("Clipboard payload did not contain data.");
+        }
+
+        // Clipboard access must stay on STA, but text classification is pure CPU-bound work.
+        _logger.LogDebug("Classifying text clipboard content on a background thread");
+        var content = await Task.Run(() => ClipboardTextClassifier.Classify(payload.Text)).ConfigureAwait(true);
+        LogDetectedTextContent(content);
+        return content;
     }
 
-    private JsonContent? TryParseAsJson(string text)
+    private void LogDetectedTextContent(ClipboardContent content)
     {
-        var trimmed = text.Trim();
-
-        if (!(trimmed.StartsWith('{') || trimmed.StartsWith('[')))
+        switch (content)
         {
-            return null;
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(trimmed);
-            var formatted = JsonSerializer.Serialize(doc, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-            return new JsonContent(trimmed, formatted);
-        }
-        catch (JsonException)
-        {
-            return null;
+            case CsvContent:
+                _logger.LogDebug("Detected as tabular text/CSV");
+                break;
+            case JsonContent:
+                _logger.LogDebug("Detected as JSON");
+                break;
+            case MarkdownContent:
+                _logger.LogDebug("Detected as Markdown");
+                break;
+            case TextContent:
+                _logger.LogDebug("Detected as plain text");
+                break;
         }
     }
 
-    private CsvContent? TryParseAsCsv(string text)
-    {
-        if (!text.Contains('\t'))
-        {
-            return null;
-        }
-
-        if (!DelimitedTextCodec.TryParseTabSeparated(text, out var rows))
-        {
-            return null;
-        }
-
-        // Keep the classifier stable even when clipboard text contains trailing blank lines.
-        var effectiveRows = rows
-            .Where(r => r.Count > 1 || r.Any(cell => !string.IsNullOrEmpty(cell)))
-            .ToList();
-
-        if (effectiveRows.Count < 2)
-        {
-            return null;
-        }
-
-        if (effectiveRows.Any(r => r.Count < 2))
-        {
-            return null;
-        }
-
-        var columnCounts = effectiveRows.Select(r => r.Count).ToList();
-        var maxColumns = columnCounts.Max();
-
-        return new CsvContent(text, effectiveRows.Count, maxColumns);
-    }
-
-    private BitmapSource? GetImageInternal()
+    private static void EnsureStaThread()
     {
         if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
         {
             throw new InvalidOperationException("ClipboardService must run on an STA thread.");
         }
+    }
+
+    private BitmapSource? GetImageInternal()
+    {
+        EnsureStaThread();
 
         var pngImage = TryGetPngImage();
         if (pngImage != null)
@@ -322,5 +277,18 @@ public partial class ClipboardService
     private static bool IsClipboardLocked(Exception ex)
     {
         return ex is ExternalException && ex.HResult == ClipbrdECantOpen;
+    }
+
+    private sealed record ClipboardPayload(BitmapSource? Image, string? Text)
+    {
+        public static ClipboardPayload FromImage(BitmapSource image)
+        {
+            return new ClipboardPayload(image, null);
+        }
+
+        public static ClipboardPayload FromText(string text)
+        {
+            return new ClipboardPayload(null, text);
+        }
     }
 }

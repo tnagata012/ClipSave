@@ -292,17 +292,20 @@ try {
     Write-Host "  Main PR: $mainBumpBranch -> $nextMainVersion (target: $MainBranch)" -ForegroundColor White
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
-    Write-Host "1. Keep user-facing changes in CHANGELOG.md under [Unreleased] while release contents are still moving."
-    Write-Host "2. Before tagging, move shipped items in the last release-side PR (typically a stabilization/RC PR) to [$releaseVersion] - YYYY-MM-DD (see docs/release/ReleaseNotes.md)."
+    Write-Host "1. Keep issue 'Release Notes: Unreleased' up to date for main-bound user-facing changes."
+    Write-Host "2. Create or update issue 'Release Notes: $major.$minor' and manually move the shipped bullets from 'Release Notes: Unreleased'."
+    Write-Host "3. Keep the PR 'Release Notes' section up to date for user-facing changes, and use 'N/A' for internal-only PRs."
     if (-not $Push) {
-        Write-Host "3. Push both branches:"
+        Write-Host "4. Push both branches:"
         Write-Host "   git push -u origin $branchName"
         Write-Host "   git push -u origin $mainBumpBranch"
-        Write-Host "4. Create PR: $mainBumpBranch -> $MainBranch"
-        Write-Host "5. RC Build triggers on push to release/*."
+        Write-Host "5. Create PR: $mainBumpBranch -> $MainBranch"
+        Write-Host "6. Before tagging, keep issue 'Release Notes: $major.$minor' ready for GitHub Release reference."
+        Write-Host "7. RC Build triggers on push to release/*."
     } else {
-        Write-Host "3. Create PR: $mainBumpBranch -> $MainBranch"
-        Write-Host "4. RC Build will run automatically (already pushed)."
+        Write-Host "4. Create PR: $mainBumpBranch -> $MainBranch"
+        Write-Host "5. Before tagging, keep issue 'Release Notes: $major.$minor' ready for GitHub Release reference."
+        Write-Host "6. RC Build will run automatically (already pushed)."
     }
     Write-Host ""
     Write-Host "Patch release reminder:" -ForegroundColor Cyan

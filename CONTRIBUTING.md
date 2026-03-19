@@ -27,8 +27,10 @@ ClipSave へのコントリビューションに興味を持っていただき�
 
 ## Issue
 
-バグ報告・改善提案は GitHub Issues を使用してください。
-再現手順、期待結果、実際の結果、環境情報を含めてください。
+バグ報告は GitHub Issues を使用してください。
+user-facing change の作業中ノートは `Release Notes: Unreleased` Issue を基点に管理します。
+`release/X.Y` を切ったら `Release Notes: X.Y` Issue を 1 つ作り、`Release Notes: Unreleased` から今回出荷する bullet を手動で移します。
+機能ごとの Issue は必須ではなく、事前合意や長めの議論が必要な場合だけ使ってください。
 
 ## Pull Request
 
@@ -41,7 +43,9 @@ PR 本文は [`.github/pull_request_template.md`](.github/pull_request_template.
   - `Quality` は該当する項目を満たす（不要な項目は理由を `Summary` または `Why` に明記）
   - `Related Issue` はどちらか 1 つをチェック
   - `Specs` はどちらか 1 つをチェック
-  - `Changelog` はどちらか 1 つをチェック
+  - `Release Notes` はどちらか 1 つをチェック
+  - user-facing な PR は、対応する release-notes issue を更新したうえでチェックする
+  - 通常の `main` 向け PR は `Release Notes: Unreleased`、`release/X.Y` 向け PR は当該 `Release Notes: X.Y` を更新する
 
 レビュー担当は [`.github/CODEOWNERS`](.github/CODEOWNERS) を参照してください。
 
@@ -98,7 +102,7 @@ feat: Add OCR support for clipboard images
 - [リリースプロセス](docs/release/ReleaseProcess.md)
 - [リリースガイド](docs/release/ReleaseGuide.md)
 - [署名運用](docs/distribution/Signing.md)
-- [CHANGELOG 運用](docs/release/ReleaseNotes.md)
+- [Release Notes 運用](docs/release/ReleaseNotes.md)
 
 ## Questions?
 

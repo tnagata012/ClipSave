@@ -188,6 +188,7 @@ jobs:
         $base = "${{ inputs.release_branch }}"
         $version = "${{ steps.patch.outputs.PATCH_VERSION }}"
         $repo = "${{ github.repository }}"
+        $releaseLine = $base -replace '^release/', ''
 
         $existingPrJson = gh pr list `
           --repo $repo `
@@ -228,7 +229,7 @@ jobs:
         - Current finalized version: ${{ steps.current.outputs.CURRENT_VERSION }}
         - Patch init branch: $head
         - Version: $version
-        - CHANGELOG: prepare `[$version]` in this PR or in the last backport PR before tagging
+        - Release notes: update issue `Release Notes: $releaseLine` before tagging
 
         This PR is the only patch version bump for this release cycle.
         "@

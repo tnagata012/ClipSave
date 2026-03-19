@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible defect or regression
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for user-visible bugs and regressions.
+        If you already know the target notes bucket, mention or link `Release Notes: Unreleased` or the current `Release Notes: X.Y` issue.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is broken?
+      placeholder: Saving CSV from Excel fails when the active Explorer window is pinned.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide the shortest repeatable sequence.
+      placeholder: |
+        1. Open Explorer
+        2. Copy a table from Excel
+        3. Press Ctrl+Shift+V
+        4. Observe the failure
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: A UTF-8 BOM CSV file is created in the active Explorer folder.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: Nothing is saved and no notification appears.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, app version, and any other relevant context
+      placeholder: Windows 11 24H2 / ClipSave 0.1.0 / Store package
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, or related PR / release-notes issue links

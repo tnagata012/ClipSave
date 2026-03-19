@@ -1,0 +1,24 @@
+name: Release notes (release line)
+description: Track the curated public notes for one release line
+title: "Release Notes: X.Y"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use one issue per release line.
+        Reuse the existing issue instead of creating duplicates. Multiple open duplicates make release workflows fail.
+        Replace `X.Y` in the title before submitting so the issue title becomes `Release Notes: X.Y`.
+        Workflows find this issue by exact title.
+        Create or update this issue when `prepare-release-branch` creates `release/X.Y`.
+        Manually move the shipped bullets from `Release Notes: Unreleased`, then keep this issue as the public notes source for the release line.
+        GitHub Release `X.Y.Z` snapshots this issue body and links back to it.
+  - type: textarea
+    id: release_notes
+    attributes:
+      label: Release Notes
+      description: Keep short user-facing bullets here. GitHub Release `X.Y.Z` snapshots this content and links back to this issue.
+      placeholder: |
+        - Improve clipboard save reliability on recent Windows builds
+        - Fix duplicate save when the clipboard updates quickly
+    validations:
+      required: true

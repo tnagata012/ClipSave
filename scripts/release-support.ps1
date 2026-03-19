@@ -33,6 +33,161 @@ function Get-ReleaseAssetSummary {
     }
 }
 
+function Get-MarkdownSection {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Body,
+        [Parameter(Mandatory = $true)]
+        [string]$Heading
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Body) -or [string]::IsNullOrWhiteSpace($Heading)) {
+        return $null
+    }
+
+    $pattern = "(?ms)^##\s+$([regex]::Escape($Heading))\s*\r?\n(?<content>.*?)(?=^\s*##\s+|\z)"
+    $match = [regex]::Match($Body, $pattern)
+    if (-not $match.Success) {
+        return $null
+    }
+
+    return $match.Groups["content"].Value.Trim()
+}
+
+function Get-GitHubIssues {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Repository) -or $Repository -notmatch '^[^/\s]+/[^/\s]+$') {
+        throw "Repository must be in 'owner/name' format. Actual: '$Repository'"
+    }
+
+    $ghAvailable = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $ghAvailable) {
+        throw "GitHub CLI 'gh' is required to query issues."
+    }
+
+    $issuesPagesJson = gh api --paginate --slurp "repos/$Repository/issues?state=all&per_page=100" 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($issuesPagesJson)) {
+        throw "Failed to query GitHub issues for '$Repository'."
+    }
+
+    try {
+        $issuePages = $issuesPagesJson | ConvertFrom-Json -Depth 100
+    }
+    catch {
+        throw "Failed to parse GitHub issues response for '$Repository'."
+    }
+
+    $issues = @()
+    foreach ($page in @($issuePages)) {
+        if ($null -eq $page) {
+            continue
+        }
+
+        $entries = if ($page -is [System.Array]) { $page } else { @($page) }
+        foreach ($entry in $entries) {
+            if ($null -eq $entry -or $null -ne $entry.pull_request) {
+                continue
+            }
+
+            $issues += [PSCustomObject]@{
+                Number = [int]$entry.number
+                Title  = ([string]$entry.title).Trim()
+                Url    = [string]$entry.html_url
+                Body   = [string]$entry.body
+                State  = [string]$entry.state
+            }
+        }
+    }
+
+    return $issues
+}
+
+function Resolve-PreferredIssueMatch {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        $Matches,
+        [Parameter(Mandatory = $true)]
+        [string]$DuplicateOpenMessage,
+        [Parameter(Mandatory = $true)]
+        [string]$DuplicateClosedMessage
+    )
+
+    $matchArray = @($Matches | Where-Object { $null -ne $_ })
+    if ($matchArray.Count -eq 0) {
+        return $null
+    }
+
+    $openMatches = @(
+        $matchArray |
+            Where-Object { ([string]$_.State).Trim().ToLowerInvariant() -eq "open" }
+    )
+    if ($openMatches.Count -eq 1) {
+        return $openMatches[0]
+    }
+
+    $candidates = if ($openMatches.Count -gt 0) { $openMatches } else { $matchArray }
+    if ($candidates.Count -eq 1) {
+        return $candidates[0]
+    }
+
+    $details = $candidates |
+        Sort-Object `
+            @{ Expression = { if (([string]$_.State).Trim().ToLowerInvariant() -eq "open") { 0 } else { 1 } } }, `
+            @{ Expression = { $_.Number }; Descending = $true } |
+        ForEach-Object {
+            $state = ([string]$_.State).Trim()
+            if (-not $state) {
+                $state = "unknown"
+            }
+
+            "#$($_.Number) [$state] $($_.Url)"
+        }
+
+    if ($openMatches.Count -gt 1) {
+        throw "$DuplicateOpenMessage Matches: $($details -join '; ')"
+    }
+
+    throw "$DuplicateClosedMessage Matches: $($details -join '; ')"
+}
+
+function Get-GitHubIssueByExactTitle {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository,
+        [Parameter(Mandatory = $true)]
+        [string]$Title,
+        [switch]$AllowMissing = $false
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Title)) {
+        throw "Title is required."
+    }
+
+    $exactTitle = $Title.Trim()
+    $matches = @(Get-GitHubIssues -Repository $Repository | Where-Object { $_.Title -eq $exactTitle })
+
+    if ($matches.Count -eq 0) {
+        if ($AllowMissing) {
+            return $null
+        }
+
+        throw "Issue '$exactTitle' was not found in '$Repository'."
+    }
+
+    return Resolve-PreferredIssueMatch `
+        -Matches $matches `
+        -DuplicateOpenMessage "Multiple open issues found with exact title '$exactTitle' in '$Repository'. Keep a single open issue per release-notes title." `
+        -DuplicateClosedMessage "Multiple closed issues found with exact title '$exactTitle' in '$Repository'. Reopen or rename the canonical issue so a single match remains."
+}
+
 function Get-ReleaseArchiveStatus {
     [CmdletBinding()]
     param(

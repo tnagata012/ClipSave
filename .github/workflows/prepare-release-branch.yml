@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  issues: read
   pull-requests: write
 
 concurrency:
@@ -64,6 +65,40 @@ jobs:
         echo "RELEASE_SERIES=$major.$minor" >> $env:GITHUB_OUTPUT
         Write-Host "Resolved release series: $major.$minor"
         Write-Host "Resolved release version: $releaseVersion"
+
+    - name: Resolve release notes issues
+      id: release_notes
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        . ./scripts/release-support.ps1
+
+        $repo = "${{ github.repository }}"
+        $unreleasedTitle = "Release Notes: Unreleased"
+        $lineTitle = "Release Notes: ${{ steps.version.outputs.RELEASE_SERIES }}"
+
+        $unreleasedIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $unreleasedTitle -AllowMissing
+        $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle -AllowMissing
+
+        echo "UNRELEASED_TITLE=$unreleasedTitle" >> $env:GITHUB_OUTPUT
+        echo "LINE_TITLE=$lineTitle" >> $env:GITHUB_OUTPUT
+        echo "UNRELEASED_EXISTS=$(([string]($null -ne $unreleasedIssue)).ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+        echo "LINE_EXISTS=$(([string]($null -ne $lineIssue)).ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+        if ($unreleasedIssue) {
+          echo "UNRELEASED_URL=$($unreleasedIssue.Url)" >> $env:GITHUB_OUTPUT
+          Write-Host "Found unreleased release-notes issue: $($unreleasedIssue.Url)"
+        } else {
+          Write-Warning "Release Notes: Unreleased was not found."
+        }
+
+        if ($lineIssue) {
+          echo "LINE_URL=$($lineIssue.Url)" >> $env:GITHUB_OUTPUT
+          Write-Host "Found release-line issue: $($lineIssue.Url)"
+        } else {
+          Write-Warning "$lineTitle was not found."
+        }
 
     - name: Create release and main bump branches
       shell: pwsh
@@ -138,6 +173,7 @@ jobs:
         - Release branch: release/$major.$minor
         - Target branch: main
         - Main bump branch: $head
+        - Release notes: create or update `Release Notes: $major.$minor` and move the shipped bullets from `Release Notes: Unreleased`
         "@
 
         gh pr create --repo $repo --base $base --head $head --title $title --body $body
@@ -161,6 +197,14 @@ jobs:
         $releaseBranch = "release/$major.$minor"
         $mainBumpBranch = "chore/bump-main-to-$nextMainVersion"
         $prCreated = "${{ inputs.create_main_bump_pr }}"
+        $unreleasedIssue = "${{ steps.release_notes.outputs.UNRELEASED_URL }}".Trim()
+        if (-not $unreleasedIssue) {
+          $unreleasedIssue = "create manually (`${{ steps.release_notes.outputs.UNRELEASED_TITLE }}`)"
+        }
+        $lineIssue = "${{ steps.release_notes.outputs.LINE_URL }}".Trim()
+        if (-not $lineIssue) {
+          $lineIssue = "create manually (`${{ steps.release_notes.outputs.LINE_TITLE }}`)"
+        }
 
         @"
         ## Release Branch Preparation Complete
@@ -172,4 +216,11 @@ jobs:
         | Main Bump Branch | $mainBumpBranch |
         | Next Main Version | $nextMainVersion |
         | PR Created | $prCreated |
+        | Unreleased Notes | $unreleasedIssue |
+        | Release Line Notes | $lineIssue |
+
+        Next steps:
+        1. Create or update `${{ steps.release_notes.outputs.LINE_TITLE }}`.
+        2. Manually move the shipped bullets from `${{ steps.release_notes.outputs.UNRELEASED_TITLE }}` into `${{ steps.release_notes.outputs.LINE_TITLE }}`.
+        3. Review `${{ steps.release_notes.outputs.LINE_TITLE }}` before tagging so it is ready to be linked from GitHub Release $version.
         "@ >> $env:GITHUB_STEP_SUMMARY

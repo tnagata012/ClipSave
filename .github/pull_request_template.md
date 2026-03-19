@@ -22,6 +22,6 @@
 - [ ] No spec impact.
 - [ ] Updated specs/docs for behavioral changes.
 
-### Changelog (choose one)
-- [ ] No user-facing change (Changelog N/A).
-- [ ] Updated `CHANGELOG.md` (`[Unreleased]`) for user-facing changes.
+### Release Notes (choose one)
+- [ ] User-facing change. Updated the relevant release-notes issue (`Release Notes: Unreleased` for main-bound work, `Release Notes: X.Y` for release-line work).
+- [ ] No user-facing change. No release-notes update needed.

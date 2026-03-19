@@ -1,121 +1,92 @@
-# CHANGELOG 運用ガイド
+# GitHub Release Notes 運用ガイド
 
-**このドキュメントの目的**: `CHANGELOG.md` を一貫して更新するための運用ルールを定義します。
-Keep a Changelog に沿い、リポジトリ固有情報に依存しない共通ルールを定義します。
+**このドキュメントの目的**: ClipSave の公開向け変更履歴を `Release Notes` Issues と GitHub Release の参照リンクで一貫して管理するための運用ルールを定義します。
+
+## なぜ `CHANGELOG.md` で運用しないか
+
+1. `Release Notes: Unreleased` と `Release Notes: X.Y` に分けた方が、作業中ドラフトと release line ごとの公開ノートを分離しやすい。
+2. GitHub Release 本文は配布アーカイブの案内に寄せつつ、`Release Finalize` が issue 本文を snapshot として自動反映する方が運用が軽い。
+3. repo 内ファイルと GitHub Release 本文を二重更新すると、patch release や backport で転記漏れが起きやすい。
+4. PR、release 準備、Store 前確認が同じ issue title を参照できる。
 
 ## 基本ルール
 
-1. 正本はリポジトリ直下の `CHANGELOG.md`。
-2. `CHANGELOG` はユーザー向け。ユーザー影響のある変更のみ記載する。
-3. 変更はまず `[Unreleased]` に追記し、リリース時に `## [X.Y.Z] - YYYY-MM-DD` へ移す。
-4. カテゴリは Keep a Changelog 準拠（`Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security`）。
-5. 新しい版を上に追加する（降順）。履歴は追記ベースで管理する。
-6. 1 項目 1 変更を原則に、1〜3 行で簡潔に書く。
-7. 日付は `YYYY-MM-DD`（ISO 8601）で統一する。
-8. 比較リンク（`[Unreleased]` など）は任意で運用する。
+1. 作業中の一次ソースは `Release Notes: Unreleased` Issue とする。
+2. release line ごとの公開ノートは GitHub Issue `Release Notes: X.Y` とする。
+3. GitHub Release `X.Y.Z` 本文の `Release Notes` セクションは、`Release Notes: X.Y` への参照と、その時点の issue 本文 snapshot を自動で持つ。
+4. `Release Notes: X.Y` はその系列の公開向けメモとして必要に応じて更新する。
+5. patch release でも issue は増やさず、同じ `Release Notes: X.Y` を更新する。
+6. ユーザー影響のある PR は、対応する release-notes issue を更新する。
+7. 通常の `main` 向け PR は `Release Notes: Unreleased`、`release/X.Y` 向け PR は当該 `Release Notes: X.Y` を更新する。
+8. ユーザー影響のない PR は、release-notes issue の更新を不要とする。
 
-## 記載スタイル
+## 運用要素
 
-| 観点 | 推奨                                             |
-| ---- | ------------------------------------------------ |
-| 視点 | ユーザー視点で「何がどう変わるか」を書く         |
-| 粒度 | 1 項目に複数変更を詰め込みすぎない               |
-| 文言 | 内部実装名だけで終わらせず、挙動の変化を明示する |
+### `Release Notes: Unreleased`
 
-## 記載判断（書く/書かない）
+Issue title: `Release Notes: Unreleased`
 
-| 判断     | 目安                                          | 例                                                   |
-| -------- | --------------------------------------------- | ---------------------------------------------------- |
-| 書く     | アップデート後にユーザーが気づく/影響を受ける | 新機能、仕様変更、不具合修正、削除、セキュリティ対応 |
-| 書かない | ユーザー影響がない内部変更                    | リファクタ、テスト追加、CI 改善、内部ログ整理        |
+1. `main` で今後出す user-facing changes をここに集める。
+2. user-facing bullet を短く保ち、必要なら `Added / Changed / Fixed` の見出しを使う。
+3. release 準備時に、今回出荷する bullet だけを `Release Notes: X.Y` へ手動で移す。
+4. 同じ title の open issue を重複作成しない。
+5. この Issue はクローズしない。常に 1 つだけ open のまま維持する。
 
-## カテゴリ定義
+### `Release Notes: X.Y`
 
-| カテゴリ     | 用途                         |
-| ------------ | ---------------------------- |
-| `Added`      | 新機能                       |
-| `Changed`    | 既存機能の仕様変更、挙動変更 |
-| `Deprecated` | 将来削除予定の機能           |
-| `Removed`    | 削除した機能                 |
-| `Fixed`      | 不具合修正                   |
-| `Security`   | セキュリティ修正、緩和策     |
+1. `release/X.Y` を切ったら 1 系列につき 1 つ作る。
+2. `Release Notes: Unreleased` から、今回の系列で出荷する bullet を手動で移したものを初期内容にする。
+3. patch 版を出すたびに同じ issue を更新する。
+4. issue 本文は GitHub Release からリンクされる公開向けノートとして読みやすく保つ。
+5. GitHub Release `X.Y.Z` はこの issue へのリンクを持つが、release 本文には tag 時点の snapshot も残す。
+6. issue 自体は系列内で後から更新されるため、GitHub Release から辿る issue リンク先は常に系列の最新状態を指す。
+7. 同じ title の open issue を重複作成しない。
+8. 現行サポート系列である間は open のまま維持し、その系列が [ReleaseProcess](ReleaseProcess.md) の `frozen / unsupported` へ移った時点でクローズする。
+
+### Pull Request
+
+1. `main` 向けの user-facing PR は、`Release Notes: Unreleased` を更新する。
+2. `release/X.Y` 向けの user-facing PR は、当該 `Release Notes: X.Y` を更新する。
+3. `main` で user-facing change を入れ、その後 `release/X.Y` へ backport した場合は、release 側 PR で `Release Notes: X.Y` も更新する。
+4. docs / CI / internal-only な PR は、release-notes issue を更新しない。
+5. PR テンプレの `Release Notes` チェックは、更新済みか不要かだけを示す。
 
 ## 更新フロー
 
-### PR 時
+### release line 開始前
 
-1. ユーザー影響がある変更なら `CHANGELOG.md` の `[Unreleased]` に追記する。
-2. 該当カテゴリを 1 つ選び、ユーザー視点で 1〜3 行にまとめる。
-3. ユーザー影響がない変更は PR テンプレの `Changelog` を `N/A` にする。
+1. `main` に入る user-facing change は `Release Notes: Unreleased` を一次ソースにする。
+2. 機能ごとの Issue は必須にしない。必要な議論があるときだけ補助的に使う。
 
-### リリース時
+### リリース開始時
 
-1. `Unreleased` の内容を整理する。
-2. `## [X.Y.Z] - YYYY-MM-DD` セクションを作り、対象版に含める項目だけを移動する。
-3. `Unreleased` から移した項目を削除する（未リリース項目は残す）。
-4. 配布先のリリースノートへ同内容を反映する。
-5. 比較リンクを運用する場合は、`[Unreleased]` と直近版リンクを更新する。
+1. `Prepare Release Branch` または `create-release-branch.ps1` で `release/X.Y` を作る。
+2. `Release Notes: X.Y` Issue を作成または更新する。
+3. `Release Notes: Unreleased` から今回の系列で出す bullet を手動で移し、残りは `Unreleased` に残す。
 
-### パッチリリース時
+### release line 運用中
 
-- `Unreleased` からパッチ対象の修正のみを `X.Y.Z` へ移す。
-- 次版向け・未リリース項目は `Unreleased` に残す（空にしない場合がある）。
+1. `main` 側の user-facing change は引き続き `Release Notes: Unreleased` を更新する。
+2. `release/X.Y` 側の安定化 PR / backport PR は、必要に応じて `Release Notes: X.Y` を更新する。
+3. `Release Notes: X.Y` は、その系列で次に出す版の候補を保持し、tag 時点の内容は GitHub Release 側に snapshot される。
 
-## テンプレート
+### tag 前
 
-未使用カテゴリは削除して構いません。
+1. `Release Notes: X.Y` Issue を見直し、今回の出荷内容として読めることを確認する。
+2. 必要なら merged PR や関連 Issue を見て bullet を補い、ユーザー向け文面に磨く。
 
-### `Unreleased`
+### Release Finalize と再実行
 
-```markdown
-## [Unreleased]
+1. tag `X.Y.Z` を push したら `Release Finalize` が GitHub Release `X.Y.Z` を更新する。
+2. workflow は GitHub Release 本文の `Release Notes` セクションに `Release Notes: X.Y` への参照と、その時点の issue 本文 snapshot を入れる。
+3. issue が未作成でも release 自体は publish されるが、参照は検索リンク fallback になり、`store-checklist.ps1` は未整備として扱う。
+4. 既存 archive が揃っている版への再実行は、archive を再生成せず metadata と本文参照を更新する。
+5. workflow は `Release Notes` / `Release Archive (Unsigned)` / `Operator Notes` / `Store Submission Log` の 4 セクションを保持する。
 
-### Added
-- 
+## 記載スタイル
 
-### Changed
-- 
-
-### Deprecated
-- 
-
-### Removed
-- 
-
-### Fixed
-- 
-
-### Security
-- 
-```
-
-### 版セクション
-
-```markdown
-## [X.Y.Z] - YYYY-MM-DD
-
-### Added
-- 
-
-### Changed
-- 
-
-### Deprecated
-- 
-
-### Removed
-- 
-
-### Fixed
-- 
-
-### Security
-- 
-```
-
-### 比較リンク（任意）
-
-```markdown
-[Unreleased]: https://github.com/<owner>/<repo>/compare/X.Y.Z...HEAD
-[X.Y.Z]: https://github.com/<owner>/<repo>/compare/A.B.C...X.Y.Z
-```
+| 観点 | 推奨 |
+| ---- | ---- |
+| 視点 | ユーザー視点で「何がどう変わるか」を書く |
+| 粒度 | 1 項目に複数変更を詰め込みすぎない |
+| 文言 | 内部実装名だけで終わらせず、挙動の変化を明示する |

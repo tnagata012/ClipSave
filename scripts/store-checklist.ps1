@@ -24,6 +24,7 @@ $ErrorActionPreference = "Stop"
 
 # Get project root
 $projectRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "release-support.ps1")
 
 function Fail([string]$Message) {
     Write-Host "`n[ERROR] $Message" -ForegroundColor Red
@@ -43,31 +44,6 @@ function Resolve-GitHubRepository {
     }
 
     return "$($match.Groups['owner'].Value)/$($match.Groups['repo'].Value)"
-}
-
-function Get-RepositoryFileContent {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$RelativePath,
-        [string]$GitRef = $null
-    )
-
-    if (-not $GitRef) {
-        $absolutePath = Join-Path $projectRoot $RelativePath
-        if (-not (Test-Path $absolutePath)) {
-            return $null
-        }
-
-        return Get-Content -LiteralPath $absolutePath -Raw
-    }
-
-    $objectSpec = "${GitRef}:$RelativePath"
-    $content = git show $objectSpec 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        return $null
-    }
-
-    return ($content -join [Environment]::NewLine)
 }
 
 function Get-GitRefCommit {
@@ -331,24 +307,36 @@ try {
                 $missingArtifacts += $candidateArtifactName
             }
 
-            $releaseArchiveVerified = $false
+            $releaseArchiveStatus = $null
+            $releaseArchiveQueryError = $null
             if (-not $queryFailed) {
-                gh release view $targetVersion --repo $repo *> $null
-                $releaseArchiveVerified = $LASTEXITCODE -eq 0
+                try {
+                    $releaseArchiveStatus = Get-ReleaseArchiveStatus -Repository $repo -Version $targetVersion
+                } catch {
+                    $releaseArchiveQueryError = $_.Exception.Message
+                }
             }
 
             if ($queryFailed) {
                 Write-Host "SKIPPED" -ForegroundColor Yellow
                 Write-Host "    Failed to query Actions artifacts via GitHub CLI." -ForegroundColor Gray
                 $allPassed = $false
-            } elseif ($missingArtifacts.Count -eq 0 -and $releaseArchiveVerified) {
+            } elseif ($missingArtifacts.Count -eq 0 -and $releaseArchiveStatus -and $releaseArchiveStatus.HasArchiveAssets -and -not $releaseArchiveStatus.IsDraft) {
                 Write-Host "PASS" -ForegroundColor Green
             } else {
                 Write-Host "NOT FOUND" -ForegroundColor Yellow
                 foreach ($artifact in $missingArtifacts) {
                     Write-Host "    Missing artifact: $artifact" -ForegroundColor Gray
                 }
-                if (-not $releaseArchiveVerified) {
+                if ($releaseArchiveStatus) {
+                    if ($releaseArchiveStatus.IsDraft) {
+                        Write-Host "    GitHub Release '$targetVersion' is still a draft. Publish it from Release Finalize before Store submission." -ForegroundColor Gray
+                    } elseif (-not $releaseArchiveStatus.HasArchiveAssets) {
+                        Write-Host "    GitHub Release '$targetVersion' does not have finalized archive assets yet." -ForegroundColor Gray
+                    }
+                } elseif ($releaseArchiveQueryError) {
+                    Write-Host "    $releaseArchiveQueryError" -ForegroundColor Gray
+                } else {
                     Write-Host "    Missing release archive GitHub Release: $targetVersion" -ForegroundColor Gray
                 }
                 Write-Host "    Run RC Build / Release Finalize and confirm outputs are retained." -ForegroundColor Gray
@@ -361,28 +349,80 @@ try {
         $allPassed = $false
     }
 
-    # Check 7: Changelog
-    Write-Host -NoNewline "  Checking changelog... "
-    $changelogGitRef = if ($versionSpecified) { $targetGitRef } else { $null }
-    $changelog = Get-RepositoryFileContent -RelativePath "CHANGELOG.md" -GitRef $changelogGitRef
-    if ($changelog) {
-        $versionPattern = [regex]::Escape($targetVersion)
-        $modernPattern = "(?m)^##\s+\[$versionPattern\]\s*-\s*\d{4}-\d{2}-\d{2}\s*$"
-
-        if ($changelog -match $modernPattern) {
-            Write-Host "FOUND" -ForegroundColor Green
-        } else {
-            Write-Host "NOT FOUND" -ForegroundColor Yellow
-            Write-Host "    Changelog entry not found in expected format: ## [$targetVersion] - YYYY-MM-DD" -ForegroundColor Gray
+    # Check 7: Release notes issue reference
+    Write-Host -NoNewline "  Checking release notes issue reference... "
+    if ($ghAvailable) {
+        if (-not $repo) {
+            Write-Host "SKIPPED" -ForegroundColor Yellow
+            Write-Host "    Could not resolve GitHub repository from remote.origin.url." -ForegroundColor Gray
             $allPassed = $false
+        } else {
+            $notesIssue = $null
+            $issueLookupFailed = $false
+            try {
+                $target = Resolve-ReleaseSeriesTarget -Version $targetVersion
+                $notesIssueTitle = "Release Notes: $($target.Series)"
+                $notesIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $notesIssueTitle -AllowMissing
+            } catch {
+                Write-Host "SKIPPED" -ForegroundColor Yellow
+                Write-Host "    $($_.Exception.Message)" -ForegroundColor Gray
+                $allPassed = $false
+                $issueLookupFailed = $true
+            }
+
+            if (-not $issueLookupFailed) {
+                if ($null -eq $notesIssue) {
+                    Write-Host "NOT FOUND" -ForegroundColor Yellow
+                    Write-Host "    Create or restore issue '$notesIssueTitle' before Store submission." -ForegroundColor Gray
+                    $allPassed = $false
+                } else {
+                    $releaseJson = gh release view $targetVersion --repo $repo --json body 2>$null
+                    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseJson)) {
+                        Write-Host "NOT FOUND" -ForegroundColor Yellow
+                        Write-Host "    GitHub Release '$targetVersion' body could not be read." -ForegroundColor Gray
+                        $allPassed = $false
+                    } else {
+                        try {
+                            $release = $releaseJson | ConvertFrom-Json
+                        } catch {
+                            Write-Host "SKIPPED" -ForegroundColor Yellow
+                            Write-Host "    Failed to parse GitHub Release metadata." -ForegroundColor Gray
+                            $allPassed = $false
+                            $release = $null
+                        }
+
+                        if ($release) {
+                            $body = [string]$release.body
+                            $content = Get-MarkdownSection -Body $body -Heading "Release Notes"
+                            if (-not $content) {
+                                Write-Host "NOT FOUND" -ForegroundColor Yellow
+                                Write-Host "    GitHub Release body does not contain a 'Release Notes' reference section." -ForegroundColor Gray
+                                $allPassed = $false
+                            } else {
+                                $normalizedContent = ($content -replace "\r\n?", "`n").Trim()
+                                $issueUrl = [string]$notesIssue.Url
+                                $referencesExactIssue = $false
+                                if ($issueUrl -and $normalizedContent -match [regex]::Escape($issueUrl)) {
+                                    $referencesExactIssue = $true
+                                }
+
+                                if (-not $referencesExactIssue) {
+                                    Write-Host "NOT READY" -ForegroundColor Yellow
+                                    Write-Host "    GitHub Release body does not link to '$notesIssueTitle'." -ForegroundColor Gray
+                                    Write-Host "    Rerun Release Finalize to refresh the issue reference." -ForegroundColor Gray
+                                    $allPassed = $false
+                                } else {
+                                    Write-Host "READY" -ForegroundColor Green
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     } else {
-        Write-Host "NOT FOUND" -ForegroundColor Yellow
-        if ($versionSpecified) {
-            Write-Host "    CHANGELOG.md was not found at target tag $targetGitRef. Fetch the tag locally and try again." -ForegroundColor Gray
-        } else {
-            Write-Host "    CHANGELOG.md was not found at $projectRoot" -ForegroundColor Gray
-        }
+        Write-Host "SKIPPED" -ForegroundColor Yellow
+        Write-Host "    GitHub CLI not available. Install gh to verify the release-notes issue reference." -ForegroundColor Gray
         $allPassed = $false
     }
 
@@ -395,7 +435,7 @@ try {
     $checklist = @(
         "RC package artifact (rc-package-$targetVersion, unsigned) reviewed for at least 24 hours",
         "Confirmed tag X.Y.Z (=$targetVersion) created and pushed",
-        "Release archive GitHub Release X.Y.Z (=$targetVersion) created by Release Finalize",
+        "Release archive GitHub Release X.Y.Z (=$targetVersion) published by Release Finalize",
         "No critical bugs reported",
         "Partner Center app description updated (Japanese)",
         "Partner Center app description updated (English)",

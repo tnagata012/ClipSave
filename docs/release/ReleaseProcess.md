@@ -1,7 +1,7 @@
 # リリースプロセス
 
 **このドキュメントの目的**: ClipSave のリリース系列、版数、タグ、配布チャネル、`Release Finalize`、Store 公開の関係を定義します。
-`docs/release` 領域の正本はこのドキュメントとし、実行手順は [Release Guide](ReleaseGuide.md)、CHANGELOG 記法は [ReleaseNotes](ReleaseNotes.md) に分離します。
+`docs/release` 領域の正本はこのドキュメントとし、実行手順は [Release Guide](ReleaseGuide.md)、GitHub Release Notes の運用は [ReleaseNotes](ReleaseNotes.md) に分離します。
 
 ## このドキュメントの役割
 
@@ -11,7 +11,7 @@
 - latest-only 運用とサポート終了の判定基準を明文化する
 - `Release Finalize` と Store 公開の関係、Store への handoff 条件を整理する
 
-このドキュメントでは、workflow の実行手順、Partner Center 入力手順、CHANGELOG の具体的な記法までは扱いません。
+このドキュメントでは、workflow の実行手順、Partner Center 入力手順、GitHub Release Notes の具体運用までは扱いません。
 
 ## 全体像
 
@@ -22,7 +22,7 @@
 | `dev-latest`           | `main` の最新検証成果物  | このドキュメント / [Release Guide](ReleaseGuide.md)          |
 | `rc-X.Y-latest`        | `release/X.Y` の最新候補 | このドキュメント / [Release Guide](ReleaseGuide.md)          |
 | `X.Y.Z`                | 確定版を指す固定タグ     | このドキュメント                                             |
-| GitHub Release `X.Y.Z` | 確定版アーカイブの保存先 | [Release Guide](ReleaseGuide.md)                             |
+| GitHub Release `X.Y.Z` | 確定版アーカイブと `Release Notes: X.Y` snapshot / 参照 | [Release Guide](ReleaseGuide.md) / [ReleaseNotes](ReleaseNotes.md) |
 | Store package          | 一般ユーザー向け公開物   | [Release Guide](ReleaseGuide.md) / [Store Submission](../distribution/store/StoreSubmission.md) |
 
 関係だけを先に追いたい場合は、次の図を見ると把握しやすいです。
@@ -45,7 +45,7 @@ flowchart LR
 3. 版数の SSOT は `Directory.Build.props` の `Version` (`X.Y.Z`) とする。
 4. Dev/RC は比較・検証用の移動タグであり、履歴の正本ではない。
 5. 確定版は固定タグ `X.Y.Z` を付与した時点で成立する。
-6. `Release Finalize` は確定タグから不変のアーカイブ成果物を GitHub Release `X.Y.Z` に保存する。
+6. `Release Finalize` は確定タグから不変のアーカイブ成果物を GitHub Release `X.Y.Z` に保存し、GitHub Release 本文には `Release Notes: X.Y` の snapshot と参照を置く。
 7. Store 公開は確定版の後段にある任意工程であり、確定そのものとは別工程とする。
 
 ## ブランチモデル
@@ -244,7 +244,7 @@ Dev と RC/Archive は同一 Identity（`Identity Name` / `Publisher`）を採�
 | 文書                                                         | 何を正本にするか                            |
 | ------------------------------------------------------------ | ------------------------------------------- |
 | [ReleaseGuide](ReleaseGuide.md)                              | workflow、成果物、リリース実行ガイド        |
-| [ReleaseNotes](ReleaseNotes.md)                              | `CHANGELOG.md` の更新ルール                 |
+| [ReleaseNotes](ReleaseNotes.md)                              | `Release Notes: Unreleased` / `Release Notes: X.Y` / GitHub Release 参照の運用ルール     |
 | [../distribution/Signing](../distribution/Signing.md)        | 署名方針と配布安全性                        |
 | [../distribution/store/StoreSubmission](../distribution/store/StoreSubmission.md) | Partner Center 提出、listing 運用、提出記録 |
 | [../distribution/ArtifactInstallation](../distribution/ArtifactInstallation.md) | 未署名アーティファクトの検証・導入手順      |

@@ -136,7 +136,7 @@ Store listing の投入物と編集用ソースを分離する。Partner Center 
 7. 画像フィールドには import 対象フォルダ直下から解決できる相対パスのみを入れ、絶対パスや repo ルート基準のパス（例: `src/...`）は入れない。
 8. Partner Center から export した CSV や `listingassets/...` URL を保存する場合は `docs/distribution/store/listing/results/` を作成し、入力値の CSV を上書きしない。
 9. ファイル名は `clipsave-store-<用途>-<番号 or 内容>.ext` を基本とし、タイムスタンプ由来の名前を残さない。
-10. `ReleaseNotes` は提出版と整合する内容に更新する。
+10. `ReleaseNotes` は issue `Release Notes: X.Y` の公開ノートと矛盾しない内容に更新する。
 11. 必須項目（`Title`、`ShortDescription`、`ReleaseNotes`、`DesktopScreenshot1`）は各言語列で空欄にしない。
 
 ## 証跡と提出記録

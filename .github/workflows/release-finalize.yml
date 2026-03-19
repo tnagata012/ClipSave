@@ -37,6 +37,7 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+  issues: read
 
 concurrency:
   group: release-finalize-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
@@ -143,7 +144,6 @@ jobs:
           $body = [string]$release.body
         }
         $isPrerelease = ([string]$release.isPrerelease).ToLowerInvariant()
-
         $assetNames = @($release.assets | ForEach-Object { [string]$_.name } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         $bundleAssets = @($assetNames | Where-Object { $_ -match '\.msixbundle$' })
         $hasChecksum = $assetNames -contains "SHA256SUMS.txt"
@@ -452,22 +452,11 @@ jobs:
         INPUT_RELEASE_TITLE: ${{ github.event_name == 'workflow_dispatch' && inputs.release_title || '' }}
         INPUT_OPERATOR_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.operator_notes || '' }}
       run: |
-        function Get-MarkdownSection([string]$Body, [string]$Heading) {
-          if (-not $Body) {
-            return $null
-          }
-
-          $pattern = "(?ms)^##\s+$([regex]::Escape($Heading))\s*\r?\n(?<content>.*?)(?=^\s*##\s+|\z)"
-          $match = [regex]::Match($Body, $pattern)
-          if (-not $match.Success) {
-            return $null
-          }
-
-          return $match.Groups["content"].Value.Trim()
-        }
+        . ./tooling/scripts/release-support.ps1
 
         $version = "${{ steps.version.outputs.VERSION }}"
         $releaseBranch = "${{ steps.target.outputs.RELEASE_BRANCH }}"
+        $releaseSeries = $releaseBranch.Substring("release/".Length)
         $checkoutRef = "${{ steps.target.outputs.CHECKOUT_REF }}"
         $informationalVersion = "${{ steps.version.outputs.INFORMATIONAL_VERSION }}"
         $fileVersion = "${{ steps.version.outputs.FILE_VERSION }}"
@@ -507,6 +496,36 @@ jobs:
           }
         }
 
+        $releaseNotesIssueTitle = "Release Notes: $releaseSeries"
+        $releaseNotesIssue = Get-GitHubIssueByExactTitle `
+          -Repository "${{ github.repository }}" `
+          -Title $releaseNotesIssueTitle `
+          -AllowMissing
+        $releaseNotesIssueUrl = ""
+        $releaseNotesIssueBody = ""
+        if ($releaseNotesIssue) {
+          $releaseNotesIssueUrl = [string]$releaseNotesIssue.Url
+          $releaseNotesIssueBody = [string]$releaseNotesIssue.Body
+        }
+        $releaseNotesSearchQuery = [Uri]::EscapeDataString("is:issue in:title `"$releaseNotesIssueTitle`"")
+        if ($releaseNotesIssueUrl) {
+          $releaseNotesReferenceUrl = $releaseNotesIssueUrl
+        } else {
+          $releaseNotesReferenceUrl = "${{ github.server_url }}/${{ github.repository }}/issues?q=$releaseNotesSearchQuery"
+          Write-Warning "Release notes issue '$releaseNotesIssueTitle' was not found. The GitHub Release will link to an issue search until the issue is created."
+        }
+        $releaseNotesReference = "Release-line notes source: [$releaseNotesIssueTitle]($releaseNotesReferenceUrl)"
+        if (-not [string]::IsNullOrWhiteSpace($releaseNotesIssueBody)) {
+          $releaseNotesSection = @"
+        $releaseNotesReference
+
+        $($releaseNotesIssueBody.Trim())
+        "@
+        } else {
+          $releaseNotesSection = $releaseNotesReference
+        }
+        $releaseNotesSection = $releaseNotesSection.Trim()
+
         $operatorNotes = $env:INPUT_OPERATOR_NOTES.Trim()
         if (-not $operatorNotes) {
           $operatorNotes = Get-MarkdownSection -Body $existingBody -Heading "Operator Notes"
@@ -543,6 +562,10 @@ jobs:
         $archiveSection = $archiveSection.Trim()
 
         $body = @"
+        ## Release Notes
+
+        $releaseNotesSection
+
         ## Release Archive (Unsigned)
 
         $archiveSection
@@ -560,6 +583,8 @@ jobs:
         echo "RELEASE_TITLE=$releaseTitle" >> $env:GITHUB_OUTPUT
         echo "PRERELEASE=$prerelease" >> $env:GITHUB_OUTPUT
         echo "BODY_PATH=$bodyPath" >> $env:GITHUB_OUTPUT
+        echo "RELEASE_NOTES_TITLE=$releaseNotesIssueTitle" >> $env:GITHUB_OUTPUT
+        echo "RELEASE_NOTES_URL=$releaseNotesReferenceUrl" >> $env:GITHUB_OUTPUT
 
     - name: Publish GitHub Release archive
       if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
@@ -573,6 +598,7 @@ jobs:
           output/SHA256SUMS.txt
         overwrite_files: true
         prerelease: ${{ steps.presentation.outputs.PRERELEASE }}
+        draft: false
         make_latest: false
 
     - name: Update GitHub Release metadata only
@@ -583,6 +609,7 @@ jobs:
         name: ${{ steps.presentation.outputs.RELEASE_TITLE }}
         body_path: ${{ steps.presentation.outputs.BODY_PATH }}
         prerelease: ${{ steps.presentation.outputs.PRERELEASE }}
+        draft: false
         make_latest: false
 
     - name: Cleanup stale archive assets
@@ -690,6 +717,7 @@ jobs:
         | Package Version | `${{ steps.version.outputs.MSIX_VERSION }}` |
         | Release Title | `${{ steps.presentation.outputs.RELEASE_TITLE }}` |
         | Prerelease | `${{ steps.presentation.outputs.PRERELEASE }}` |
+        | Release Notes | [`${{ steps.presentation.outputs.RELEASE_NOTES_TITLE }}`](${{ steps.presentation.outputs.RELEASE_NOTES_URL }}) |
         | Archive Mode | ``$($archiveModeLabel)`` |
         | Release Archive Artifact | ``$($archiveArtifact)`` |
         | Store Package Mode | ``$($storeMode)`` |
@@ -699,5 +727,5 @@ jobs:
         | Commit SHA | `${{ steps.version.outputs.COMMIT_SHA }}` |
         | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
-        Existing archive assets are preserved on manual reruns once a finalized archive already exists. `Operator Notes` and `Store Submission Log` are preserved across reruns unless explicitly overridden.
+        Existing archive assets are preserved on manual reruns once a finalized archive already exists. `Release Notes` is rebuilt from the current release-line issue and keeps a link back to it, and `Operator Notes` / `Store Submission Log` are preserved across reruns unless explicitly overridden.
         "@ >> $env:GITHUB_STEP_SUMMARY

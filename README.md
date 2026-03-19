@@ -55,7 +55,7 @@ Project documentation is written in Japanese.
 - [Usage Guide](docs/UsageGuide.md) - Basic operations and settings
 - [Product Concept](docs/ProductConcept.md) - Vision and design principles
 - [Landing Page Operations](docs/presentation/LandingPage.md) - Update policy and verification steps for `site/`
-- [Changelog](CHANGELOG.md) - Change history
+- [Releases](https://github.com/tnagata012/ClipSave/releases) - Published release notes and downloadable artifacts
 
 ## For Contributors
 
@@ -65,7 +65,7 @@ If you want to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 |---------|-------------|
 | Design | [Specification](docs/dev/Specification.md) ・ [Architecture](docs/dev/Architecture.md) ・ [Coding Guidelines](docs/dev/CodingGuidelines.md) |
 | Testing | [Testing Strategy](docs/dev/TestingStrategy.md) |
-| Release | [Release Process](docs/release/ReleaseProcess.md) ・ [Release Guide](docs/release/ReleaseGuide.md) ・ [Release Notes Operations](docs/release/ReleaseNotes.md) |
+| Release | [Release Process](docs/release/ReleaseProcess.md) ・ [Release Guide](docs/release/ReleaseGuide.md) ・ [Release Notes Operations](docs/release/ReleaseNotes.md) ・ [GitHub Releases](https://github.com/tnagata012/ClipSave/releases) |
 | Distribution | [Store Submission](docs/distribution/store/StoreSubmission.md) ・ [Signing](docs/distribution/Signing.md) ・ [Validation Artifact Installation](docs/distribution/ArtifactInstallation.md) ・ [Store Listing Assets](docs/distribution/store/listing/) ・ [Icon Asset Operations](docs/presentation/IconAssets.md) |
 
 ## Security

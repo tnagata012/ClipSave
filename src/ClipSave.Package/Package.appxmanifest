@@ -1,57 +1,31 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-
-<Package
-  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
-  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
-  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
-  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap desktop rescap">
-
-  <Identity
-    Name="tnagata012.ClipSave"
-    Publisher="CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959"
-    Version="0.0.1.0" />
-
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" IgnorableNamespaces="uap desktop rescap">
+  <Identity Name="tnagata012.ClipSave" Publisher="CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959" Version="0.2.0.0" />
   <Properties>
     <DisplayName>ClipSave</DisplayName>
     <PublisherDisplayName>tnagata012</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
-
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.0.0" MaxVersionTested="10.0.0.0" />
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.22000.0" />
   </Dependencies>
-
   <Resources>
-    <Resource Language="x-generate"/>
+    <Resource Language="x-generate" />
   </Resources>
-
   <Applications>
-    <Application Id="App"
-      Executable="$targetnametoken$.exe"
-      EntryPoint="$targetentrypoint$">
-      <uap:VisualElements
-        DisplayName="ClipSave"
-        Description="ClipSave"
-        BackgroundColor="transparent"
-        Square150x150Logo="Images\Square150x150Logo.png"
-        Square44x44Logo="Images\Square44x44Logo.png">
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
+      <uap:VisualElements DisplayName="ClipSave" Description="ClipSave" BackgroundColor="transparent" Square150x150Logo="Images\Square150x150Logo.png" Square44x44Logo="Images\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Images\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Images\SplashScreen.png" />
       </uap:VisualElements>
       <Extensions>
-        <desktop:Extension Category="windows.startupTask"
-                           Executable="ClipSave\ClipSave.exe"
-                           EntryPoint="Windows.FullTrustApplication">
-          <desktop:StartupTask TaskId="ClipSaveStartupTask"
-                               Enabled="true"
-                               DisplayName="ClipSave" />
+        <desktop:Extension Category="windows.startupTask" Executable="ClipSave\ClipSave.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="ClipSaveStartupTask" Enabled="true" DisplayName="ClipSave" />
         </desktop:Extension>
       </Extensions>
     </Application>
   </Applications>
-
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
   </Capabilities>

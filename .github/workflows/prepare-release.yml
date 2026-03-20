@@ -184,9 +184,11 @@ jobs:
         }
 
         function Assert-RemoteBranchState([string]$GitRef, [string]$ExpectedVersion, [string]$BranchName = "") {
-          $assertArgs = @("-GitRef", $GitRef)
+          $assertArgs = @{
+            GitRef = $GitRef
+          }
           if ($BranchName) {
-            $assertArgs += @("-BranchName", $BranchName)
+            $assertArgs.BranchName = $BranchName
           }
 
           & ./scripts/assert-version-policy.ps1 @assertArgs
@@ -232,16 +234,13 @@ jobs:
           Assert-RemoteBranchState -GitRef "origin/$mainBumpBranch" -ExpectedVersion $nextMainVersion
         }
 
-        if (-not $releaseExists -and -not $mainBumpExists) {
+        if (-not $releaseExists) {
           $branchMode = "create_all"
         } else {
-          if ($releaseExists -ne $mainBumpExists) {
-            $existingBranch = if ($releaseExists) { $releaseBranch } else { $mainBumpBranch }
-            $missingBranch = if ($releaseExists) { $mainBumpBranch } else { $releaseBranch }
-            throw "Partial prepare-release state detected. Existing remote branch: '$existingBranch'. Missing remote branch: '$missingBranch'. Clean up the stale branch or complete the missing branch manually before rerunning."
-          }
-
           $branchMode = "reuse_existing"
+          if (-not $mainBumpExists) {
+            Write-Warning "Release branch already exists and will be reused. Missing main bump branch '$mainBumpBranch' will not be recreated automatically on rerun."
+          }
         }
 
         echo "BRANCH_MODE=$branchMode" >> $env:GITHUB_OUTPUT
@@ -345,7 +344,7 @@ jobs:
         & ./scripts/create-release-branch.ps1 @scriptArgs
 
     - name: Create PR for main version bump branch
-      if: ${{ inputs.create_main_bump_pr }}
+      if: ${{ inputs.create_main_bump_pr && (steps.branch_state.outputs.BRANCH_MODE == 'create_all' || steps.branch_state.outputs.MAIN_BUMP_EXISTS == 'true') }}
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}

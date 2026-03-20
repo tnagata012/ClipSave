@@ -42,7 +42,7 @@ function Get-TrackedFileContent {
             Fail "Required file not found: $AbsolutePath"
         }
 
-        return Get-Content -LiteralPath $AbsolutePath -Raw
+        return (Get-Content -LiteralPath $AbsolutePath -Raw).TrimStart([char]0xFEFF)
     }
 
     Push-Location $ProjectRoot
@@ -63,7 +63,7 @@ function Get-TrackedFileContent {
             Fail "Failed to read '$RelativePath' at git ref '$GitRef'."
         }
 
-        return ($content -join [Environment]::NewLine)
+        return ($content -join [Environment]::NewLine).TrimStart([char]0xFEFF)
     }
     finally {
         Pop-Location

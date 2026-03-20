@@ -235,12 +235,16 @@ jobs:
         }
 
         if (-not $releaseExists) {
+          if ($mainBumpExists) {
+            throw "Unexpected prepare-release state. Main bump branch '$mainBumpBranch' exists, but release branch '$releaseBranch' does not."
+          }
+
           $branchMode = "create_all"
+        } elseif (-not $mainBumpExists) {
+          $branchMode = "create_main_bump_only"
+          Write-Warning "Release branch already exists and will be reused. Missing main bump branch '$mainBumpBranch' will be recreated from the current main branch."
         } else {
           $branchMode = "reuse_existing"
-          if (-not $mainBumpExists) {
-            Write-Warning "Release branch already exists and will be reused. Missing main bump branch '$mainBumpBranch' will not be recreated automatically on rerun."
-          }
         }
 
         echo "BRANCH_MODE=$branchMode" >> $env:GITHUB_OUTPUT
@@ -343,8 +347,59 @@ jobs:
 
         & ./scripts/create-release-branch.ps1 @scriptArgs
 
+    - name: Create missing main bump branch
+      if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'create_main_bump_only' }}
+      shell: pwsh
+      run: |
+        $mainBranch = "main"
+        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}".Trim()
+        $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}".Trim()
+        $propsPath = "Directory.Build.props"
+        $manifestPath = "src/ClipSave.Package/Package.appxmanifest"
+
+        git checkout $mainBranch
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to checkout $mainBranch."
+        }
+
+        git checkout -b $mainBumpBranch
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to create missing main bump branch '$mainBumpBranch'."
+        }
+
+        [xml]$props = Get-Content $propsPath
+        $props.Project.PropertyGroup.Version = $nextMainVersion
+        $props.Save($propsPath)
+        Write-Host "Updated Directory.Build.props to $nextMainVersion"
+
+        [xml]$manifest = Get-Content $manifestPath
+        $manifest.Package.Identity.Version = "$nextMainVersion.0"
+        $manifest.Save($manifestPath)
+        Write-Host "Updated Package.appxmanifest to $nextMainVersion.0"
+
+        git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
+        git diff --staged --quiet
+        if ($LASTEXITCODE -ne 0) {
+          git commit -m "chore: bump main version to $nextMainVersion"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to commit version update on '$mainBumpBranch'."
+          }
+        } else {
+          Write-Host "No version changes detected for '$mainBumpBranch'."
+        }
+
+        ./scripts/assert-version-policy.ps1 -BranchName $mainBranch
+        if ($LASTEXITCODE -ne 0) {
+          throw "Version validation failed on '$mainBumpBranch'."
+        }
+
+        git push -u origin $mainBumpBranch
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to push '$mainBumpBranch'."
+        }
+
     - name: Create PR for main version bump branch
-      if: ${{ inputs.create_main_bump_pr && (steps.branch_state.outputs.BRANCH_MODE == 'create_all' || steps.branch_state.outputs.MAIN_BUMP_EXISTS == 'true') }}
+      if: ${{ inputs.create_main_bump_pr && (steps.branch_state.outputs.BRANCH_MODE == 'create_all' || steps.branch_state.outputs.BRANCH_MODE == 'create_main_bump_only' || steps.branch_state.outputs.MAIN_BUMP_EXISTS == 'true') }}
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
@@ -407,6 +462,13 @@ jobs:
           throw "Failed to create pull request: $head -> $base"
         }
 
+    - name: Explain skipped main bump PR creation
+      if: ${{ inputs.create_main_bump_pr && steps.branch_state.outputs.BRANCH_MODE != 'create_all' && steps.branch_state.outputs.BRANCH_MODE != 'create_main_bump_only' && steps.branch_state.outputs.MAIN_BUMP_EXISTS != 'true' }}
+      shell: pwsh
+      run: |
+        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
+        Write-Warning "Main bump PR creation was skipped because '$mainBumpBranch' does not exist on origin. Prepare Release reruns reuse the existing release branch but do not recreate a deleted main bump branch."
+
     - name: Summary
       shell: pwsh
       run: |
@@ -414,8 +476,9 @@ jobs:
         $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}"
         $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
         $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
-        $prCreated = "${{ inputs.create_main_bump_pr }}"
+        $prRequested = "${{ inputs.create_main_bump_pr }}".Trim().ToLowerInvariant() -eq "true"
         $branchMode = "${{ steps.branch_state.outputs.BRANCH_MODE }}"
+        $mainBumpExists = "${{ steps.branch_state.outputs.MAIN_BUMP_EXISTS }}".Trim().ToLowerInvariant() -eq "true"
         $unreleasedIssue = "${{ steps.release_notes.outputs.UNRELEASED_URL }}".Trim()
         if (-not $unreleasedIssue) {
           $unreleasedIssue = "create manually (`${{ steps.release_notes.outputs.UNRELEASED_TITLE }}`)"
@@ -429,6 +492,14 @@ jobs:
           $lineIssueAction = "reused"
         }
 
+        if (-not $prRequested) {
+          $prStatus = "disabled"
+        } elseif ($branchMode -eq "create_all" -or $branchMode -eq "create_main_bump_only" -or $mainBumpExists) {
+          $prStatus = "attempted"
+        } else {
+          $prStatus = "skipped (missing main bump branch)"
+        }
+
         @"
         ## Release Preparation Complete
 
@@ -438,7 +509,7 @@ jobs:
         | Release Branch | $releaseBranch |
         | Main Bump Branch | $mainBumpBranch |
         | Next Main Version | $nextMainVersion |
-        | PR Created | $prCreated |
+        | Main Bump PR | $prStatus |
         | Branch Prep Mode | `$branchMode` |
         | Unreleased Notes | $unreleasedIssue |
         | Release Line Notes | $lineIssue |
@@ -447,4 +518,5 @@ jobs:
         Next steps:
         1. Manually move the shipped bullets from `${{ steps.release_notes.outputs.UNRELEASED_TITLE }}` into `${{ steps.line_issue.outputs.LINE_TITLE }}`.
         2. Review `${{ steps.line_issue.outputs.LINE_TITLE }}` before tagging so it is ready to be linked from GitHub Release $version.
+        3. If `${{ inputs.create_main_bump_pr }}` was requested but `Main Bump PR` is `skipped (missing main bump branch)`, recreate `$mainBumpBranch` manually before opening the PR.
         "@ >> $env:GITHUB_STEP_SUMMARY

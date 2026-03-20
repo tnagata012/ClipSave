@@ -235,12 +235,16 @@ jobs:
         }
 
         if (-not $releaseExists) {
+          if ($mainBumpExists) {
+            throw "Unexpected prepare-release state. Main bump branch '$mainBumpBranch' exists, but release branch '$releaseBranch' does not."
+          }
+
           $branchMode = "create_all"
+        } elseif (-not $mainBumpExists) {
+          $branchMode = "create_main_bump_only"
+          Write-Warning "Release branch already exists and will be reused. Missing main bump branch '$mainBumpBranch' will be recreated from the current main branch."
         } else {
           $branchMode = "reuse_existing"
-          if (-not $mainBumpExists) {
-            Write-Warning "Release branch already exists and will be reused. Missing main bump branch '$mainBumpBranch' will not be recreated automatically on rerun."
-          }
         }
 
         echo "BRANCH_MODE=$branchMode" >> $env:GITHUB_OUTPUT
@@ -343,8 +347,59 @@ jobs:
 
         & ./scripts/create-release-branch.ps1 @scriptArgs
 
+    - name: Create missing main bump branch
+      if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'create_main_bump_only' }}
+      shell: pwsh
+      run: |
+        $mainBranch = "main"
+        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}".Trim()
+        $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}".Trim()
+        $propsPath = "Directory.Build.props"
+        $manifestPath = "src/ClipSave.Package/Package.appxmanifest"
+
+        git checkout $mainBranch
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to checkout $mainBranch."
+        }
+
+        git checkout -b $mainBumpBranch
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to create missing main bump branch '$mainBumpBranch'."
+        }
+
+        [xml]$props = Get-Content $propsPath
+        $props.Project.PropertyGroup.Version = $nextMainVersion
+        $props.Save($propsPath)
+        Write-Host "Updated Directory.Build.props to $nextMainVersion"
+
+        [xml]$manifest = Get-Content $manifestPath
+        $manifest.Package.Identity.Version = "$nextMainVersion.0"
+        $manifest.Save($manifestPath)
+        Write-Host "Updated Package.appxmanifest to $nextMainVersion.0"
+
+        git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
+        git diff --staged --quiet
+        if ($LASTEXITCODE -ne 0) {
+          git commit -m "chore: bump main version to $nextMainVersion"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to commit version update on '$mainBumpBranch'."
+          }
+        } else {
+          Write-Host "No version changes detected for '$mainBumpBranch'."
+        }
+
+        ./scripts/assert-version-policy.ps1 -BranchName $mainBranch
+        if ($LASTEXITCODE -ne 0) {
+          throw "Version validation failed on '$mainBumpBranch'."
+        }
+
+        git push -u origin $mainBumpBranch
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to push '$mainBumpBranch'."
+        }
+
     - name: Create PR for main version bump branch
-      if: ${{ inputs.create_main_bump_pr && (steps.branch_state.outputs.BRANCH_MODE == 'create_all' || steps.branch_state.outputs.MAIN_BUMP_EXISTS == 'true') }}
+      if: ${{ inputs.create_main_bump_pr && (steps.branch_state.outputs.BRANCH_MODE == 'create_all' || steps.branch_state.outputs.BRANCH_MODE == 'create_main_bump_only' || steps.branch_state.outputs.MAIN_BUMP_EXISTS == 'true') }}
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
@@ -408,7 +463,7 @@ jobs:
         }
 
     - name: Explain skipped main bump PR creation
-      if: ${{ inputs.create_main_bump_pr && steps.branch_state.outputs.BRANCH_MODE != 'create_all' && steps.branch_state.outputs.MAIN_BUMP_EXISTS != 'true' }}
+      if: ${{ inputs.create_main_bump_pr && steps.branch_state.outputs.BRANCH_MODE != 'create_all' && steps.branch_state.outputs.BRANCH_MODE != 'create_main_bump_only' && steps.branch_state.outputs.MAIN_BUMP_EXISTS != 'true' }}
       shell: pwsh
       run: |
         $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
@@ -439,7 +494,7 @@ jobs:
 
         if (-not $prRequested) {
           $prStatus = "disabled"
-        } elseif ($branchMode -eq "create_all" -or $mainBumpExists) {
+        } elseif ($branchMode -eq "create_all" -or $branchMode -eq "create_main_bump_only" -or $mainBumpExists) {
           $prStatus = "attempted"
         } else {
           $prStatus = "skipped (missing main bump branch)"

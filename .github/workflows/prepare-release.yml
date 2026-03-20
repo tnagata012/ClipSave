@@ -407,6 +407,13 @@ jobs:
           throw "Failed to create pull request: $head -> $base"
         }
 
+    - name: Explain skipped main bump PR creation
+      if: ${{ inputs.create_main_bump_pr && steps.branch_state.outputs.BRANCH_MODE != 'create_all' && steps.branch_state.outputs.MAIN_BUMP_EXISTS != 'true' }}
+      shell: pwsh
+      run: |
+        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
+        Write-Warning "Main bump PR creation was skipped because '$mainBumpBranch' does not exist on origin. Prepare Release reruns reuse the existing release branch but do not recreate a deleted main bump branch."
+
     - name: Summary
       shell: pwsh
       run: |
@@ -414,8 +421,9 @@ jobs:
         $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}"
         $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
         $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
-        $prCreated = "${{ inputs.create_main_bump_pr }}"
+        $prRequested = "${{ inputs.create_main_bump_pr }}".Trim().ToLowerInvariant() -eq "true"
         $branchMode = "${{ steps.branch_state.outputs.BRANCH_MODE }}"
+        $mainBumpExists = "${{ steps.branch_state.outputs.MAIN_BUMP_EXISTS }}".Trim().ToLowerInvariant() -eq "true"
         $unreleasedIssue = "${{ steps.release_notes.outputs.UNRELEASED_URL }}".Trim()
         if (-not $unreleasedIssue) {
           $unreleasedIssue = "create manually (`${{ steps.release_notes.outputs.UNRELEASED_TITLE }}`)"
@@ -429,6 +437,14 @@ jobs:
           $lineIssueAction = "reused"
         }
 
+        if (-not $prRequested) {
+          $prStatus = "disabled"
+        } elseif ($branchMode -eq "create_all" -or $mainBumpExists) {
+          $prStatus = "attempted"
+        } else {
+          $prStatus = "skipped (missing main bump branch)"
+        }
+
         @"
         ## Release Preparation Complete
 
@@ -438,7 +454,7 @@ jobs:
         | Release Branch | $releaseBranch |
         | Main Bump Branch | $mainBumpBranch |
         | Next Main Version | $nextMainVersion |
-        | PR Created | $prCreated |
+        | Main Bump PR | $prStatus |
         | Branch Prep Mode | `$branchMode` |
         | Unreleased Notes | $unreleasedIssue |
         | Release Line Notes | $lineIssue |
@@ -447,4 +463,5 @@ jobs:
         Next steps:
         1. Manually move the shipped bullets from `${{ steps.release_notes.outputs.UNRELEASED_TITLE }}` into `${{ steps.line_issue.outputs.LINE_TITLE }}`.
         2. Review `${{ steps.line_issue.outputs.LINE_TITLE }}` before tagging so it is ready to be linked from GitHub Release $version.
+        3. If `${{ inputs.create_main_bump_pr }}` was requested but `Main Bump PR` is `skipped (missing main bump branch)`, recreate `$mainBumpBranch` manually before opening the PR.
         "@ >> $env:GITHUB_STEP_SUMMARY

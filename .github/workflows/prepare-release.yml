@@ -392,21 +392,56 @@ jobs:
           throw "Failed to push '$mainBumpBranch'."
         }
 
-    - name: Dispatch RC Build
+    - name: Ensure RC Build
       id: rc_build
-      if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'create_all' }}
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
         $repo = "${{ github.repository }}"
+        $releaseHeadRef = git ls-remote --heads origin $releaseBranch
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseHeadRef)) {
+          throw "Failed to resolve origin/$releaseBranch."
+        }
+
+        $releaseHeadSha = ($releaseHeadRef -split "\s+")[0].Trim()
+        if (-not $releaseHeadSha) {
+          throw "Failed to parse HEAD sha for origin/$releaseBranch."
+        }
+
+        $existingRunJson = gh run list `
+          --repo $repo `
+          --workflow rc-build.yml `
+          --branch $releaseBranch `
+          --limit 20 `
+          --json headSha,url,status,conclusion 2>$null
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to query existing RC Build runs for '$releaseBranch'."
+        }
+
+        try {
+          $existingRuns = @($existingRunJson | ConvertFrom-Json)
+        } catch {
+          throw "Failed to parse RC Build run query result."
+        }
+
+        $existingRun = $existingRuns |
+          Where-Object { $_.headSha -eq $releaseHeadSha } |
+          Select-Object -First 1
+        if ($existingRun) {
+          echo "RC_BUILD_ACTION=already_present" >> $env:GITHUB_OUTPUT
+          echo "RC_BUILD_URL=$($existingRun.url)" >> $env:GITHUB_OUTPUT
+          Write-Host "Existing RC Build run already covers '$releaseBranch' at $releaseHeadSha."
+          exit 0
+        }
+
         $maxAttempts = 5
 
         for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
           gh workflow run rc-build.yml --repo $repo --ref $releaseBranch *> $null
           if ($LASTEXITCODE -eq 0) {
-            echo "RC_BUILD_TRIGGERED=true" >> $env:GITHUB_OUTPUT
+            echo "RC_BUILD_ACTION=dispatched" >> $env:GITHUB_OUTPUT
             Write-Host "Dispatched RC Build for '$releaseBranch'."
             exit 0
           }
@@ -537,7 +572,8 @@ jobs:
         }
         $lineIssue = "${{ steps.line_issue.outputs.LINE_URL }}".Trim()
         $lineIssueAction = "${{ steps.line_issue.outputs.LINE_ACTION }}".Trim()
-        $rcBuildTriggered = "${{ steps.rc_build.outputs.RC_BUILD_TRIGGERED }}".Trim()
+        $rcBuildAction = "${{ steps.rc_build.outputs.RC_BUILD_ACTION }}".Trim()
+        $rcBuildUrl = "${{ steps.rc_build.outputs.RC_BUILD_URL }}".Trim()
         $mainBumpPrUrl = "${{ steps.main_bump_pr.outputs.PR_URL }}".Trim()
         $prCheckTriggered = "${{ steps.main_bump_pr.outputs.PR_CHECK_TRIGGERED }}".Trim()
         if (-not $lineIssue) {
@@ -552,12 +588,11 @@ jobs:
         if (-not $prCheckTriggered) {
           $prCheckTriggered = "false"
         }
-        if (-not $rcBuildTriggered) {
-          if ($branchMode -eq "create_all") {
-            $rcBuildTriggered = "false"
-          } else {
-            $rcBuildTriggered = "not_needed"
-          }
+        if (-not $rcBuildAction) {
+          $rcBuildAction = "not_needed"
+        }
+        if (-not $rcBuildUrl) {
+          $rcBuildUrl = "n/a"
         }
 
         if (-not $prRequested) {
@@ -577,7 +612,8 @@ jobs:
         | Release Branch | $releaseBranch |
         | Main Bump Branch | $mainBumpBranch |
         | Next Main Version | $nextMainVersion |
-        | RC Build Dispatch | `$rcBuildTriggered` |
+        | RC Build | `$rcBuildAction` |
+        | RC Build Run | $rcBuildUrl |
         | Main Bump PR | $prStatus |
         | Main Bump PR URL | $mainBumpPrUrl |
         | PR Check Dispatch | `$prCheckTriggered` |

@@ -234,12 +234,10 @@ jobs:
           Assert-RemoteBranchState -GitRef "origin/$mainBumpBranch" -ExpectedVersion $nextMainVersion
         }
 
-        if (-not $releaseExists -and -not $mainBumpExists) {
+        if (-not $releaseExists) {
           $branchMode = "create_all"
-        } elseif ($releaseExists -and -not $mainBumpExists) {
+        } elseif (-not $mainBumpExists) {
           $branchMode = "create_main_bump_only"
-        } elseif (-not $releaseExists -and $mainBumpExists) {
-          throw "Partial prepare-release state detected. Existing remote branch: '$mainBumpBranch'. Missing remote branch: '$releaseBranch'. Recreating a release branch from a surviving main bump branch is not automated because the original release cut point may no longer be recoverable safely. Recreate '$releaseBranch' manually or remove '$mainBumpBranch' before rerunning."
         } else {
           $branchMode = "reuse_existing"
         }

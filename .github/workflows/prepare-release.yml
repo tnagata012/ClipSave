@@ -144,7 +144,18 @@ jobs:
       run: |
         function Get-RemoteBranchExists([string]$BranchName) {
           git ls-remote --exit-code --heads origin $BranchName *> $null
-          return ($LASTEXITCODE -eq 0)
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -eq 0) {
+            $global:LASTEXITCODE = 0
+            return $true
+          }
+
+          if ($exitCode -eq 2) {
+            $global:LASTEXITCODE = 0
+            return $false
+          }
+
+          throw "Failed to inspect origin/$BranchName (git ls-remote exit code $exitCode)."
         }
 
         function Get-VersionFromGitObject([string]$ObjectRef) {

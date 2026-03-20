@@ -171,6 +171,22 @@ jobs:
       shell: pwsh
       working-directory: repo
       run: |
+        function Get-RemoteBranchExists([string]$BranchName) {
+          git ls-remote --exit-code --heads origin $BranchName *> $null
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -eq 0) {
+            $global:LASTEXITCODE = 0
+            return $true
+          }
+
+          if ($exitCode -eq 2) {
+            $global:LASTEXITCODE = 0
+            return $false
+          }
+
+          throw "Failed to inspect origin/$BranchName (git ls-remote exit code $exitCode)."
+        }
+
         function Get-VersionFromGitObject([string]$ObjectRef) {
           $content = git show $ObjectRef 2>$null
           if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($content -join "`n"))) {
@@ -190,8 +206,7 @@ jobs:
         $expectedVersion = "${{ steps.patch_target.outputs.PATCH_VERSION }}"
         $assertScript = Join-Path $env:GITHUB_WORKSPACE "tooling/scripts/assert-version-policy.ps1"
 
-        git ls-remote --exit-code --heads origin $patchBranch *> $null
-        $patchExists = ($LASTEXITCODE -eq 0)
+        $patchExists = Get-RemoteBranchExists $patchBranch
         if ($patchExists) {
           git fetch --no-tags origin "$patchBranch"
           if ($LASTEXITCODE -ne 0) {

@@ -14,6 +14,7 @@ on:
         type: boolean
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -247,7 +248,8 @@ jobs:
           -ReleaseBranch "${{ inputs.release_branch }}" `
           -Push
 
-    - name: Create PR for patch init branch
+    - name: Ensure patch init PR and dispatch PR Check
+      id: patch_pr
       if: ${{ inputs.create_patch_pr }}
       shell: pwsh
       env:
@@ -259,36 +261,36 @@ jobs:
         $repo = "${{ github.repository }}"
         $releaseLine = $base -replace '^release/', ''
 
-        $existingPrJson = gh pr list `
-          --repo $repo `
-          --head $head `
-          --base $base `
-          --state open `
-          --json number,url 2>$null
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to query existing pull requests."
-        }
-
-        try {
-          $existingPrs = $existingPrJson | ConvertFrom-Json
-        } catch {
-          throw "Failed to parse pull request query result."
-        }
-
-        if ($null -eq $existingPrs) {
-          $existingPrs = @()
-        } elseif ($existingPrs -isnot [System.Array]) {
-          $existingPrs = @($existingPrs)
-        }
-
-        $existingPr = $existingPrs | Select-Object -First 1
-        if ($existingPr) {
-          Write-Host "PR already exists: #$($existingPr.number) ($head -> $base)"
-          if ($existingPr.url) {
-            Write-Host "PR URL: $($existingPr.url)"
+        function Get-OpenPatchPr() {
+          $prJson = gh pr list `
+            --repo $repo `
+            --head $head `
+            --base $base `
+            --state open `
+            --json number,url 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to query existing pull requests."
           }
-          exit 0
+
+          try {
+            $prs = $prJson | ConvertFrom-Json
+          } catch {
+            throw "Failed to parse pull request query result."
+          }
+
+          if ($null -eq $prs) {
+            return @()
+          }
+
+          if ($prs -isnot [System.Array]) {
+            return @($prs)
+          }
+
+          return $prs
         }
+
+        $createdPr = $false
+        $pr = @(Get-OpenPatchPr) | Select-Object -First 1
 
         $title = "chore: start $version patch release"
         $body = @"
@@ -303,14 +305,53 @@ jobs:
         This PR is the only patch version bump for this release cycle.
         "@
 
-        gh pr create --repo $repo --base $base --head $head --title $title --body $body
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to create pull request: $head -> $base"
+        if (-not $pr) {
+          gh pr create --repo $repo --base $base --head $head --title $title --body $body *> $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create pull request: $head -> $base"
+          }
+          $createdPr = $true
         }
+
+        $pr = @(Get-OpenPatchPr) | Select-Object -First 1
+        if (-not $pr) {
+          throw "Failed to resolve the open pull request for '$head -> $base'."
+        }
+
+        if ($createdPr) {
+          Write-Host "Created PR: #$($pr.number) ($head -> $base)"
+        } else {
+          Write-Host "Using existing PR: #$($pr.number) ($head -> $base)"
+        }
+
+        if ($pr.url) {
+          Write-Host "PR URL: $($pr.url)"
+        }
+
+        gh workflow run pr-check.yml `
+          --repo $repo `
+          --ref $head `
+          -f pr_number=$([string]$pr.number) *> $null
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to dispatch PR Check for PR #$($pr.number)."
+        }
+
+        echo "PR_URL=$($pr.url)" >> $env:GITHUB_OUTPUT
+        echo "PR_CHECK_TRIGGERED=true" >> $env:GITHUB_OUTPUT
+        Write-Host "Dispatched PR Check for PR #$($pr.number)."
 
     - name: Summary
       shell: pwsh
       run: |
+        $patchPrUrl = "${{ steps.patch_pr.outputs.PR_URL }}".Trim()
+        $prCheckTriggered = "${{ steps.patch_pr.outputs.PR_CHECK_TRIGGERED }}".Trim()
+        if (-not $patchPrUrl) {
+          $patchPrUrl = "not created"
+        }
+        if (-not $prCheckTriggered) {
+          $prCheckTriggered = "false"
+        }
+
         @"
         ## Patch Release Preparation Complete
 
@@ -322,4 +363,6 @@ jobs:
         | Patch Version | `${{ steps.patch_target.outputs.PATCH_VERSION }}` |
         | Branch Prep Mode | `${{ steps.patch_state.outputs.BRANCH_MODE }}` |
         | PR Created | `${{ inputs.create_patch_pr }}` |
+        | Patch PR URL | $patchPrUrl |
+        | PR Check Dispatch | `$prCheckTriggered` |
         "@ >> $env:GITHUB_STEP_SUMMARY

@@ -3,13 +3,19 @@ name: PR Check
 on:
   pull_request:
     branches: [main, 'release/*']
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull request number to validate'
+        required: true
+        type: string
 
 permissions:
   contents: read
   pull-requests: read
 
 concurrency:
-  group: pr-check-${{ github.head_ref }}
+  group: pr-check-${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -28,6 +34,66 @@ jobs:
     - name: Lint GitHub Actions workflows
       uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2.1.2
 
+    - name: Resolve PR metadata
+      id: pr
+      uses: actions/github-script@v7
+      with:
+        script: |
+          if (context.eventName === "pull_request") {
+            const pr = context.payload.pull_request;
+            if (!pr?.number || !pr.base?.ref) {
+              core.setFailed("pull_request payload is missing required PR metadata.");
+              return;
+            }
+
+            core.info(`Resolved PR #${pr.number} from pull_request event targeting '${pr.base.ref}'.`);
+            core.setOutput("pr_number", String(pr.number));
+            core.setOutput("base_ref", pr.base.ref);
+            return;
+          }
+
+          if (context.eventName !== "workflow_dispatch") {
+            core.setFailed(`Unsupported event for PR Check: ${context.eventName}`);
+            return;
+          }
+
+          const inputPrNumberRaw = "${{ inputs.pr_number }}";
+          const inputPrNumber = Number(inputPrNumberRaw);
+          if (!Number.isInteger(inputPrNumber) || inputPrNumber <= 0) {
+            core.setFailed(`Invalid workflow_dispatch pr_number input: '${inputPrNumberRaw}'.`);
+            return;
+          }
+
+          const { data: pr } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: inputPrNumber,
+          });
+
+          const expectedHeadRef = context.ref.replace(/^refs\/heads\//, "");
+          if (pr.head.ref !== expectedHeadRef) {
+            core.setFailed(
+              `workflow_dispatch ref '${expectedHeadRef}' does not match PR #${pr.number} head '${pr.head.ref}'.`
+            );
+            return;
+          }
+
+          if (pr.head.sha !== context.sha) {
+            core.setFailed(
+              `workflow_dispatch sha '${context.sha}' does not match PR #${pr.number} head sha '${pr.head.sha}'.`
+            );
+            return;
+          }
+
+          if (pr.state !== "open") {
+            core.setFailed(`PR #${pr.number} is not open.`);
+            return;
+          }
+
+          core.info(`Resolved PR #${pr.number} from workflow_dispatch targeting '${pr.base.ref}'.`);
+          core.setOutput("pr_number", String(pr.number));
+          core.setOutput("base_ref", pr.base.ref);
+
     - name: Detect website-only changes
       id: changes
       uses: actions/github-script@v7
@@ -42,7 +108,7 @@ jobs:
           const files = await github.paginate(github.rest.pulls.listFiles, {
             owner: context.repo.owner,
             repo: context.repo.repo,
-            pull_number: context.issue.number,
+            pull_number: Number("${{ steps.pr.outputs.pr_number }}"),
             per_page: 100,
           });
 
@@ -125,4 +191,4 @@ jobs:
 
     - name: Validate version
       shell: pwsh
-      run: ./scripts/assert-version-policy.ps1 -BranchName "${{ github.base_ref }}"
+      run: ./scripts/assert-version-policy.ps1 -BranchName "${{ steps.pr.outputs.base_ref }}"

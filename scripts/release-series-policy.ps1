@@ -79,7 +79,7 @@ function Resolve-PrepareReleaseSeries {
         $allowedExplicitSeries = @($main.Series, $nextMajorSeries)
     } else {
         $defaultSeries = $nextMinorSeries
-        $allowedExplicitSeries = @($nextMinorSeries, $nextMajorSeries)
+        $allowedExplicitSeries = @($main.Series, $nextMinorSeries, $nextMajorSeries)
     }
 
     $requestedTrimmed = if ([string]::IsNullOrWhiteSpace($RequestedSeries)) { $null } else { $RequestedSeries.Trim() }

@@ -1,4 +1,4 @@
-name: Prepare Release Branch
+name: Prepare Release
 
 on:
   workflow_dispatch:
@@ -19,11 +19,11 @@ on:
 
 permissions:
   contents: write
-  issues: read
+  issues: write
   pull-requests: write
 
 concurrency:
-  group: prepare-release-branch
+  group: prepare-release
   cancel-in-progress: false
 
 env:
@@ -66,7 +66,7 @@ jobs:
         Write-Host "Resolved release series: $major.$minor"
         Write-Host "Resolved release version: $releaseVersion"
 
-    - name: Resolve release notes issues
+    - name: Resolve unreleased release-notes issue
       id: release_notes
       shell: pwsh
       env:
@@ -76,28 +76,17 @@ jobs:
 
         $repo = "${{ github.repository }}"
         $unreleasedTitle = "Release Notes: Unreleased"
-        $lineTitle = "Release Notes: ${{ steps.version.outputs.RELEASE_SERIES }}"
 
         $unreleasedIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $unreleasedTitle -AllowMissing
-        $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle -AllowMissing
 
         echo "UNRELEASED_TITLE=$unreleasedTitle" >> $env:GITHUB_OUTPUT
-        echo "LINE_TITLE=$lineTitle" >> $env:GITHUB_OUTPUT
         echo "UNRELEASED_EXISTS=$(([string]($null -ne $unreleasedIssue)).ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-        echo "LINE_EXISTS=$(([string]($null -ne $lineIssue)).ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
         if ($unreleasedIssue) {
           echo "UNRELEASED_URL=$($unreleasedIssue.Url)" >> $env:GITHUB_OUTPUT
           Write-Host "Found unreleased release-notes issue: $($unreleasedIssue.Url)"
         } else {
           Write-Warning "Release Notes: Unreleased was not found."
-        }
-
-        if ($lineIssue) {
-          echo "LINE_URL=$($lineIssue.Url)" >> $env:GITHUB_OUTPUT
-          Write-Host "Found release-line issue: $($lineIssue.Url)"
-        } else {
-          Write-Warning "$lineTitle was not found."
         }
 
     - name: Create release and main bump branches
@@ -113,6 +102,67 @@ jobs:
           -MainBranch "main" `
           @extraArgs `
           -Push
+
+    - name: Ensure release-line notes issue
+      id: line_issue
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        . ./scripts/release-support.ps1
+
+        $repo = "${{ github.repository }}"
+        $releaseSeries = "${{ steps.version.outputs.RELEASE_SERIES }}"
+        $lineTitle = "Release Notes: $releaseSeries"
+        $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle -AllowMissing
+        $lineAction = "reused"
+
+        if ($null -eq $lineIssue) {
+          $bodyPath = Join-Path $env:RUNNER_TEMP "release-notes-$releaseSeries.md"
+          $body = @(
+            "## Release Notes",
+            "",
+            "Current target: $releaseSeries",
+            "",
+            "### Added",
+            "- None yet.",
+            "",
+            "### Changed",
+            "- None yet.",
+            "",
+            "### Fixed",
+            "- None yet."
+          ) -join "`r`n"
+
+          Set-Content -Path $bodyPath -Value $body -Encoding utf8
+
+          $createdUrl = gh issue create `
+            --repo $repo `
+            --title $lineTitle `
+            --body-file $bodyPath 2>$null
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($createdUrl)) {
+            throw "Failed to create release-line issue '$lineTitle'."
+          }
+
+          $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle
+          $lineAction = "created"
+          Write-Host "Created release-line issue: $($lineIssue.Url)"
+        } elseif (([string]$lineIssue.State).Trim().ToLowerInvariant() -ne "open") {
+          gh issue reopen $lineIssue.Number --repo $repo *> $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to reopen release-line issue '$lineTitle' (#$($lineIssue.Number))."
+          }
+
+          $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle
+          $lineAction = "reopened"
+          Write-Host "Reopened release-line issue: $($lineIssue.Url)"
+        } else {
+          Write-Host "Reusing release-line issue: $($lineIssue.Url)"
+        }
+
+        echo "LINE_TITLE=$lineTitle" >> $env:GITHUB_OUTPUT
+        echo "LINE_URL=$($lineIssue.Url)" >> $env:GITHUB_OUTPUT
+        echo "LINE_ACTION=$lineAction" >> $env:GITHUB_OUTPUT
 
     - name: Create PR for main version bump branch
       if: ${{ inputs.create_main_bump_pr }}
@@ -168,12 +218,12 @@ jobs:
 
         $title = "chore: bump main version to $nextMainVersion"
         $body = @"
-        Automated PR created by **Prepare Release Branch** workflow.
+        Automated PR created by **Prepare Release** workflow.
 
         - Release branch: release/$major.$minor
         - Target branch: main
         - Main bump branch: $head
-        - Release notes: create or update `Release Notes: $major.$minor` and move the shipped bullets from `Release Notes: Unreleased`
+        - Release notes: review `${{ steps.line_issue.outputs.LINE_TITLE }}` and move the shipped bullets from `Release Notes: Unreleased`
         "@
 
         gh pr create --repo $repo --base $base --head $head --title $title --body $body
@@ -201,13 +251,14 @@ jobs:
         if (-not $unreleasedIssue) {
           $unreleasedIssue = "create manually (`${{ steps.release_notes.outputs.UNRELEASED_TITLE }}`)"
         }
-        $lineIssue = "${{ steps.release_notes.outputs.LINE_URL }}".Trim()
-        if (-not $lineIssue) {
-          $lineIssue = "create manually (`${{ steps.release_notes.outputs.LINE_TITLE }}`)"
+        $lineIssue = "${{ steps.line_issue.outputs.LINE_URL }}".Trim()
+        $lineIssueAction = "${{ steps.line_issue.outputs.LINE_ACTION }}".Trim()
+        if (-not $lineIssueAction) {
+          $lineIssueAction = "reused"
         }
 
         @"
-        ## Release Branch Preparation Complete
+        ## Release Preparation Complete
 
         | Item | Value |
         |------|-------|
@@ -218,9 +269,9 @@ jobs:
         | PR Created | $prCreated |
         | Unreleased Notes | $unreleasedIssue |
         | Release Line Notes | $lineIssue |
+        | Release Line Notes Action | `$lineIssueAction` |
 
         Next steps:
-        1. Create or update `${{ steps.release_notes.outputs.LINE_TITLE }}`.
-        2. Manually move the shipped bullets from `${{ steps.release_notes.outputs.UNRELEASED_TITLE }}` into `${{ steps.release_notes.outputs.LINE_TITLE }}`.
-        3. Review `${{ steps.release_notes.outputs.LINE_TITLE }}` before tagging so it is ready to be linked from GitHub Release $version.
+        1. Manually move the shipped bullets from `${{ steps.release_notes.outputs.UNRELEASED_TITLE }}` into `${{ steps.line_issue.outputs.LINE_TITLE }}`.
+        2. Review `${{ steps.line_issue.outputs.LINE_TITLE }}` before tagging so it is ready to be linked from GitHub Release $version.
         "@ >> $env:GITHUB_STEP_SUMMARY

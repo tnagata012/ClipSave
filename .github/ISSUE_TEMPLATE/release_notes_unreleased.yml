@@ -8,7 +8,7 @@ body:
         Use this issue as the rolling draft for upcoming user-facing changes.
         Reuse this single issue instead of creating duplicates. Multiple open duplicates make release workflows fail.
         Keep upcoming user-facing bullets here while changes are still landing on `main`.
-        When `prepare-release-branch` creates `release/X.Y`, manually move the shipped bullets into `Release Notes: X.Y` and leave future items here.
+        When `prepare-release` creates or reuses `Release Notes: X.Y` for a new `release/X.Y`, manually move the shipped bullets there and leave future items here.
         Keep this issue open continuously.
   - type: textarea
     id: release_notes

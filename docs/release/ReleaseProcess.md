@@ -30,7 +30,7 @@
 ```mermaid
 flowchart LR
   main[main] -->|Dev Build| dev[dev-latest / dev-package-*]
-  main -->|Prepare Release Branch| release[release/X.Y]
+  main -->|Prepare Release| release[release/X.Y]
   release -->|RC Build| rc[rc-X.Y-latest / rc-package-*]
   release -->|tag X.Y.Z| tag[固定タグ X.Y.Z]
   tag -->|Release Finalize| finalize[Release Finalize]
@@ -201,7 +201,7 @@ Store 提出へ進める条件は release 文書側で定義し、Partner Center
 
 - 版数更新は作業ブランチから PR で反映する。
 - `main` / `release/X.Y` への直 push は行わない。
-- `Prepare Release Branch` による初期作成コミットだけを例外とする。
+- `Prepare Release` による初期作成コミットだけを例外とする。
 
 ### メジャー/マイナー開始
 

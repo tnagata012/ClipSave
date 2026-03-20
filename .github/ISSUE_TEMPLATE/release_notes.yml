@@ -9,7 +9,7 @@ body:
         Reuse the existing issue instead of creating duplicates. Multiple open duplicates make release workflows fail.
         Replace `X.Y` in the title before submitting so the issue title becomes `Release Notes: X.Y`.
         Workflows find this issue by exact title.
-        Create or update this issue when `prepare-release-branch` creates `release/X.Y`.
+        `prepare-release` creates or reuses this issue when `release/X.Y` is prepared.
         Manually move the shipped bullets from `Release Notes: Unreleased`, then keep this issue as the public notes source for the release line.
         GitHub Release `X.Y.Z` snapshots this issue body and links back to it.
   - type: textarea

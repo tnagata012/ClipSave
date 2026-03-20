@@ -35,13 +35,14 @@ Issue title: `Release Notes: Unreleased`
 ### `Release Notes: X.Y`
 
 1. `release/X.Y` を切ったら 1 系列につき 1 つ作る。
-2. `Release Notes: Unreleased` から、今回の系列で出荷する bullet を手動で移したものを初期内容にする。
-3. patch 版を出すたびに同じ issue を更新する。
-4. issue 本文は GitHub Release からリンクされる公開向けノートとして読みやすく保つ。
-5. GitHub Release `X.Y.Z` はこの issue へのリンクを持つが、release 本文には tag 時点の snapshot も残す。
-6. issue 自体は系列内で後から更新されるため、GitHub Release から辿る issue リンク先は常に系列の最新状態を指す。
-7. 同じ title の open issue を重複作成しない。
-8. 現行サポート系列である間は open のまま維持し、その系列が [ReleaseProcess](ReleaseProcess.md) の `frozen / unsupported` へ移った時点でクローズする。
+2. `Prepare Release` workflow を使う場合は最小構成の issue を自動作成または再利用し、`create-release-branch.ps1` だけを使う場合は手動で作成する。
+3. `Release Notes: Unreleased` から、今回の系列で出荷する bullet を手動で移したものを初期内容にする。
+4. patch 版を出すたびに同じ issue を更新する。
+5. issue 本文は GitHub Release からリンクされる公開向けノートとして読みやすく保つ。
+6. GitHub Release `X.Y.Z` はこの issue へのリンクを持つが、release 本文には tag 時点の snapshot も残す。
+7. issue 自体は系列内で後から更新されるため、GitHub Release から辿る issue リンク先は常に系列の最新状態を指す。
+8. 同じ title の open issue を重複作成しない。
+9. 現行サポート系列である間は open のまま維持し、その系列が [ReleaseProcess](ReleaseProcess.md) の `frozen / unsupported` へ移った時点でクローズする。
 
 ### Pull Request
 
@@ -60,8 +61,8 @@ Issue title: `Release Notes: Unreleased`
 
 ### リリース開始時
 
-1. `Prepare Release Branch` または `create-release-branch.ps1` で `release/X.Y` を作る。
-2. `Release Notes: X.Y` Issue を作成または更新する。
+1. `Prepare Release` または `create-release-branch.ps1` で `release/X.Y` を作る。
+2. `Prepare Release` を使う場合は `Release Notes: X.Y` Issue が自動作成または再利用される。`create-release-branch.ps1` だけを使う場合は手動で作成または更新する。
 3. `Release Notes: Unreleased` から今回の系列で出す bullet を手動で移し、残りは `Unreleased` に残す。
 
 ### release line 運用中

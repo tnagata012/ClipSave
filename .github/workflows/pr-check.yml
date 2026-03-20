@@ -3,18 +3,30 @@ name: PR Check
 on:
   pull_request:
     branches: [main, 'release/*']
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull request number to validate'
+        required: true
+        type: string
+      base_ref:
+        description: 'Base branch name for version validation'
+        required: true
+        type: string
 
 permissions:
   contents: read
   pull-requests: read
 
 concurrency:
-  group: pr-check-${{ github.head_ref }}
+  group: pr-check-${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 env:
   SOLUTION_FILE: ClipSave.slnx
   APP_PROJECT: src/ClipSave/ClipSave.csproj
+  PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr_number }}
+  BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref || inputs.base_ref }}
 
 jobs:
   check:
@@ -42,7 +54,7 @@ jobs:
           const files = await github.paginate(github.rest.pulls.listFiles, {
             owner: context.repo.owner,
             repo: context.repo.repo,
-            pull_number: context.issue.number,
+            pull_number: Number("${{ env.PR_NUMBER }}"),
             per_page: 100,
           });
 
@@ -125,4 +137,4 @@ jobs:
 
     - name: Validate version
       shell: pwsh
-      run: ./scripts/assert-version-policy.ps1 -BranchName "${{ github.base_ref }}"
+      run: ./scripts/assert-version-policy.ps1 -BranchName "${{ env.BASE_REF }}"

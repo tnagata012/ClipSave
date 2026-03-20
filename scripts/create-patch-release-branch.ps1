@@ -60,6 +60,7 @@ $propsPath = Join-Path $projectRoot "Directory.Build.props"
 $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifest"
 
 . (Join-Path $scriptRoot "release-support.ps1")
+. (Join-Path $scriptRoot "version-file-support.ps1")
 
 function Fail([string]$Message) {
     Write-Host "`n[ERROR] $Message" -ForegroundColor Red
@@ -259,15 +260,9 @@ try {
     }
 
     Write-Host "[7/9] Updating version files to $nextVersion..." -ForegroundColor Yellow
-    [xml]$props = Get-Content $propsPath
-    $props.Project.PropertyGroup.Version = $nextVersion
-    $props.Save($propsPath)
-    Write-Host "  [OK] Directory.Build.props = $nextVersion" -ForegroundColor Green
-
-    [xml]$manifest = Get-Content $manifestPath
-    $manifest.Package.Identity.Version = "$nextVersion.0"
-    $manifest.Save($manifestPath)
-    Write-Host "  [OK] Package.appxmanifest = $nextVersion.0" -ForegroundColor Green
+    $versionFiles = Set-RepositoryVersionFiles -ProjectRoot $projectRoot -Version $nextVersion
+    Write-Host "  [OK] Directory.Build.props = $($versionFiles.Version)" -ForegroundColor Green
+    Write-Host "  [OK] Package.appxmanifest = $($versionFiles.ManifestVersion)" -ForegroundColor Green
 
     git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
     git diff --staged --quiet

@@ -61,6 +61,7 @@ $propsPath = Join-Path $projectRoot "Directory.Build.props"
 $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifest"
 
 . "$projectRoot\scripts\release-series-policy.ps1"
+. "$projectRoot\scripts\version-file-support.ps1"
 
 if ($null -ne $Version) {
     $Version = $Version.Trim()
@@ -214,15 +215,9 @@ try {
 
     # 6. Update and commit release branch versions
     Write-Host "[6/9] Updating release branch version to $releaseVersion..." -ForegroundColor Yellow
-    [xml]$props = Get-Content $propsPath
-    $props.Project.PropertyGroup.Version = $releaseVersion
-    $props.Save($propsPath)
-    Write-Host "  [OK] Directory.Build.props = $releaseVersion" -ForegroundColor Green
-
-    [xml]$manifest = Get-Content $manifestPath
-    $manifest.Package.Identity.Version = "$releaseVersion.0"
-    $manifest.Save($manifestPath)
-    Write-Host "  [OK] Package.appxmanifest = $releaseVersion.0" -ForegroundColor Green
+    $releaseFiles = Set-RepositoryVersionFiles -ProjectRoot $projectRoot -Version $releaseVersion
+    Write-Host "  [OK] Directory.Build.props = $($releaseFiles.Version)" -ForegroundColor Green
+    Write-Host "  [OK] Package.appxmanifest = $($releaseFiles.ManifestVersion)" -ForegroundColor Green
 
     git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
     git diff --staged --quiet
@@ -252,15 +247,9 @@ try {
     }
 
     Write-Host "[8/9] Updating $mainBumpBranch to $nextMainVersion..." -ForegroundColor Yellow
-    [xml]$props = Get-Content $propsPath
-    $props.Project.PropertyGroup.Version = $nextMainVersion
-    $props.Save($propsPath)
-    Write-Host "  [OK] Directory.Build.props = $nextMainVersion" -ForegroundColor Green
-
-    [xml]$manifest = Get-Content $manifestPath
-    $manifest.Package.Identity.Version = "$nextMainVersion.0"
-    $manifest.Save($manifestPath)
-    Write-Host "  [OK] Package.appxmanifest = $nextMainVersion.0" -ForegroundColor Green
+    $mainBumpFiles = Set-RepositoryVersionFiles -ProjectRoot $projectRoot -Version $nextMainVersion
+    Write-Host "  [OK] Directory.Build.props = $($mainBumpFiles.Version)" -ForegroundColor Green
+    Write-Host "  [OK] Package.appxmanifest = $($mainBumpFiles.ManifestVersion)" -ForegroundColor Green
 
     git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
     git diff --staged --quiet

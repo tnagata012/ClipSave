@@ -23,6 +23,7 @@ on:
         type: boolean
 
 permissions:
+  actions: write
   contents: write
   issues: write
   pull-requests: write
@@ -354,8 +355,7 @@ jobs:
         $mainBranch = "main"
         $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}".Trim()
         $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}".Trim()
-        $propsPath = "Directory.Build.props"
-        $manifestPath = "src/ClipSave.Package/Package.appxmanifest"
+        . ./scripts/version-file-support.ps1
 
         git checkout $mainBranch
         if ($LASTEXITCODE -ne 0) {
@@ -367,15 +367,9 @@ jobs:
           throw "Failed to create missing main bump branch '$mainBumpBranch'."
         }
 
-        [xml]$props = Get-Content $propsPath
-        $props.Project.PropertyGroup.Version = $nextMainVersion
-        $props.Save($propsPath)
-        Write-Host "Updated Directory.Build.props to $nextMainVersion"
-
-        [xml]$manifest = Get-Content $manifestPath
-        $manifest.Package.Identity.Version = "$nextMainVersion.0"
-        $manifest.Save($manifestPath)
-        Write-Host "Updated Package.appxmanifest to $nextMainVersion.0"
+        $versionFiles = Set-RepositoryVersionFiles -ProjectRoot (Get-Location).Path -Version $nextMainVersion
+        Write-Host "Updated Directory.Build.props to $($versionFiles.Version)"
+        Write-Host "Updated Package.appxmanifest to $($versionFiles.ManifestVersion)"
 
         git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
         git diff --staged --quiet
@@ -398,7 +392,8 @@ jobs:
           throw "Failed to push '$mainBumpBranch'."
         }
 
-    - name: Create PR for main version bump branch
+    - name: Ensure main bump PR and dispatch PR Check
+      id: main_bump_pr
       if: ${{ inputs.create_main_bump_pr && (steps.branch_state.outputs.BRANCH_MODE == 'create_all' || steps.branch_state.outputs.BRANCH_MODE == 'create_main_bump_only' || steps.branch_state.outputs.MAIN_BUMP_EXISTS == 'true') }}
       shell: pwsh
       env:
@@ -416,36 +411,36 @@ jobs:
         $base = "main"
         $repo = "${{ github.repository }}"
 
-        $existingPrJson = gh pr list `
-          --repo $repo `
-          --head $head `
-          --base $base `
-          --state open `
-          --json number,url 2>$null
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to query existing pull requests."
-        }
-
-        try {
-          $existingPrs = $existingPrJson | ConvertFrom-Json
-        } catch {
-          throw "Failed to parse pull request query result."
-        }
-
-        if ($null -eq $existingPrs) {
-          $existingPrs = @()
-        } elseif ($existingPrs -isnot [System.Array]) {
-          $existingPrs = @($existingPrs)
-        }
-
-        $existingPr = $existingPrs | Select-Object -First 1
-        if ($existingPr) {
-          Write-Host "PR already exists: #$($existingPr.number) ($head -> $base)"
-          if ($existingPr.url) {
-            Write-Host "PR URL: $($existingPr.url)"
+        function Get-OpenMainBumpPr() {
+          $prJson = gh pr list `
+            --repo $repo `
+            --head $head `
+            --base $base `
+            --state open `
+            --json number,url 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to query existing pull requests."
           }
-          exit 0
+
+          try {
+            $prs = $prJson | ConvertFrom-Json
+          } catch {
+            throw "Failed to parse pull request query result."
+          }
+
+          if ($null -eq $prs) {
+            return @()
+          }
+
+          if ($prs -isnot [System.Array]) {
+            return @($prs)
+          }
+
+          return $prs
         }
+
+        $createdPr = $false
+        $pr = @(Get-OpenMainBumpPr) | Select-Object -First 1
 
         $title = "chore: bump main version to $nextMainVersion"
         $body = @"
@@ -457,10 +452,41 @@ jobs:
         - Release notes: review `${{ steps.line_issue.outputs.LINE_TITLE }}` and move the shipped bullets from `Release Notes: Unreleased`
         "@
 
-        gh pr create --repo $repo --base $base --head $head --title $title --body $body
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to create pull request: $head -> $base"
+        if (-not $pr) {
+          gh pr create --repo $repo --base $base --head $head --title $title --body $body *> $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create pull request: $head -> $base"
+          }
+          $createdPr = $true
         }
+
+        $pr = @(Get-OpenMainBumpPr) | Select-Object -First 1
+        if (-not $pr) {
+          throw "Failed to resolve the open pull request for '$head -> $base'."
+        }
+
+        if ($createdPr) {
+          Write-Host "Created PR: #$($pr.number) ($head -> $base)"
+        } else {
+          Write-Host "Using existing PR: #$($pr.number) ($head -> $base)"
+        }
+
+        if ($pr.url) {
+          Write-Host "PR URL: $($pr.url)"
+        }
+
+        gh workflow run pr-check.yml `
+          --repo $repo `
+          --ref $head `
+          -f pr_number=$([string]$pr.number) `
+          -f base_ref=$base *> $null
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to dispatch PR Check for PR #$($pr.number)."
+        }
+
+        echo "PR_URL=$($pr.url)" >> $env:GITHUB_OUTPUT
+        echo "PR_CHECK_TRIGGERED=true" >> $env:GITHUB_OUTPUT
+        Write-Host "Dispatched PR Check for PR #$($pr.number)."
 
     - name: Explain skipped main bump PR creation
       if: ${{ inputs.create_main_bump_pr && steps.branch_state.outputs.BRANCH_MODE != 'create_all' && steps.branch_state.outputs.BRANCH_MODE != 'create_main_bump_only' && steps.branch_state.outputs.MAIN_BUMP_EXISTS != 'true' }}
@@ -485,11 +511,19 @@ jobs:
         }
         $lineIssue = "${{ steps.line_issue.outputs.LINE_URL }}".Trim()
         $lineIssueAction = "${{ steps.line_issue.outputs.LINE_ACTION }}".Trim()
+        $mainBumpPrUrl = "${{ steps.main_bump_pr.outputs.PR_URL }}".Trim()
+        $prCheckTriggered = "${{ steps.main_bump_pr.outputs.PR_CHECK_TRIGGERED }}".Trim()
         if (-not $lineIssue) {
           $lineIssue = "create manually (`${{ steps.line_issue.outputs.LINE_TITLE }}`)"
         }
         if (-not $lineIssueAction) {
           $lineIssueAction = "reused"
+        }
+        if (-not $mainBumpPrUrl) {
+          $mainBumpPrUrl = "not created"
+        }
+        if (-not $prCheckTriggered) {
+          $prCheckTriggered = "false"
         }
 
         if (-not $prRequested) {
@@ -510,6 +544,8 @@ jobs:
         | Main Bump Branch | $mainBumpBranch |
         | Next Main Version | $nextMainVersion |
         | Main Bump PR | $prStatus |
+        | Main Bump PR URL | $mainBumpPrUrl |
+        | PR Check Dispatch | `$prCheckTriggered` |
         | Branch Prep Mode | `$branchMode` |
         | Unreleased Notes | $unreleasedIssue |
         | Release Line Notes | $lineIssue |

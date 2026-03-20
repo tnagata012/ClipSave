@@ -135,6 +135,30 @@ jobs:
         echo "CURRENT_VERSION_SHA=$tagCommit" >> $env:GITHUB_OUTPUT
         Write-Host "Current finalized version: $version ($tagCommit)"
 
+    - name: Resolve patch init target
+      id: patch_target
+      shell: pwsh
+      run: |
+        $currentVersion = "${{ steps.current.outputs.CURRENT_VERSION }}".Trim()
+        if ($currentVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
+          throw "Invalid current version format: $currentVersion"
+        }
+
+        $major = [int]$matches['major']
+        $minor = [int]$matches['minor']
+        $patch = [int]$matches['patch']
+        if ($patch -ge 65535) {
+          throw "Cannot increment patch. Current patch is $patch (max supported 65535)."
+        }
+
+        $nextVersion = "$major.$minor.$($patch + 1)"
+        $patchBranch = "chore/release-$nextVersion-init"
+
+        echo "PATCH_VERSION=$nextVersion" >> $env:GITHUB_OUTPUT
+        echo "PATCH_BRANCH=$patchBranch" >> $env:GITHUB_OUTPUT
+        Write-Host "Patch branch: $patchBranch"
+        Write-Host "Patch version: $nextVersion"
+
     - name: Configure git author
       shell: pwsh
       working-directory: repo
@@ -142,8 +166,54 @@ jobs:
         git config user.name "${{ env.GIT_AUTHOR_NAME }}"
         git config user.email "${{ env.GIT_AUTHOR_EMAIL }}"
 
+    - name: Inspect existing patch init branch
+      id: patch_state
+      shell: pwsh
+      working-directory: repo
+      run: |
+        function Get-VersionFromGitObject([string]$ObjectRef) {
+          $content = git show $ObjectRef 2>$null
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($content -join "`n"))) {
+            throw "Failed to read '$ObjectRef'."
+          }
+
+          $text = ($content -join "`n")
+          $match = [regex]::Match($text, '<Version>(?<value>[^<]+)</Version>')
+          if (-not $match.Success) {
+            throw "Version element was not found in '$ObjectRef'."
+          }
+
+          return $match.Groups['value'].Value.Trim()
+        }
+
+        $patchBranch = "${{ steps.patch_target.outputs.PATCH_BRANCH }}"
+        $expectedVersion = "${{ steps.patch_target.outputs.PATCH_VERSION }}"
+
+        git ls-remote --exit-code --heads origin $patchBranch *> $null
+        $patchExists = ($LASTEXITCODE -eq 0)
+        if ($patchExists) {
+          git fetch --no-tags origin "$patchBranch"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to fetch origin/$patchBranch."
+          }
+
+          $actualVersion = Get-VersionFromGitObject ("origin/$patchBranch" + ":Directory.Build.props")
+          if ($actualVersion -ne $expectedVersion) {
+            throw "origin/$patchBranch has version '$actualVersion' but expected '$expectedVersion'."
+          }
+
+          $branchMode = "reuse_existing"
+        } else {
+          $branchMode = "create_new"
+        }
+
+        echo "BRANCH_MODE=$branchMode" >> $env:GITHUB_OUTPUT
+        echo "PATCH_EXISTS=$($patchExists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+        Write-Host "Branch mode: $branchMode"
+        Write-Host "Patch branch exists: $patchExists"
+
     - name: Create patch init branch
-      id: patch
+      if: ${{ steps.patch_state.outputs.BRANCH_MODE == 'create_new' }}
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
@@ -156,37 +226,15 @@ jobs:
           -ReleaseBranch "${{ inputs.release_branch }}" `
           -Push
 
-        Push-Location $projectRoot
-        try {
-          $patchBranch = git branch --show-current
-          if (-not $patchBranch) {
-            throw "Failed to resolve current branch after patch preparation."
-          }
-
-          [xml]$props = Get-Content Directory.Build.props
-          $version = $props.Project.PropertyGroup.Version
-          if (-not $version -or $version -notmatch '^\d+\.\d+\.\d+$') {
-            throw "Invalid version format after patch preparation: $version"
-          }
-        }
-        finally {
-          Pop-Location
-        }
-
-        echo "PATCH_BRANCH=$patchBranch" >> $env:GITHUB_OUTPUT
-        echo "PATCH_VERSION=$version" >> $env:GITHUB_OUTPUT
-        Write-Host "Patch branch: $patchBranch"
-        Write-Host "Patch version: $version"
-
     - name: Create PR for patch init branch
       if: ${{ inputs.create_patch_pr }}
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        $head = "${{ steps.patch.outputs.PATCH_BRANCH }}"
+        $head = "${{ steps.patch_target.outputs.PATCH_BRANCH }}"
         $base = "${{ inputs.release_branch }}"
-        $version = "${{ steps.patch.outputs.PATCH_VERSION }}"
+        $version = "${{ steps.patch_target.outputs.PATCH_VERSION }}"
         $repo = "${{ github.repository }}"
         $releaseLine = $base -replace '^release/', ''
 
@@ -249,7 +297,8 @@ jobs:
         |------|-------|
         | Release Branch | `${{ inputs.release_branch }}` |
         | Current Finalized Version | `${{ steps.current.outputs.CURRENT_VERSION }}` |
-        | Patch Branch | `${{ steps.patch.outputs.PATCH_BRANCH }}` |
-        | Patch Version | `${{ steps.patch.outputs.PATCH_VERSION }}` |
+        | Patch Branch | `${{ steps.patch_target.outputs.PATCH_BRANCH }}` |
+        | Patch Version | `${{ steps.patch_target.outputs.PATCH_VERSION }}` |
+        | Branch Prep Mode | `${{ steps.patch_state.outputs.BRANCH_MODE }}` |
         | PR Created | `${{ inputs.create_patch_pr }}` |
         "@ >> $env:GITHUB_STEP_SUMMARY

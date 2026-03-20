@@ -19,7 +19,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | [pr-check.yml](../../.github/workflows/pr-check.yml) | PR（`main`, `release/*`） | 品質ゲート | `TestResults/**/*.trx` |
 | [deploy-pages.yml](../../.github/workflows/deploy-pages.yml) | `main` push（`site/**`） / 手動（`main` のみ） | GitHub Pages 公開 | GitHub Pages site artifact |
-| [prepare-release-branch.yml](../../.github/workflows/prepare-release-branch.yml) | 手動（`X.Y`。内部で `X.Y.0` に展開） | `release/X.Y` 作成 + `main` 側 bump ブランチ作成、任意で PR 作成 | `release/X.Y`, `chore/bump-main-to-*` |
+| [prepare-release.yml](../../.github/workflows/prepare-release.yml) | 手動（`X.Y`。内部で `X.Y.0` に展開） | `release/X.Y` 作成 + `Release Notes: X.Y` の自動確保 + `main` 側 bump ブランチ作成、任意で PR 作成 | `release/X.Y`, `chore/bump-main-to-*` |
 | [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`） | patch init ブランチ作成、任意で PR 作成 | `chore/release-X.Y.(Z+1)-init` |
 | [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
 | [rc-build.yml](../../.github/workflows/rc-build.yml) | `release/*` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 公開候補生成（未署名） | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
@@ -70,18 +70,19 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 
 ### メジャー/マイナーリリース
 
-1. `Prepare Release Branch`（推奨、workflow 入力は `X.Y`。内部で `X.Y.0` に展開）または `create-release-branch.ps1`（`-Version X.Y`）で `release/X.Y` を作成する。
+1. `Prepare Release`（推奨、workflow 入力は `X.Y`。内部で `X.Y.0` に展開）または `create-release-branch.ps1`（`-Version X.Y`）で `release/X.Y` を作成する。
 2. 必要に応じて `next_main_version` / `-NextMainVersion` を指定し、`main` を次の近接系列ではなく将来系列（例: `0.5.0`）へ進める。
-3. `chore/bump-main-to-* -> main` の PR をレビューしてマージする。`Prepare Release Branch` workflow は既定でこの PR を自動作成する。
-4. `Release Notes: X.Y` Issue を作成または更新し、`Release Notes: Unreleased` から今回の系列で出す bullet を手動で移す。
-5. `release/X.Y` の安定化を PR で反映する。
-6. `rc-X.Y-latest` と複数の公開候補（`rc-package-*`）を比較し、確定対象コミットを決定する。
-7. tag 前に `Release Notes: X.Y` Issue を見直し、今回の出荷内容として読めるよう公開向け文面を整える。
-8. 確定版を決め、その commit に確定タグ `X.Y.Z` を作成する。
-9. タグ push で `Release Finalize` が走り、GitHub Release `X.Y.Z` にアーカイブ成果物と `Release Notes: X.Y` snapshot / 参照が保存されたことを確認する。
-10. GitHub Release の見せ方や issue 参照を調整したい場合は、`Release Notes: X.Y` を更新して `Release Finalize` を手動再実行する。既存 archive がある場合、assets は保持され、release notes snapshot だけ更新される。
-11. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を参照し、条件を満たす場合のみ `Release Finalize` を `build_store_package=true` で実行して Store package を作成する。
-12. Store 提出は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) の手順に従って実行する。
+3. `chore/bump-main-to-* -> main` の PR をレビューしてマージする。`Prepare Release` workflow は既定でこの PR を自動作成する。
+4. `Prepare Release` workflow が `Release Notes: X.Y` Issue を自動作成または再利用する。`create-release-branch.ps1` だけを使う場合は手動で作成または更新する。
+5. `Release Notes: Unreleased` から今回の系列で出す bullet を `Release Notes: X.Y` へ手動で移す。
+6. `release/X.Y` の安定化を PR で反映する。
+7. `rc-X.Y-latest` と複数の公開候補（`rc-package-*`）を比較し、確定対象コミットを決定する。
+8. tag 前に `Release Notes: X.Y` Issue を見直し、今回の出荷内容として読めるよう公開向け文面を整える。
+9. 確定版を決め、その commit に確定タグ `X.Y.Z` を作成する。
+10. タグ push で `Release Finalize` が走り、GitHub Release `X.Y.Z` にアーカイブ成果物と `Release Notes: X.Y` snapshot / 参照が保存されたことを確認する。
+11. GitHub Release の見せ方や issue 参照を調整したい場合は、`Release Notes: X.Y` を更新して `Release Finalize` を手動再実行する。既存 archive がある場合、assets は保持され、release notes snapshot だけ更新される。
+12. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を参照し、条件を満たす場合のみ `Release Finalize` を `build_store_package=true` で実行して Store package を作成する。
+13. Store 提出は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) の手順に従って実行する。
 
 ### パッチリリース
 

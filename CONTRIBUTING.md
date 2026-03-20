@@ -29,7 +29,7 @@ ClipSave へのコントリビューションに興味を持っていただき�
 
 バグ報告は GitHub Issues を使用してください。
 user-facing change の作業中ノートは `Release Notes: Unreleased` Issue を基点に管理します。
-`release/X.Y` を切ったら `Release Notes: X.Y` Issue を 1 つ作り、`Release Notes: Unreleased` から今回出荷する bullet を手動で移します。
+`Prepare Release` で `release/X.Y` を切る場合は `Release Notes: X.Y` Issue が自動で確保されるので、`Release Notes: Unreleased` から今回出荷する bullet を手動で移します。`create-release-branch.ps1` だけを使う場合は `Release Notes: X.Y` Issue も手動で作成または更新してください。
 機能ごとの Issue は必須ではなく、事前合意や長めの議論が必要な場合だけ使ってください。
 
 ## Pull Request

@@ -5,7 +5,7 @@ on:
     inputs:
       version:
         description: 'Release series (X.Y)'
-        required: true
+        required: false
         type: string
       next_main_version:
         description: 'Next main version after branching (optional, defaults to next minor)'
@@ -13,6 +13,11 @@ on:
         type: string
       create_main_bump_pr:
         description: 'Create PR for main version bump branch'
+        required: true
+        default: true
+        type: boolean
+      auto_create_release_line_issue:
+        description: 'Auto-create/reopen release-line notes issue'
         required: true
         default: true
         type: boolean
@@ -52,18 +57,23 @@ jobs:
       id: version
       shell: pwsh
       run: |
-        $inputVersion = "${{ inputs.version }}".Trim()
-        if ($inputVersion -match '^(?<major>\d+)\.(?<minor>\d+)$') {
-          $major = [int]$matches['major']
-          $minor = [int]$matches['minor']
-          $releaseVersion = "$major.$minor.0"
-        } else {
-          throw "Invalid version format: $inputVersion (expected X.Y)"
-        }
+        . ./scripts/release-series-policy.ps1
+
+        [xml]$mainProps = Get-Content "Directory.Build.props"
+        $mainVersion = $mainProps.Project.PropertyGroup.Version
+        $resolution = Resolve-PrepareReleaseSeries `
+          -MainVersion $mainVersion `
+          -RequestedSeries "${{ inputs.version }}"
+
+        $releaseVersion = $resolution.ResolvedReleaseVersion
+        $releaseSeries = $resolution.ResolvedReleaseSeries
 
         echo "RELEASE_VERSION=$releaseVersion" >> $env:GITHUB_OUTPUT
-        echo "RELEASE_SERIES=$major.$minor" >> $env:GITHUB_OUTPUT
-        Write-Host "Resolved release series: $major.$minor"
+        echo "RELEASE_SERIES=$releaseSeries" >> $env:GITHUB_OUTPUT
+        echo "CURRENT_MAIN_VERSION=$($resolution.CurrentMainVersion)" >> $env:GITHUB_OUTPUT
+        echo "RELEASE_SERIES_SOURCE=$($resolution.ResolutionSource)" >> $env:GITHUB_OUTPUT
+        Write-Host "Current main version: $($resolution.CurrentMainVersion)"
+        Write-Host "Resolved release series: $releaseSeries ($($resolution.ResolutionSource))"
         Write-Host "Resolved release version: $releaseVersion"
 
     - name: Resolve branch targets
@@ -201,17 +211,6 @@ jobs:
           throw "Version validation failed on main."
         }
 
-        [xml]$mainProps = Get-Content "Directory.Build.props"
-        $mainVersion = $mainProps.Project.PropertyGroup.Version
-        if (-not $mainVersion -or $mainVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
-          throw "Current main version format is invalid: $mainVersion"
-        }
-
-        $mainSeries = "$($matches['major']).$($matches['minor'])"
-        if ($mainSeries -ne $releaseSeries) {
-          throw "Target release series $releaseSeries does not match current main line $mainVersion. Use a matching X.Y series."
-        }
-
         $releaseExists = Get-RemoteBranchExists $releaseBranch
         $mainBumpExists = Get-RemoteBranchExists $mainBumpBranch
 
@@ -263,6 +262,19 @@ jobs:
         $repo = "${{ github.repository }}"
         $releaseSeries = "${{ steps.version.outputs.RELEASE_SERIES }}"
         $lineTitle = "Release Notes: $releaseSeries"
+        $autoCreateLineIssue = "${{ inputs.auto_create_release_line_issue }}".Trim().ToLowerInvariant() -eq "true"
+        $lineIssue = $null
+        $lineAction = "skipped"
+
+        if (-not $autoCreateLineIssue) {
+          Write-Host "Auto-create is disabled. Release-line issue was not queried or created."
+
+          echo "LINE_TITLE=$lineTitle" >> $env:GITHUB_OUTPUT
+          echo "LINE_URL=$($lineIssue.Url)" >> $env:GITHUB_OUTPUT
+          echo "LINE_ACTION=$lineAction" >> $env:GITHUB_OUTPUT
+          exit 0
+        }
+
         $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle -AllowMissing
         $lineAction = "reused"
 
@@ -407,6 +419,9 @@ jobs:
         }
         $lineIssue = "${{ steps.line_issue.outputs.LINE_URL }}".Trim()
         $lineIssueAction = "${{ steps.line_issue.outputs.LINE_ACTION }}".Trim()
+        if (-not $lineIssue) {
+          $lineIssue = "create manually (`${{ steps.line_issue.outputs.LINE_TITLE }}`)"
+        }
         if (-not $lineIssueAction) {
           $lineIssueAction = "reused"
         }

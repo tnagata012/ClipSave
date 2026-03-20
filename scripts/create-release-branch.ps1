@@ -39,8 +39,7 @@
 #>
 
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$Version,
+    [string]$Version = $null,
 
     [string]$MainBranch = "main",
     [string]$NextMainVersion = $null,
@@ -58,57 +57,12 @@ function Fail([string]$Message) {
     exit 1
 }
 
-# Validate target release series format (X.Y)
-if ($Version -notmatch '^(?<major>\d+)\.(?<minor>\d+)$') {
-    Fail "Invalid version format. Use X.Y (example: 1.3)."
-}
-
-$major = [int]$matches['major']
-$minor = [int]$matches['minor']
-$releaseVersion = "$major.$minor.0"
-
-$branchName = "release/$major.$minor"
-$releaseVersionTuple = @($major, $minor, 0)
-
-if ($NextMainVersion) {
-    if ($NextMainVersion -notmatch '^(?<nextMajor>\d+)\.(?<nextMinor>\d+)\.(?<nextPatch>\d+)$') {
-        Fail "Invalid NextMainVersion format. Use X.Y.Z (example: 0.5.0)."
-    }
-
-    $nextMajor = [int]$matches['nextMajor']
-    $nextMinor = [int]$matches['nextMinor']
-    $nextPatch = [int]$matches['nextPatch']
-
-    if ($nextPatch -ne 0) {
-        Fail "NextMainVersion must use a .0 patch version (example: 0.5.0)."
-    }
-
-    $nextVersionTuple = @($nextMajor, $nextMinor, $nextPatch)
-    $isGreater =
-        ($nextVersionTuple[0] -gt $releaseVersionTuple[0]) -or
-        ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -gt $releaseVersionTuple[1]) -or
-        ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -eq $releaseVersionTuple[1] -and $nextVersionTuple[2] -gt $releaseVersionTuple[2])
-
-    if (-not $isGreater) {
-        Fail "NextMainVersion must be greater than release version $releaseVersion. Actual: $NextMainVersion"
-    }
-
-    $nextMainVersion = "$nextMajor.$nextMinor.$nextPatch"
-} else {
-    $nextMinor = $minor + 1
-    $nextMainVersion = "$major.$nextMinor.0"
-}
-
-$mainBumpBranch = "chore/bump-$MainBranch-to-$nextMainVersion"
-
 $propsPath = Join-Path $projectRoot "Directory.Build.props"
 $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifest"
 
+. "$projectRoot\scripts\release-series-policy.ps1"
+
 Write-Host "=== Create Release Branch (Trunk-Based Development) ===" -ForegroundColor Cyan
-Write-Host "Release branch: $branchName (version $releaseVersion)" -ForegroundColor White
-Write-Host "Main branch   : $MainBranch (target version $nextMainVersion via PR branch)" -ForegroundColor White
-Write-Host "PR branch     : $mainBumpBranch" -ForegroundColor White
-Write-Host ""
 
 Push-Location $projectRoot
 try {
@@ -165,11 +119,57 @@ try {
         Fail "Current $MainBranch version format is invalid: $mainVersion"
     }
 
-    $mainMajor = [int]$matches['major']
-    $mainMinor = [int]$matches['minor']
-    if ($mainMajor -ne $major -or $mainMinor -ne $minor) {
-        Fail "Target release series $Version does not match current $MainBranch line $mainVersion. Use a matching X.Y series."
+    try {
+        $resolution = Resolve-PrepareReleaseSeries -MainVersion $mainVersion -RequestedSeries $Version
     }
+    catch {
+        Fail $_.Exception.Message
+    }
+
+    $releaseInfo = Get-ReleaseSeriesInfo -Series $resolution.ResolvedReleaseSeries -Label "Resolved release series"
+    $major = $releaseInfo.Major
+    $minor = $releaseInfo.Minor
+    $releaseVersion = $releaseInfo.Version
+    $branchName = "release/$($releaseInfo.Series)"
+    $releaseVersionTuple = @($major, $minor, 0)
+
+    if ($NextMainVersion) {
+        if ($NextMainVersion -notmatch '^(?<nextMajor>\d+)\.(?<nextMinor>\d+)\.(?<nextPatch>\d+)$') {
+            Fail "Invalid NextMainVersion format. Use X.Y.Z (example: 0.5.0)."
+        }
+
+        $nextMajor = [int]$matches['nextMajor']
+        $nextMinor = [int]$matches['nextMinor']
+        $nextPatch = [int]$matches['nextPatch']
+
+        if ($nextPatch -ne 0) {
+            Fail "NextMainVersion must use a .0 patch version (example: 0.5.0)."
+        }
+
+        $nextVersionTuple = @($nextMajor, $nextMinor, $nextPatch)
+        $isGreater =
+            ($nextVersionTuple[0] -gt $releaseVersionTuple[0]) -or
+            ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -gt $releaseVersionTuple[1]) -or
+            ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -eq $releaseVersionTuple[1] -and $nextVersionTuple[2] -gt $releaseVersionTuple[2])
+
+        if (-not $isGreater) {
+            Fail "NextMainVersion must be greater than release version $releaseVersion. Actual: $NextMainVersion"
+        }
+
+        $nextMainVersion = "$nextMajor.$nextMinor.$nextPatch"
+    } else {
+        $nextMinor = $minor + 1
+        $nextMainVersion = "$major.$nextMinor.0"
+    }
+
+    $mainBumpBranch = "chore/bump-$MainBranch-to-$nextMainVersion"
+
+    Write-Host "Current $MainBranch version: $($resolution.CurrentMainVersion)" -ForegroundColor White
+    Write-Host "Resolved release series: $($resolution.ResolvedReleaseSeries) ($($resolution.ResolutionSource))" -ForegroundColor White
+    Write-Host "Release branch: $branchName (version $releaseVersion)" -ForegroundColor White
+    Write-Host "Main branch   : $MainBranch (target version $nextMainVersion via PR branch)" -ForegroundColor White
+    Write-Host "PR branch     : $mainBumpBranch" -ForegroundColor White
+    Write-Host ""
 
     # 4. Check if target branches already exist (local or remote)
     Write-Host "[4/9] Checking branch existence..." -ForegroundColor Yellow

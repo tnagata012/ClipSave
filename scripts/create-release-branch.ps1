@@ -269,17 +269,11 @@ try {
     # 9. Push if requested
     if ($Push) {
         Write-Host "[9/9] Pushing branches..." -ForegroundColor Yellow
-        git push -u origin $branchName
+        git push --atomic -u origin $branchName $mainBumpBranch
         if ($LASTEXITCODE -ne 0) {
-            Fail "Failed to push $branchName."
+            Fail "Failed to push release branches atomically."
         }
-        Write-Host "  [OK] Pushed $branchName" -ForegroundColor Green
-
-        git push -u origin $mainBumpBranch
-        if ($LASTEXITCODE -ne 0) {
-            Fail "Failed to push $mainBumpBranch."
-        }
-        Write-Host "  [OK] Pushed $mainBumpBranch" -ForegroundColor Green
+        Write-Host "  [OK] Pushed $branchName and $mainBumpBranch" -ForegroundColor Green
     } else {
         Write-Host "[9/9] Skipping push (use -Push to push automatically)" -ForegroundColor Gray
     }

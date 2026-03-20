@@ -82,6 +82,29 @@ jobs:
           $nextMainVersion = "$major.$($minor + 1).0"
         }
 
+        if ($nextMainVersion -notmatch '^(?<nextMajor>\d+)\.(?<nextMinor>\d+)\.(?<nextPatch>\d+)$') {
+          throw "Invalid next main version format: $nextMainVersion (expected X.Y.Z)"
+        }
+
+        $nextMajor = [int]$matches['nextMajor']
+        $nextMinor = [int]$matches['nextMinor']
+        $nextPatch = [int]$matches['nextPatch']
+        if ($nextPatch -ne 0) {
+          throw "Next main version must use a .0 patch version. Actual: $nextMainVersion"
+        }
+
+        $releaseVersionTuple = @($major, $minor, 0)
+        $nextVersionTuple = @($nextMajor, $nextMinor, $nextPatch)
+        $isGreater =
+          ($nextVersionTuple[0] -gt $releaseVersionTuple[0]) -or
+          ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -gt $releaseVersionTuple[1]) -or
+          ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -eq $releaseVersionTuple[1] -and $nextVersionTuple[2] -gt $releaseVersionTuple[2])
+        if (-not $isGreater) {
+          throw "Next main version must be greater than release version $releaseVersion. Actual: $nextMainVersion"
+        }
+
+        $nextMainVersion = "$nextMajor.$nextMinor.$nextPatch"
+
         $releaseBranch = "release/$major.$minor"
         $mainBumpBranch = "chore/bump-main-to-$nextMainVersion"
 
@@ -200,10 +223,44 @@ jobs:
           return $match.Groups['value'].Value.Trim()
         }
 
+        function Assert-RemoteBranchState([string]$GitRef, [string]$ExpectedVersion, [string]$BranchName = "") {
+          $assertArgs = @("-GitRef", $GitRef)
+          if ($BranchName) {
+            $assertArgs += @("-BranchName", $BranchName)
+          }
+
+          & ./scripts/assert-version-policy.ps1 @assertArgs
+          if ($LASTEXITCODE -ne 0) {
+            throw "Version validation failed on '$GitRef'."
+          }
+
+          $actualVersion = Get-VersionFromGitObject ($GitRef + ":Directory.Build.props")
+          if ($actualVersion -ne $ExpectedVersion) {
+            throw "$GitRef has version '$actualVersion' but expected '$ExpectedVersion'."
+          }
+        }
+
         $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
         $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
         $releaseVersion = "${{ steps.version.outputs.RELEASE_VERSION }}"
         $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}"
+        $releaseSeries = "${{ steps.version.outputs.RELEASE_SERIES }}"
+
+        ./scripts/assert-version-policy.ps1 -BranchName "main"
+        if ($LASTEXITCODE -ne 0) {
+          throw "Version validation failed on main."
+        }
+
+        [xml]$mainProps = Get-Content "Directory.Build.props"
+        $mainVersion = $mainProps.Project.PropertyGroup.Version
+        if (-not $mainVersion -or $mainVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
+          throw "Current main version format is invalid: $mainVersion"
+        }
+
+        $mainSeries = "$($matches['major']).$($matches['minor'])"
+        if ($mainSeries -ne $releaseSeries) {
+          throw "Target release series $releaseSeries does not match current main line $mainVersion. Use a matching X.Y series."
+        }
 
         $releaseExists = Get-RemoteBranchExists $releaseBranch
         $mainBumpExists = Get-RemoteBranchExists $mainBumpBranch
@@ -214,10 +271,7 @@ jobs:
             throw "Failed to fetch origin/$releaseBranch."
           }
 
-          $actualReleaseVersion = Get-VersionFromGitObject ("origin/$releaseBranch" + ":Directory.Build.props")
-          if ($actualReleaseVersion -ne $releaseVersion) {
-            throw "origin/$releaseBranch has version '$actualReleaseVersion' but expected '$releaseVersion'."
-          }
+          Assert-RemoteBranchState -GitRef "origin/$releaseBranch" -ExpectedVersion $releaseVersion -BranchName $releaseBranch
         }
 
         if ($mainBumpExists) {
@@ -226,20 +280,19 @@ jobs:
             throw "Failed to fetch origin/$mainBumpBranch."
           }
 
-          $actualMainVersion = Get-VersionFromGitObject ("origin/$mainBumpBranch" + ":Directory.Build.props")
-          if ($actualMainVersion -ne $nextMainVersion) {
-            throw "origin/$mainBumpBranch has version '$actualMainVersion' but expected '$nextMainVersion'."
-          }
+          Assert-RemoteBranchState -GitRef "origin/$mainBumpBranch" -ExpectedVersion $nextMainVersion
         }
 
         if (-not $releaseExists -and -not $mainBumpExists) {
           $branchMode = "create_all"
-        } elseif ($releaseExists -and $mainBumpExists) {
-          $branchMode = "reuse_existing"
-        } elseif ($releaseExists) {
-          $branchMode = "recover_main_bump"
         } else {
-          $branchMode = "recover_release_branch"
+          if ($releaseExists -ne $mainBumpExists) {
+            $existingBranch = if ($releaseExists) { $releaseBranch } else { $mainBumpBranch }
+            $missingBranch = if ($releaseExists) { $mainBumpBranch } else { $releaseBranch }
+            throw "Partial prepare-release state detected. Existing remote branch: '$existingBranch'. Missing remote branch: '$missingBranch'. Clean up the stale branch or complete the missing branch manually before rerunning."
+          }
+
+          $branchMode = "reuse_existing"
         }
 
         echo "BRANCH_MODE=$branchMode" >> $env:GITHUB_OUTPUT
@@ -263,136 +316,6 @@ jobs:
           -MainBranch "main" `
           @extraArgs `
           -Push
-
-    - name: Recover missing main bump branch
-      if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'recover_main_bump' }}
-      shell: pwsh
-      run: |
-        function Set-VersionFiles([string]$Version) {
-          [xml]$props = Get-Content "Directory.Build.props"
-          $props.Project.PropertyGroup.Version = $Version
-          $props.Save("Directory.Build.props")
-
-          [xml]$manifest = Get-Content "src/ClipSave.Package/Package.appxmanifest"
-          $manifest.Package.Identity.Version = "$Version.0"
-          $manifest.Save("src/ClipSave.Package/Package.appxmanifest")
-        }
-
-        $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
-        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
-        $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}"
-
-        git fetch --no-tags origin "main" "$releaseBranch"
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to fetch origin/main and origin/$releaseBranch."
-        }
-
-        $baseCommit = (git merge-base "origin/main" "origin/$releaseBranch").Trim()
-        if (-not $baseCommit) {
-          throw "Failed to resolve merge-base for origin/main and origin/$releaseBranch."
-        }
-
-        git show-ref --verify --quiet "refs/heads/$mainBumpBranch"
-        if ($LASTEXITCODE -eq 0) {
-          git branch -D $mainBumpBranch *> $null
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to remove stale local branch '$mainBumpBranch'."
-          }
-        }
-
-        git checkout --detach $baseCommit
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to detach at base commit '$baseCommit'."
-        }
-
-        git checkout -b $mainBumpBranch
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to create '$mainBumpBranch' from '$baseCommit'."
-        }
-
-        Set-VersionFiles -Version $nextMainVersion
-        git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
-        git commit -m "chore: bump main version to $nextMainVersion"
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to commit version update on '$mainBumpBranch'."
-        }
-
-        ./scripts/assert-version-policy.ps1 -BranchName "main"
-        if ($LASTEXITCODE -ne 0) {
-          throw "Version validation failed on recovered '$mainBumpBranch'."
-        }
-
-        git push -u origin $mainBumpBranch
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to push recovered '$mainBumpBranch'."
-        }
-
-        Write-Host "Recovered missing main bump branch: $mainBumpBranch"
-
-    - name: Recover missing release branch
-      if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'recover_release_branch' }}
-      shell: pwsh
-      run: |
-        function Set-VersionFiles([string]$Version) {
-          [xml]$props = Get-Content "Directory.Build.props"
-          $props.Project.PropertyGroup.Version = $Version
-          $props.Save("Directory.Build.props")
-
-          [xml]$manifest = Get-Content "src/ClipSave.Package/Package.appxmanifest"
-          $manifest.Package.Identity.Version = "$Version.0"
-          $manifest.Save("src/ClipSave.Package/Package.appxmanifest")
-        }
-
-        $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
-        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
-        $releaseVersion = "${{ steps.version.outputs.RELEASE_VERSION }}"
-
-        git fetch --no-tags origin "main" "$mainBumpBranch"
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to fetch origin/main and origin/$mainBumpBranch."
-        }
-
-        $baseCommit = (git merge-base "origin/main" "origin/$mainBumpBranch").Trim()
-        if (-not $baseCommit) {
-          throw "Failed to resolve merge-base for origin/main and origin/$mainBumpBranch."
-        }
-
-        git show-ref --verify --quiet "refs/heads/$releaseBranch"
-        if ($LASTEXITCODE -eq 0) {
-          git branch -D $releaseBranch *> $null
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to remove stale local branch '$releaseBranch'."
-          }
-        }
-
-        git checkout --detach $baseCommit
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to detach at base commit '$baseCommit'."
-        }
-
-        git checkout -b $releaseBranch
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to create '$releaseBranch' from '$baseCommit'."
-        }
-
-        Set-VersionFiles -Version $releaseVersion
-        git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
-        git commit -m "chore: set release version to $releaseVersion"
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to commit version update on '$releaseBranch'."
-        }
-
-        ./scripts/assert-version-policy.ps1 -BranchName $releaseBranch
-        if ($LASTEXITCODE -ne 0) {
-          throw "Version validation failed on recovered '$releaseBranch'."
-        }
-
-        git push -u origin $releaseBranch
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to push recovered '$releaseBranch'."
-        }
-
-        Write-Host "Recovered missing release branch: $releaseBranch"
 
     - name: Create PR for main version bump branch
       if: ${{ inputs.create_main_bump_pr }}

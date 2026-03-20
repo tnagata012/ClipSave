@@ -188,6 +188,7 @@ jobs:
 
         $patchBranch = "${{ steps.patch_target.outputs.PATCH_BRANCH }}"
         $expectedVersion = "${{ steps.patch_target.outputs.PATCH_VERSION }}"
+        $assertScript = Join-Path $env:GITHUB_WORKSPACE "tooling/scripts/assert-version-policy.ps1"
 
         git ls-remote --exit-code --heads origin $patchBranch *> $null
         $patchExists = ($LASTEXITCODE -eq 0)
@@ -195,6 +196,11 @@ jobs:
           git fetch --no-tags origin "$patchBranch"
           if ($LASTEXITCODE -ne 0) {
             throw "Failed to fetch origin/$patchBranch."
+          }
+
+          & $assertScript -ProjectRoot (Get-Location).Path -GitRef "origin/$patchBranch"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Version validation failed on origin/$patchBranch."
           }
 
           $actualVersion = Get-VersionFromGitObject ("origin/$patchBranch" + ":Directory.Build.props")

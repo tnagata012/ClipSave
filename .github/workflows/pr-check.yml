@@ -29,21 +29,6 @@ jobs:
     timeout-minutes: 45
 
     steps:
-    - name: Initialize check status
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const targetUrl = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-          await github.rest.repos.createCommitStatus({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            sha: context.sha,
-            state: "pending",
-            context: "check",
-            description: "PR Check is running.",
-            target_url: targetUrl,
-          });
-
     - name: Checkout
       uses: actions/checkout@v4
 
@@ -65,6 +50,7 @@ jobs:
             core.info(`Resolved PR #${pr.number} from pull_request event targeting '${pr.base.ref}'.`);
             core.setOutput("pr_number", String(pr.number));
             core.setOutput("base_ref", pr.base.ref);
+            core.setOutput("head_sha", pr.head.sha);
             return;
           }
 
@@ -109,6 +95,22 @@ jobs:
           core.info(`Resolved PR #${pr.number} from workflow_dispatch targeting '${pr.base.ref}'.`);
           core.setOutput("pr_number", String(pr.number));
           core.setOutput("base_ref", pr.base.ref);
+          core.setOutput("head_sha", pr.head.sha);
+
+    - name: Initialize check status
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const targetUrl = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          await github.rest.repos.createCommitStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            sha: "${{ steps.pr.outputs.head_sha }}",
+            state: "pending",
+            context: "check",
+            description: "PR Check is running.",
+            target_url: targetUrl,
+          });
 
     - name: Detect website-only changes
       id: changes
@@ -210,7 +212,7 @@ jobs:
       run: ./scripts/assert-version-policy.ps1 -BranchName "${{ steps.pr.outputs.base_ref }}"
 
     - name: Finalize check status
-      if: always()
+      if: always() && steps.pr.outputs.head_sha != ''
       uses: actions/github-script@v7
       env:
         JOB_STATUS: ${{ job.status }}
@@ -232,7 +234,7 @@ jobs:
           await github.rest.repos.createCommitStatus({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            sha: context.sha,
+            sha: "${{ steps.pr.outputs.head_sha }}",
             state: stateMap[jobStatus] ?? "failure",
             context: "check",
             description: descriptionMap[jobStatus] ?? `PR Check ended with status '${jobStatus}'.`,

@@ -392,6 +392,33 @@ jobs:
           throw "Failed to push '$mainBumpBranch'."
         }
 
+    - name: Dispatch RC Build
+      id: rc_build
+      if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'create_all' }}
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
+        $repo = "${{ github.repository }}"
+        $maxAttempts = 5
+
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+          gh workflow run rc-build.yml --repo $repo --ref $releaseBranch *> $null
+          if ($LASTEXITCODE -eq 0) {
+            echo "RC_BUILD_TRIGGERED=true" >> $env:GITHUB_OUTPUT
+            Write-Host "Dispatched RC Build for '$releaseBranch'."
+            exit 0
+          }
+
+          if ($attempt -lt $maxAttempts) {
+            Write-Warning "Failed to dispatch RC Build for '$releaseBranch' on attempt $attempt/$maxAttempts. Retrying in 3 seconds."
+            Start-Sleep -Seconds 3
+          }
+        }
+
+        throw "Failed to dispatch RC Build for '$releaseBranch'."
+
     - name: Ensure main bump PR and dispatch PR Check
       id: main_bump_pr
       if: ${{ inputs.create_main_bump_pr && (steps.branch_state.outputs.BRANCH_MODE == 'create_all' || steps.branch_state.outputs.BRANCH_MODE == 'create_main_bump_only' || steps.branch_state.outputs.MAIN_BUMP_EXISTS == 'true') }}
@@ -510,6 +537,7 @@ jobs:
         }
         $lineIssue = "${{ steps.line_issue.outputs.LINE_URL }}".Trim()
         $lineIssueAction = "${{ steps.line_issue.outputs.LINE_ACTION }}".Trim()
+        $rcBuildTriggered = "${{ steps.rc_build.outputs.RC_BUILD_TRIGGERED }}".Trim()
         $mainBumpPrUrl = "${{ steps.main_bump_pr.outputs.PR_URL }}".Trim()
         $prCheckTriggered = "${{ steps.main_bump_pr.outputs.PR_CHECK_TRIGGERED }}".Trim()
         if (-not $lineIssue) {
@@ -523,6 +551,13 @@ jobs:
         }
         if (-not $prCheckTriggered) {
           $prCheckTriggered = "false"
+        }
+        if (-not $rcBuildTriggered) {
+          if ($branchMode -eq "create_all") {
+            $rcBuildTriggered = "false"
+          } else {
+            $rcBuildTriggered = "not_needed"
+          }
         }
 
         if (-not $prRequested) {
@@ -542,6 +577,7 @@ jobs:
         | Release Branch | $releaseBranch |
         | Main Bump Branch | $mainBumpBranch |
         | Next Main Version | $nextMainVersion |
+        | RC Build Dispatch | `$rcBuildTriggered` |
         | Main Bump PR | $prStatus |
         | Main Bump PR URL | $mainBumpPrUrl |
         | PR Check Dispatch | `$prCheckTriggered` |

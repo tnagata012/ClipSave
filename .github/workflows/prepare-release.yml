@@ -138,67 +138,6 @@ jobs:
           Write-Warning "Release Notes: Unreleased was not found."
         }
 
-    - name: Ensure release-line notes issue
-      id: line_issue
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        . ./scripts/release-support.ps1
-
-        $repo = "${{ github.repository }}"
-        $releaseSeries = "${{ steps.version.outputs.RELEASE_SERIES }}"
-        $lineTitle = "Release Notes: $releaseSeries"
-        $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle -AllowMissing
-        $lineAction = "reused"
-
-        if ($null -eq $lineIssue) {
-          $bodyPath = Join-Path $env:RUNNER_TEMP "release-notes-$releaseSeries.md"
-          $body = @(
-            "## Release Notes",
-            "",
-            "Current target: $releaseSeries",
-            "",
-            "### Added",
-            "- None yet.",
-            "",
-            "### Changed",
-            "- None yet.",
-            "",
-            "### Fixed",
-            "- None yet."
-          ) -join "`r`n"
-
-          Set-Content -Path $bodyPath -Value $body -Encoding utf8
-
-          $createdUrl = gh issue create `
-            --repo $repo `
-            --title $lineTitle `
-            --body-file $bodyPath 2>$null
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($createdUrl)) {
-            throw "Failed to create release-line issue '$lineTitle'."
-          }
-
-          $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle
-          $lineAction = "created"
-          Write-Host "Created release-line issue: $($lineIssue.Url)"
-        } elseif (([string]$lineIssue.State).Trim().ToLowerInvariant() -ne "open") {
-          gh issue reopen $lineIssue.Number --repo $repo *> $null
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to reopen release-line issue '$lineTitle' (#$($lineIssue.Number))."
-          }
-
-          $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle
-          $lineAction = "reopened"
-          Write-Host "Reopened release-line issue: $($lineIssue.Url)"
-        } else {
-          Write-Host "Reusing release-line issue: $($lineIssue.Url)"
-        }
-
-        echo "LINE_TITLE=$lineTitle" >> $env:GITHUB_OUTPUT
-        echo "LINE_URL=$($lineIssue.Url)" >> $env:GITHUB_OUTPUT
-        echo "LINE_ACTION=$lineAction" >> $env:GITHUB_OUTPUT
-
     - name: Inspect existing prepare branches
       id: branch_state
       shell: pwsh
@@ -301,6 +240,67 @@ jobs:
         Write-Host "Branch mode: $branchMode"
         Write-Host "Release branch exists: $releaseExists"
         Write-Host "Main bump branch exists: $mainBumpExists"
+
+    - name: Ensure release-line notes issue
+      id: line_issue
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        . ./scripts/release-support.ps1
+
+        $repo = "${{ github.repository }}"
+        $releaseSeries = "${{ steps.version.outputs.RELEASE_SERIES }}"
+        $lineTitle = "Release Notes: $releaseSeries"
+        $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle -AllowMissing
+        $lineAction = "reused"
+
+        if ($null -eq $lineIssue) {
+          $bodyPath = Join-Path $env:RUNNER_TEMP "release-notes-$releaseSeries.md"
+          $body = @(
+            "## Release Notes",
+            "",
+            "Current target: $releaseSeries",
+            "",
+            "### Added",
+            "- None yet.",
+            "",
+            "### Changed",
+            "- None yet.",
+            "",
+            "### Fixed",
+            "- None yet."
+          ) -join "`r`n"
+
+          Set-Content -Path $bodyPath -Value $body -Encoding utf8
+
+          $createdUrl = gh issue create `
+            --repo $repo `
+            --title $lineTitle `
+            --body-file $bodyPath 2>$null
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($createdUrl)) {
+            throw "Failed to create release-line issue '$lineTitle'."
+          }
+
+          $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle
+          $lineAction = "created"
+          Write-Host "Created release-line issue: $($lineIssue.Url)"
+        } elseif (([string]$lineIssue.State).Trim().ToLowerInvariant() -ne "open") {
+          gh issue reopen $lineIssue.Number --repo $repo *> $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to reopen release-line issue '$lineTitle' (#$($lineIssue.Number))."
+          }
+
+          $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle
+          $lineAction = "reopened"
+          Write-Host "Reopened release-line issue: $($lineIssue.Url)"
+        } else {
+          Write-Host "Reusing release-line issue: $($lineIssue.Url)"
+        }
+
+        echo "LINE_TITLE=$lineTitle" >> $env:GITHUB_OUTPUT
+        echo "LINE_URL=$($lineIssue.Url)" >> $env:GITHUB_OUTPUT
+        echo "LINE_ACTION=$lineAction" >> $env:GITHUB_OUTPUT
 
     - name: Create release and main bump branches
       if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'create_all' }}

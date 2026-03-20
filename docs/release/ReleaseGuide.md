@@ -34,6 +34,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 - `pr-check.yml` は workflow lint を常時実行し、website-only PR（`site/**`, `.github/workflows/deploy-pages.yml`, `docs/presentation/LandingPage.md` のみ変更）のときはアプリ本体の restore / security / build / test / spec coverage を skip する。
 - `deploy-pages.yml` は `workflow_dispatch` でも `main` 以外では失敗するため、手動実行は `main` を前提とする。
 - `rc-X.Y-latest` の GitHub Release は候補版として常に `prerelease` 表示にする。
+- `Prepare Release` は `release/X.Y` が既に存在していても、branch 状態と版数が妥当で `main` 側 bump ブランチだけが欠けている場合は、その不足 branch を再作成して継続する。
 
 ## 実行前チェック
 

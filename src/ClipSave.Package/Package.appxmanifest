@@ -10,7 +10,7 @@
   <Identity
     Name="tnagata012.ClipSave"
     Publisher="CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959"
-    Version="0.0.1.0" />
+    Version="0.1.0.0" />
 
   <Properties>
     <DisplayName>ClipSave</DisplayName>

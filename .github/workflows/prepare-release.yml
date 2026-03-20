@@ -478,8 +478,7 @@ jobs:
         gh workflow run pr-check.yml `
           --repo $repo `
           --ref $head `
-          -f pr_number=$([string]$pr.number) `
-          -f base_ref=$base *> $null
+          -f pr_number=$([string]$pr.number) *> $null
         if ($LASTEXITCODE -ne 0) {
           throw "Failed to dispatch PR Check for PR #$($pr.number)."
         }

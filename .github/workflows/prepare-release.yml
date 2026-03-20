@@ -305,7 +305,9 @@ jobs:
             throw "Failed to create release-line issue '$lineTitle'."
           }
 
-          $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle
+          $lineIssue = [PSCustomObject]@{
+            Url = $createdUrl.Trim()
+          }
           $lineAction = "created"
           Write-Host "Created release-line issue: $($lineIssue.Url)"
         } elseif (([string]$lineIssue.State).Trim().ToLowerInvariant() -ne "open") {

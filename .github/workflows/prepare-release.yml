@@ -89,20 +89,6 @@ jobs:
           Write-Warning "Release Notes: Unreleased was not found."
         }
 
-    - name: Create release and main bump branches
-      shell: pwsh
-      run: |
-        $extraArgs = @()
-        if ("${{ inputs.next_main_version }}".Trim()) {
-          $extraArgs += @("-NextMainVersion", "${{ inputs.next_main_version }}")
-        }
-
-        & ./scripts/create-release-branch.ps1 `
-          -Version "${{ steps.version.outputs.RELEASE_SERIES }}" `
-          -MainBranch "main" `
-          @extraArgs `
-          -Push
-
     - name: Ensure release-line notes issue
       id: line_issue
       shell: pwsh
@@ -163,6 +149,20 @@ jobs:
         echo "LINE_TITLE=$lineTitle" >> $env:GITHUB_OUTPUT
         echo "LINE_URL=$($lineIssue.Url)" >> $env:GITHUB_OUTPUT
         echo "LINE_ACTION=$lineAction" >> $env:GITHUB_OUTPUT
+
+    - name: Create release and main bump branches
+      shell: pwsh
+      run: |
+        $extraArgs = @()
+        if ("${{ inputs.next_main_version }}".Trim()) {
+          $extraArgs += @("-NextMainVersion", "${{ inputs.next_main_version }}")
+        }
+
+        & ./scripts/create-release-branch.ps1 `
+          -Version "${{ steps.version.outputs.RELEASE_SERIES }}" `
+          -MainBranch "main" `
+          @extraArgs `
+          -Push
 
     - name: Create PR for main version bump branch
       if: ${{ inputs.create_main_bump_pr }}

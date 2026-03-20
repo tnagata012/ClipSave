@@ -331,16 +331,18 @@ jobs:
       if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'create_all' }}
       shell: pwsh
       run: |
-        $extraArgs = @()
-        if ("${{ steps.targets.outputs.NEXT_MAIN_VERSION }}".Trim() -ne "") {
-          $extraArgs += @("-NextMainVersion", "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}")
+        $scriptArgs = @{
+          Version = "${{ steps.version.outputs.RELEASE_SERIES }}".Trim()
+          MainBranch = "main"
+          Push = $true
         }
 
-        & ./scripts/create-release-branch.ps1 `
-          -Version "${{ steps.version.outputs.RELEASE_SERIES }}" `
-          -MainBranch "main" `
-          @extraArgs `
-          -Push
+        $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}".Trim()
+        if ($nextMainVersion -ne "") {
+          $scriptArgs.NextMainVersion = $nextMainVersion
+        }
+
+        & ./scripts/create-release-branch.ps1 @scriptArgs
 
     - name: Create PR for main version bump branch
       if: ${{ inputs.create_main_bump_pr }}

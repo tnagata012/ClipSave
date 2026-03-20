@@ -62,6 +62,18 @@ $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifes
 
 . "$projectRoot\scripts\release-series-policy.ps1"
 
+if ($null -ne $Version) {
+    $Version = $Version.Trim()
+}
+
+if ($null -ne $MainBranch) {
+    $MainBranch = $MainBranch.Trim()
+}
+
+if ($null -ne $NextMainVersion) {
+    $NextMainVersion = $NextMainVersion.Trim()
+}
+
 Write-Host "=== Create Release Branch (Trunk-Based Development) ===" -ForegroundColor Cyan
 
 Push-Location $projectRoot

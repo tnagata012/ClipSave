@@ -9,7 +9,7 @@
 
   <Identity
     Name="ClipSave.Preview"
-    Publisher="CN=ClipSavePreview"
+    Publisher="CN=ClipSavePreview, OID.2.25.311729368913984317654407730594956997722=1"
     Version="0.1.0.0" />
 
   <Properties>

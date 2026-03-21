@@ -229,12 +229,12 @@ Store 提出へ進める条件は release 文書側で定義し、Partner Center
 
 Dev / RC / Archive は Store 版と別の unsigned 用 Identity（`Identity Name` / `Publisher`）を採用する。
 
-- unsigned 用 Identity は `ClipSave.Preview` / `CN=ClipSavePreview` とする。
+- unsigned 用 Identity は `ClipSave.Preview` とし、詳細な manifest 値は `scripts/set-package-manifest.ps1` を正本とする。
 - リポジトリ上の `Package.appxmanifest` は Preview identity を既定値として保持する。
 - Store 提出物は従来どおり `tnagata012.ClipSave` / `CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959` を使う。
 - `Release Finalize` の archive build は古い tag を backfill する場合に備えて Preview identity へ正規化する。
 - `Release Finalize` の Store package モードと `build-store-package.ps1` は、Store package 作成時だけ一時的に Store identity へ切り替える。
-- 利点: unsigned package を Store identity から切り離し、手動インストールの互換性を確保しやすい。
+- 利点: unsigned package を Store identity から切り離し、手動インストールや切り替えの扱いを明確にできる。
 - 注意: Store 版と Preview 版は package family が分かれるため、設定と LocalState は自動共有されない。
 - 注意: Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を入れると Preview identity 内ではダウングレード判定になるため、先に Dev をアンインストールする。
 - 注意: RC 候補同士、および RC 候補から同版 Archive への切り替えでも、同一 Preview identity / 同一 package version（`X.Y.Z.0`）のためアンインストールが必要になることがある。

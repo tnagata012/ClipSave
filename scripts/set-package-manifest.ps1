@@ -28,7 +28,7 @@ $profiles = @{
     preview = @{
         # Store association still validates the package display name against the Store app name.
         Name = "ClipSave.Preview"
-        Publisher = "CN=ClipSavePreview"
+        Publisher = "CN=ClipSavePreview, OID.2.25.311729368913984317654407730594956997722=1"
         PackageDisplayName = "ClipSave"
         VisualDisplayName = "ClipSave Preview"
         Description = "ClipSave Preview"

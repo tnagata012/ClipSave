@@ -129,12 +129,23 @@ if ($existingPackages.Count -gt 0) {
     }) -join ", "
 
     if (-not $RemoveExisting) {
-        Fail "Existing package found for '$($identity.Name)': $existingSummary`nRe-run with -RemoveExisting to uninstall it automatically before installing the new bundle."
-    }
+        $publisherMismatches = @($existingPackages | Where-Object { $_.Publisher -ne $identity.Publisher })
+        $sameOrNewerPackages = @($existingPackages | Where-Object { [version]$_.Version -ge $identity.Version })
 
-    Write-Host "Removing existing package(s): $existingSummary" -ForegroundColor Yellow
-    foreach ($pkg in $existingPackages) {
-        Remove-AppxPackage -Package $pkg.PackageFullName
+        if ($publisherMismatches.Count -gt 0) {
+            Fail "Existing package identity does not match the bundle publisher: $existingSummary`nRe-run with -RemoveExisting to uninstall it before installing the new bundle."
+        }
+
+        if ($sameOrNewerPackages.Count -gt 0) {
+            Fail "Existing package version is the same or newer than the bundle: $existingSummary`nRe-run with -RemoveExisting to force replacement."
+        }
+
+        Write-Host "Existing older package found. Continuing with in-place update: $existingSummary" -ForegroundColor Cyan
+    } else {
+        Write-Host "Removing existing package(s): $existingSummary" -ForegroundColor Yellow
+        foreach ($pkg in $existingPackages) {
+            Remove-AppxPackage -Package $pkg.PackageFullName
+        }
     }
 }
 

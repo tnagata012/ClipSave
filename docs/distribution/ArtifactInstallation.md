@@ -40,7 +40,7 @@ $bundlePath = $bundle[0].FullName
   -SourceRef refs/heads/main
 ```
 
-RC を導入する場合は `-Channel rc -SourceRef refs/heads/release/X.Y`、確定版アーカイブを導入する場合は `-Channel archive -SourceRef refs/tags/X.Y.Z` を使います。既存の Preview package を置き換える必要がある場合は `-RemoveExisting` を追加します。
+RC を導入する場合は `-Channel rc -SourceRef refs/heads/release/X.Y`、確定版アーカイブを導入する場合は `-Channel archive -SourceRef refs/tags/X.Y.Z` を使います。同一版への入れ替えやダウングレードで既存の Preview package を強制的に外す必要がある場合は `-RemoveExisting` を追加します。
 
 `install-artifact.ps1` は、`SHA256` と GitHub Artifact Attestation の検証、管理者権限チェック、既存 Preview package の削除、`Add-AppxPackage -AllowUnsigned` をまとめて処理します。
 

@@ -199,6 +199,15 @@ jobs:
           scripts
         sparse-checkout-cone-mode: true
 
+    - name: Pin CI SDK roll-forward for MSBuild compatibility
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
+      shell: pwsh
+      run: |
+        $path = Join-Path $PWD "global.json"
+        $json = Get-Content $path -Raw | ConvertFrom-Json
+        $json.sdk.rollForward = "latestPatch"
+        $json | ConvertTo-Json -Depth 10 | Set-Content -Path $path -Encoding utf8
+
     - name: Verify Store package target is latest finalized version
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}
       shell: pwsh
@@ -346,10 +355,10 @@ jobs:
       if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       run: dotnet restore ${{ env.APP_PROJECT }} --runtime win-x86
 
-    - name: Normalize archive manifest to preview profile
+    - name: Normalize archive manifest to unsigned preview profile
       if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
       shell: pwsh
-      run: ./tooling/scripts/set-package-manifest.ps1 -ProjectRoot "${{ github.workspace }}" -Profile preview -Version "${{ steps.version.outputs.MSIX_VERSION }}"
+      run: ./tooling/scripts/set-package-manifest.ps1 -ProjectRoot "${{ github.workspace }}" -Profile unsigned -Version "${{ steps.version.outputs.MSIX_VERSION }}"
 
     - name: Build release archive package
       if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}

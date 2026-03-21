@@ -20,13 +20,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if ($Profile -eq "unsigned") {
-    $Profile = "preview"
-}
-
 $profiles = @{
     preview = @{
-        # Store association still validates the package display name against the Store app name.
+        # Local signed deployment/debugging profile.
+        Name = "ClipSave.Preview"
+        Publisher = "CN=ClipSavePreview"
+        PackageDisplayName = "ClipSave"
+        VisualDisplayName = "ClipSave Preview"
+        Description = "ClipSave Preview"
+        PublisherDisplayName = "tnagata012"
+        StartupTaskDisplayName = "ClipSave Preview"
+    }
+    unsigned = @{
+        # Unsigned artifact profile for Dev / RC / Archive channels.
         Name = "ClipSave.Preview"
         Publisher = "CN=ClipSavePreview, OID.2.25.311729368913984317654407730594956997722=1"
         PackageDisplayName = "ClipSave"

@@ -93,17 +93,17 @@ if (-not $SkipVerify) {
         $ChecksumPath = $candidateChecksumPath
     }
 
-    $verifyArgs = @(
-        "-BundlePath", $bundlePathResolved,
-        "-ChecksumPath", (Resolve-Path -LiteralPath $ChecksumPath).Path,
-        "-Channel", $Channel,
-        "-Repo", $Repo
-    )
+    $verifyParams = @{
+        BundlePath = $bundlePathResolved
+        ChecksumPath = (Resolve-Path -LiteralPath $ChecksumPath).Path
+        Channel = $Channel
+        Repo = $Repo
+    }
     if ($SourceRef) {
-        $verifyArgs += @("-SourceRef", $SourceRef)
+        $verifyParams.SourceRef = $SourceRef
     }
 
-    & (Join-Path $PSScriptRoot "verify-artifact.ps1") @verifyArgs
+    & (Join-Path $PSScriptRoot "verify-artifact.ps1") @verifyParams
     if ($LASTEXITCODE -ne 0) {
         Fail "Artifact verification failed."
     }

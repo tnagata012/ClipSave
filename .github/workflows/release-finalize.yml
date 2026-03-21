@@ -349,7 +349,7 @@ jobs:
     - name: Normalize archive manifest to preview profile
       if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
       shell: pwsh
-      run: ./scripts/set-package-manifest.ps1 -Profile preview -Version "${{ steps.version.outputs.MSIX_VERSION }}"
+      run: ./tooling/scripts/set-package-manifest.ps1 -ProjectRoot "${{ github.workspace }}" -Profile preview -Version "${{ steps.version.outputs.MSIX_VERSION }}"
 
     - name: Build release archive package
       if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
@@ -617,7 +617,7 @@ jobs:
     - name: Prepare Store package manifest
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}
       shell: pwsh
-      run: ./scripts/set-package-manifest.ps1 -Profile store -Version "${{ steps.version.outputs.MSIX_VERSION }}"
+      run: ./tooling/scripts/set-package-manifest.ps1 -ProjectRoot "${{ github.workspace }}" -Profile store -Version "${{ steps.version.outputs.MSIX_VERSION }}"
 
     - name: Build Store package
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}

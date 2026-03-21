@@ -23,6 +23,28 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Resolve-MSBuildPath {
+    $command = Get-Command msbuild -ErrorAction SilentlyContinue
+    if ($command -and $command.Source) {
+        return $command.Source
+    }
+
+    $vswherePath = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswherePath) {
+        $resolved = & $vswherePath `
+            -latest `
+            -products * `
+            -requires Microsoft.Component.MSBuild `
+            -find MSBuild\**\Bin\MSBuild.exe 2>$null |
+            Select-Object -First 1
+        if ($resolved) {
+            return $resolved.Trim()
+        }
+    }
+
+    throw "MSBuild.exe was not found. Install Visual Studio/Build Tools with MSBuild, or run from a Developer PowerShell where msbuild is available."
+}
+
 # Get project root
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $manifestPath = Join-Path $projectRoot "src\ClipSave.Package\Package.appxmanifest"
@@ -91,6 +113,8 @@ try {
     Write-Host "Branch: $currentBranch" -ForegroundColor Cyan
     Write-Host "InformationalVersion: $informationalVersion" -ForegroundColor Cyan
     Write-Warning "This script is for local preflight only. Final submission packages must come from the Release Finalize workflow in Store package mode."
+    $msbuildPath = Resolve-MSBuildPath
+    Write-Host "MSBuild: $msbuildPath" -ForegroundColor Cyan
 
     # Verify version in both files
     Write-Host "`nVerifying version consistency..." -ForegroundColor Yellow
@@ -158,7 +182,7 @@ try {
         Remove-Item $outputDir -Recurse -Force
     }
 
-    msbuild "$projectRoot\src\ClipSave.Package\ClipSave.Package.wapproj" `
+    & $msbuildPath "$projectRoot\src\ClipSave.Package\ClipSave.Package.wapproj" `
         /p:Configuration=Release `
         /p:Platform=AnyCPU `
         /p:Version="$Version" `

@@ -346,21 +346,10 @@ jobs:
       if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
       run: dotnet restore ${{ env.APP_PROJECT }} --runtime win-x86
 
-    - name: Set MSIX manifest version
-      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
+    - name: Normalize archive manifest to preview profile
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
       shell: pwsh
-      run: |
-        $manifestPath = "src/ClipSave.Package/Package.appxmanifest"
-        [xml]$manifest = Get-Content $manifestPath
-        $ns = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
-        $ns.AddNamespace("appx", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
-        $identity = $manifest.SelectSingleNode("/appx:Package/appx:Identity", $ns)
-        if (-not $identity) {
-          throw "Identity node not found in $manifestPath"
-        }
-        $identity.SetAttribute("Version", "${{ steps.version.outputs.MSIX_VERSION }}")
-        $manifest.Save($manifestPath)
-        Write-Host "Updated Package.appxmanifest version to ${{ steps.version.outputs.MSIX_VERSION }}"
+      run: ./scripts/set-package-manifest.ps1 -Profile preview -Version "${{ steps.version.outputs.MSIX_VERSION }}"
 
     - name: Build release archive package
       if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE == 'true' }}
@@ -624,6 +613,11 @@ jobs:
           -Tag "${{ steps.version.outputs.VERSION }}" `
           -RetainAssetNames @("${{ steps.archive_bundle.outputs.BUNDLE_NAME }}", "SHA256SUMS.txt") `
           -IgnoreDeleteFailures
+
+    - name: Prepare Store package manifest
+      if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}
+      shell: pwsh
+      run: ./scripts/set-package-manifest.ps1 -Profile store -Version "${{ steps.version.outputs.MSIX_VERSION }}"
 
     - name: Build Store package
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}

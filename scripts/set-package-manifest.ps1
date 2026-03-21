@@ -26,9 +26,11 @@ if ($Profile -eq "unsigned") {
 
 $profiles = @{
     preview = @{
+        # Store association still validates the package display name against the Store app name.
         Name = "ClipSave.Preview"
         Publisher = "CN=ClipSavePreview"
-        DisplayName = "ClipSave Preview"
+        PackageDisplayName = "ClipSave"
+        VisualDisplayName = "ClipSave Preview"
         Description = "ClipSave Preview"
         PublisherDisplayName = "tnagata012"
         StartupTaskDisplayName = "ClipSave Preview"
@@ -36,7 +38,8 @@ $profiles = @{
     store = @{
         Name = "tnagata012.ClipSave"
         Publisher = "CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959"
-        DisplayName = "ClipSave"
+        PackageDisplayName = "ClipSave"
+        VisualDisplayName = "ClipSave"
         Description = "ClipSave"
         PublisherDisplayName = "tnagata012"
         StartupTaskDisplayName = "ClipSave"
@@ -105,7 +108,7 @@ if ($Version) {
 $manifestText = Replace-ManifestValue `
     -Text $manifestText `
     -Pattern '(?<prefix><Properties>\s*<DisplayName>)(?<value>[^<]+)(?<suffix></DisplayName>)' `
-    -Value $selectedProfile.DisplayName `
+    -Value $selectedProfile.PackageDisplayName `
     -Description "Properties/DisplayName"
 
 $manifestText = Replace-ManifestValue `
@@ -117,7 +120,7 @@ $manifestText = Replace-ManifestValue `
 $manifestText = Replace-ManifestValue `
     -Text $manifestText `
     -Pattern '(?<prefix><uap:VisualElements\b[^>]*\bDisplayName=")(?<value>[^"]+)(?<suffix>")' `
-    -Value $selectedProfile.DisplayName `
+    -Value $selectedProfile.VisualDisplayName `
     -Description "uap:VisualElements/@DisplayName"
 
 $manifestText = Replace-ManifestValue `

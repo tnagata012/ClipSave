@@ -13,7 +13,7 @@
     Version="0.1.0.0" />
 
   <Properties>
-    <DisplayName>ClipSave Preview</DisplayName>
+    <DisplayName>ClipSave</DisplayName>
     <PublisherDisplayName>tnagata012</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>

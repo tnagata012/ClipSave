@@ -147,7 +147,7 @@ jobs:
 
     - name: Prepare RC package manifest
       shell: pwsh
-      run: ./scripts/set-package-manifest.ps1 -ProjectRoot "${{ github.workspace }}" -Profile preview -Version "${{ steps.version.outputs.MSIX_VERSION }}"
+      run: ./scripts/set-package-manifest.ps1 -ProjectRoot "${{ github.workspace }}" -Profile unsigned -Version "${{ steps.version.outputs.MSIX_VERSION }}"
 
     - name: Build unsigned MSIX
       shell: pwsh

@@ -145,19 +145,11 @@ try {
         exit 1
     }
 
-    Write-Host "`nSetting Package.appxmanifest version..." -ForegroundColor Yellow
+    Write-Host "`nPreparing Store Package.appxmanifest..." -ForegroundColor Yellow
     $manifestBackupPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ClipSave.Package.appxmanifest.{0}.bak" -f [guid]::NewGuid())
     Copy-Item $manifestPath $manifestBackupPath -Force
-    [xml]$manifest = Get-Content $manifestPath
-    $ns = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
-    $ns.AddNamespace("appx", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
-    $identity = $manifest.SelectSingleNode("/appx:Package/appx:Identity", $ns)
-    if (-not $identity) {
-        throw "Identity node not found in $manifestPath"
-    }
-    $identity.SetAttribute("Version", $msixVersion)
-    $manifest.Save($manifestPath)
-    Write-Host "Updated Package.appxmanifest version to $msixVersion" -ForegroundColor Cyan
+    & "$projectRoot\scripts\set-package-manifest.ps1" -ProjectRoot $projectRoot -Profile store -Version $msixVersion
+    Write-Host "Prepared Package.appxmanifest for Store profile" -ForegroundColor Cyan
 
     # Build Store package
     Write-Host "`nBuilding Store upload package..." -ForegroundColor Yellow

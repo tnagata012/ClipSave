@@ -33,6 +33,8 @@ ClipSave は運用コストと配布安全性のバランスを優先する。
 補足:
 
 - `dev-build.yml` / `rc-build.yml` / `release-finalize.yml` には署名ステップを含めず、`SHA256SUMS.txt` を成果物に同梱し、同じ workflow 実行に対する GitHub Artifact Attestation を GitHub 上に記録する。
+- 未署名チャネル（Dev / RC / Archive）は Store 版とは別 identity（`ClipSave.Preview` / `CN=ClipSavePreview`）でパッケージ化する。
+- リポジトリ上の `Package.appxmanifest` は Preview identity を既定値とし、Store package 生成時だけ Store identity へ一時切り替えする。`Release Finalize` の archive build は過去 tag の backfill 互換のため Preview identity へ正規化する。
 - GitHub Artifact Attestation は配布 asset に添付せず、`gh attestation verify` により検証する。
 - `MSIX_SIGNING_CERT_BASE64` / `MSIX_SIGNING_CERT_PASSWORD` は現行運用の必須要件ではない。
 - `msix-signing-dev` / `msix-signing-release` Environment 承認は現行運用では不要。

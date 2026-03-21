@@ -52,15 +52,17 @@ Add-AppxPackage -Path $bundlePath -AllowUnsigned
 
 ## チャネル切り替え時の注意
 
-Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を導入するとダウングレード判定になるため、先に Dev をアンインストールしてください。
+Dev / RC / Archive は `ClipSave.Preview` identity で配布され、Store 版とは別パッケージとして扱われます。Store 版と Preview 版は共存できますが、設定や LocalState は共有されません。
 
-RC 候補同士、および RC 候補から同版 Archive への切り替えでも、同一 Identity / 同一 package version（`X.Y.Z.0`）のため上書き導入できないことがあります。別候補へ切り替える場合も、必要に応じて既存の ClipSave パッケージを削除してから導入してください。
+Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を導入すると Preview identity 内でダウングレード判定になるため、先に Dev をアンインストールしてください。
+
+RC 候補同士、および RC 候補から同版 Archive への切り替えでも、同一 Preview identity / 同一 package version（`X.Y.Z.0`）のため上書き導入できないことがあります。別候補へ切り替える場合も、必要に応じて既存の Preview パッケージを削除してから導入してください。
 
 確定タグ `X.Y.Z` に対応するアーカイブ版は Store 公開の有無と独立しているため、試験リリースも同じ手順で導入できます。
 GitHub Release 側で `prerelease` 表示になっていても、導入手順や真正性確認の方法は変わりません。
 
 ```powershell
-Get-AppxPackage *ClipSave* | Remove-AppxPackage
+Get-AppxPackage | Where-Object { $_.Name -eq "ClipSave.Preview" } | Remove-AppxPackage
 ```
 
 ## 関連ドキュメント

@@ -34,6 +34,14 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Pin CI SDK roll-forward for MSBuild compatibility
+      shell: pwsh
+      run: |
+        $path = Join-Path $PWD "global.json"
+        $json = Get-Content $path -Raw | ConvertFrom-Json
+        $json.sdk.rollForward = "latestPatch"
+        $json | ConvertTo-Json -Depth 10 | Set-Content -Path $path -Encoding utf8
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:

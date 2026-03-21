@@ -199,6 +199,15 @@ jobs:
           scripts
         sparse-checkout-cone-mode: true
 
+    - name: Pin CI SDK roll-forward for MSBuild compatibility
+      if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
+      shell: pwsh
+      run: |
+        $path = Join-Path $PWD "global.json"
+        $json = Get-Content $path -Raw | ConvertFrom-Json
+        $json.sdk.rollForward = "latestPatch"
+        $json | ConvertTo-Json -Depth 10 | Set-Content -Path $path -Encoding utf8
+
     - name: Verify Store package target is latest finalized version
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}
       shell: pwsh

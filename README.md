@@ -72,6 +72,10 @@ If you want to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 See [SECURITY.md](SECURITY.md) for the security policy and how to report vulnerabilities.
 
+## Privacy
+
+See [PRIVACY.md](PRIVACY.md) for the privacy policy.
+
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

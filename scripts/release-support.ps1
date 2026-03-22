@@ -603,7 +603,8 @@ function Get-BlockingFilesAheadOfFinalizedTag {
         [Parameter(Mandatory = $true)]
         [string]$TagCommit,
         [Parameter(Mandatory = $true)]
-        [string]$HeadCommit
+        [string]$HeadCommit,
+        [switch]$AllowReleaseFinalizeTooling = $false
     )
 
     if ([string]::IsNullOrWhiteSpace($TagCommit) -or $TagCommit -notmatch '^[0-9a-f]{40}$') {
@@ -644,6 +645,14 @@ function Get-BlockingFilesAheadOfFinalizedTag {
         '^scripts/store-checklist\.ps1$',
         '^[^/]+\.md$'
     )
+
+    if ($AllowReleaseFinalizeTooling) {
+        $allowedPatterns += @(
+            '^\.github/workflows/prepare-patch-release\.yml$',
+            '^scripts/create-patch-release-branch\.ps1$',
+            '^scripts/release-support\.ps1$'
+        )
+    }
 
     $blockingFiles = @()
     foreach ($changedFile in $changedFiles) {

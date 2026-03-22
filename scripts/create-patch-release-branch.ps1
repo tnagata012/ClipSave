@@ -6,8 +6,8 @@
 .DESCRIPTION
     Creates a patch-start branch from a release branch and bumps version once.
     - release/X.Y current version: X.Y.Z
-    - requires finalized tag X.Y.Z and GitHub Release X.Y.Z with archive assets
-    - release/X.Y HEAD may be ahead of the finalized tag only by docs/site/docs-only workflow files
+    - requires version tag X.Y.Z, GitHub Release X.Y.Z with archive assets, and a Store Submission Log entry that locks the version
+    - release/X.Y HEAD may be ahead of the locked tag only by docs/site/docs-only workflow files
     - patch init branch: chore/release-X.Y.(Z+1)-init
     - updates Directory.Build.props and Package.appxmanifest to X.Y.(Z+1)
     - intended for PR: patch init branch -> release/X.Y
@@ -187,14 +187,14 @@ try {
         Fail "Release branch and version mismatch. Branch=$ReleaseBranch, File=$currentVersion"
     }
 
-    Write-Host "[4/9] Verifying current version finalization..." -ForegroundColor Yellow
+    Write-Host "[4/9] Verifying current version lock state..." -ForegroundColor Yellow
     if (-not $hasOrigin) {
-        Fail "Cannot verify current version finalization because remote 'origin' is not configured."
+        Fail "Cannot verify current version lock state because remote 'origin' is not configured."
     }
 
     $tagCommit = Get-RemoteTagCommit -Remote "origin" -TagName $currentVersion
     if (-not $tagCommit) {
-        Fail "Current version '$currentVersion' is not finalized yet. Create and push tag '$currentVersion', run Release Finalize, then start the next patch cycle."
+        Fail "Current version '$currentVersion' does not have a version tag yet. Create and push tag '$currentVersion', run Release Finalize, then start the next patch cycle."
     }
 
     $headCommit = (git rev-parse HEAD).Trim()
@@ -205,10 +205,10 @@ try {
         $blockingFiles = Get-BlockingFilesAheadOfFinalizedTag -TagCommit $tagCommit -HeadCommit $headCommit
         if ($blockingFiles.Count -gt 0) {
             $blockingList = $blockingFiles -join ", "
-            Fail "Release branch HEAD ($headCommit) is ahead of finalized tag '$currentVersion' ($tagCommit) with product-affecting changes: $blockingList. Start the next patch cycle only from the finalized commit or after removing those changes."
+            Fail "Release branch HEAD ($headCommit) is ahead of locked version tag '$currentVersion' ($tagCommit) with product-affecting changes: $blockingList. Start the next patch cycle only from the locked commit or after removing those changes."
         }
 
-        Write-Warning "Release branch HEAD is ahead of finalized tag '$currentVersion' only by non-product files. Continuing from HEAD."
+        Write-Warning "Release branch HEAD is ahead of locked version tag '$currentVersion' only by non-product files. Continuing from HEAD."
     }
 
     $repo = Resolve-GitHubRepository
@@ -227,7 +227,15 @@ try {
     if ($LASTEXITCODE -ne 0) {
         Fail "Release Finalize archive verification failed for '$currentVersion'."
     }
-    Write-Host "  [OK] Current version finalized: $currentVersion ($tagCommit)" -ForegroundColor Green
+
+    $storeState = Assert-StoreSubmissionRecorded `
+        -Repository $repo `
+        -Version $currentVersion
+    if ($storeState.StoreSubmissionCommit -ne $tagCommit) {
+        Fail "Current version '$currentVersion' is recorded in Store Submission Log for commit '$($storeState.StoreSubmissionCommit)', but tag '$currentVersion' currently points to '$tagCommit'. Fix the version tag before starting the next patch cycle."
+    }
+
+    Write-Host "  [OK] Current version locked for patch init: $currentVersion ($tagCommit)" -ForegroundColor Green
 
     if ($currentPatch -ge 65535) {
         Fail "Cannot increment patch. Current patch is $currentPatch (max supported 65535)."

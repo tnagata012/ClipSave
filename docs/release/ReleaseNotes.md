@@ -81,8 +81,10 @@ Issue title: `Release Notes: Unreleased`
 1. tag `X.Y.Z` を push したら `Release Finalize` が GitHub Release `X.Y.Z` を更新する。
 2. GitHub Release 本文には `Release Notes: X.Y` への参照が入る。
 3. issue が未整備のままでも release 自体は作成されるが、Store 前確認では未整備として扱う。
-4. issue 本文を更新しただけなら rerun は不要。再実行は GitHub Release 側の更新や archive 補完が必要な場合だけでよい。
-5. GitHub Release 本文は、配布案内を主としたシンプルな構成を保つ。
+4. Store 提出前に `Release Finalize` を `release/X.Y` から手動再実行すると、`X.Y.Z` が現在 HEAD へ付け直され、GitHub Release の archive も更新されることがある。
+5. Store 提出後は `Store Submission Log` の記録をもって `X.Y.Z` が固定化されるため、再実行しても tag は動かさない。
+6. issue 本文を更新しただけなら rerun は不要。再実行は GitHub Release 側の更新や archive 補完が必要な場合だけでよい。
+7. GitHub Release 本文は、配布案内を主としたシンプルな構成を保つ。
 
 ## 記載スタイル
 

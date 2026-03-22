@@ -55,6 +55,81 @@ function Get-MarkdownSection {
     return $match.Groups["content"].Value.Trim()
 }
 
+function Get-StoreSubmissionLogState {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Body
+    )
+
+    $section = Get-MarkdownSection -Body $Body -Heading "Store Submission Log"
+    $records = @()
+
+    if (-not [string]::IsNullOrWhiteSpace($section)) {
+        $matches = [regex]::Matches($section, '(?im)^\s*StoreSubmission:\s*(?<line>.+)$')
+        foreach ($match in $matches) {
+            $line = $match.Groups['line'].Value.Trim()
+            if ([string]::IsNullOrWhiteSpace($line)) {
+                continue
+            }
+
+            $commit = $null
+            $status = $null
+
+            $commitMatch = [regex]::Match($line, '\bcommit=(?<commit>[0-9a-f]{40})\b')
+            if ($commitMatch.Success) {
+                $commit = $commitMatch.Groups['commit'].Value.Trim()
+            }
+
+            $statusMatch = [regex]::Match($line, '\bstatus=(?<status>[^|]+?)(?=\s*(?:\||$))')
+            if ($statusMatch.Success) {
+                $status = $statusMatch.Groups['status'].Value.Trim()
+            }
+
+            $records += [PSCustomObject]@{
+                Line   = $line
+                Commit = $commit
+                Status = $status
+            }
+        }
+    }
+
+    $latestRecord = $null
+    if ($records.Count -gt 0) {
+        $latestRecord = $records[$records.Count - 1]
+    }
+
+    return [PSCustomObject]@{
+        Section         = $section
+        HasSubmission   = ($records.Count -gt 0)
+        SubmissionCount = $records.Count
+        LatestLine      = if ($latestRecord) { $latestRecord.Line } else { $null }
+        LatestCommit    = if ($latestRecord) { $latestRecord.Commit } else { $null }
+        LatestStatus    = if ($latestRecord) { $latestRecord.Status } else { $null }
+        Records         = $records
+    }
+}
+
+function Get-ReleaseArchiveCommitFromBody {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Body
+    )
+
+    $section = Get-MarkdownSection -Body $Body -Heading "Release Archive (Unsigned)"
+    if ([string]::IsNullOrWhiteSpace($section)) {
+        return $null
+    }
+
+    $commitMatch = [regex]::Match($section, '(?im)^\s*\|\s*\*\*Commit\*\*\s*\|.*?(?<commit>[0-9a-f]{40}).*$')
+    if (-not $commitMatch.Success) {
+        return $null
+    }
+
+    return $commitMatch.Groups['commit'].Value.Trim()
+}
+
 function Get-GitHubIssues {
     [CmdletBinding()]
     param(
@@ -236,6 +311,89 @@ function Get-ReleaseArchiveStatus {
     }
 }
 
+function Get-ReleaseFinalizationState {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository,
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [switch]$AllowMissing = $false
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Repository) -or $Repository -notmatch '^[^/\s]+/[^/\s]+$') {
+        throw "Repository must be in 'owner/name' format. Actual: '$Repository'"
+    }
+
+    $versionPattern = '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$'
+    $versionMatch = [regex]::Match($Version.Trim(), $versionPattern)
+    if (-not $versionMatch.Success) {
+        throw "Invalid version format: '$Version' (expected X.Y.Z)."
+    }
+
+    $ghAvailable = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $ghAvailable) {
+        throw "GitHub CLI 'gh' is required to query release finalization state."
+    }
+
+    $releaseJson = gh release view $Version --repo $Repository --json tagName,isDraft,assets,body 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseJson)) {
+        if ($AllowMissing) {
+            return [PSCustomObject]@{
+                Exists                 = $false
+                TagName                = $Version.Trim()
+                IsDraft                = $false
+                AssetNames             = @()
+                HasChecksum            = $false
+                BundleCount            = 0
+                HasArchiveAssets       = $false
+                Body                   = ""
+                ArchiveCommit          = $null
+                HasStoreSubmission     = $false
+                StoreSubmissionCount   = 0
+                StoreSubmissionCommit  = $null
+                StoreSubmissionStatus  = $null
+                StoreSubmissionSection = $null
+            }
+        }
+
+        throw "GitHub Release '$Version' was not found in '$Repository'."
+    }
+
+    try {
+        $release = $releaseJson | ConvertFrom-Json -Depth 100
+    }
+    catch {
+        throw "Failed to parse GitHub Release metadata for '$Version' in '$Repository'."
+    }
+
+    $body = ""
+    if ($release.body) {
+        $body = [string]$release.body
+    }
+
+    $assetSummary = Get-ReleaseAssetSummary -Assets $release.assets
+    $storeSubmission = Get-StoreSubmissionLogState -Body $body
+    $archiveCommit = Get-ReleaseArchiveCommitFromBody -Body $body
+
+    return [PSCustomObject]@{
+        Exists                 = $true
+        TagName                = [string]$release.tagName
+        IsDraft                = ($release.isDraft -eq $true)
+        AssetNames             = $assetSummary.AssetNames
+        HasChecksum            = $assetSummary.HasChecksum
+        BundleCount            = $assetSummary.BundleCount
+        HasArchiveAssets       = $assetSummary.HasArchiveAssets
+        Body                   = $body
+        ArchiveCommit          = $archiveCommit
+        HasStoreSubmission     = $storeSubmission.HasSubmission
+        StoreSubmissionCount   = $storeSubmission.SubmissionCount
+        StoreSubmissionCommit  = $storeSubmission.LatestCommit
+        StoreSubmissionStatus  = $storeSubmission.LatestStatus
+        StoreSubmissionSection = $storeSubmission.Section
+    }
+}
+
 function Assert-FinalizedReleaseArchive {
     [CmdletBinding()]
     param(
@@ -265,6 +423,46 @@ function Assert-FinalizedReleaseArchive {
         BundleCount      = $status.BundleCount
         HasArchiveAssets = $status.HasArchiveAssets
         Status           = "finalized_archive"
+    }
+}
+
+function Assert-StoreSubmissionRecorded {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository,
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [switch]$Quiet = $false
+    )
+
+    $state = Get-ReleaseFinalizationState -Repository $Repository -Version $Version
+
+    if ($state.IsDraft) {
+        throw "GitHub Release '$Version' exists but is still a draft."
+    }
+    if (-not $state.HasArchiveAssets) {
+        $assetList = if ($state.AssetNames.Count -gt 0) { $state.AssetNames -join ", " } else { "(none)" }
+        throw "GitHub Release '$Version' does not have the finalized archive assets yet. Expected exactly one .msixbundle and SHA256SUMS.txt. Assets: $assetList"
+    }
+    if (-not $state.HasStoreSubmission) {
+        throw "GitHub Release '$Version' does not have a Store Submission Log entry yet. Record the Partner Center submission before starting the next patch cycle."
+    }
+    if (-not $state.StoreSubmissionCommit) {
+        throw "GitHub Release '$Version' has a Store Submission Log entry but no parsable commit. Fix the Store Submission Log before continuing."
+    }
+
+    if (-not $Quiet) {
+        $status = if ($state.StoreSubmissionStatus) { $state.StoreSubmissionStatus } else { "recorded" }
+        Write-Host "[OK] $Version has a Store submission record ($status) for commit $($state.StoreSubmissionCommit)." -ForegroundColor Green
+    }
+
+    return [PSCustomObject]@{
+        TagName               = $state.TagName
+        ArchiveCommit         = $state.ArchiveCommit
+        StoreSubmissionCommit = $state.StoreSubmissionCommit
+        StoreSubmissionStatus = $state.StoreSubmissionStatus
+        Status                = "store_submission_recorded"
     }
 }
 
@@ -440,6 +638,10 @@ function Get-BlockingFilesAheadOfFinalizedTag {
         '^docs/',
         '^site/',
         '^\.github/workflows/deploy-pages\.yml$',
+        '^\.github/workflows/release-finalize\.yml$',
+        '^scripts/build-store-package\.ps1$',
+        '^scripts/show-version-report\.ps1$',
+        '^scripts/store-checklist\.ps1$',
         '^[^/]+\.md$'
     )
 

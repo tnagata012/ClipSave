@@ -10,6 +10,7 @@
 - Store metadata / listing / 審査向け補足の入力方針
 - listing CSV と画像素材の運用
 - 提出記録と証跡の残し方
+- `Store Submission Log` を使った version tag 固定化
 
 このドキュメントでは、以下は扱わない。
 
@@ -32,7 +33,8 @@
 3. listing CSV を import し、スクリーンショットを含む素材の解決結果を確認する。
 4. 価格と可用性 / プロパティ / 年齢区分 / 申請オプション（表示される項目のみ）を確認して提出する。
 5. 提出直後に Partner Center submission ID、workflow summary の `Commit SHA`、GitHub Actions 実行 URL を保存する。
-6. 認定/公開後、Partner Center submission ID と公開結果を GitHub Release 本文の `Store Submission Log` に追記する。
+6. 提出直後に GitHub Release 本文の `Store Submission Log` へ 1 行追記する。これをもって `X.Y.Z` は固定扱いになる。
+7. 認定/公開後、同じ行の `status` / `note` を更新する。
 
 ## 提出前チェックリスト
 
@@ -156,8 +158,10 @@ Store listing の投入物と編集用ソースを分離する。Partner Center 
 GitHub Release 本文には次の 1 行を追記する。
 
 ```text
-StoreSubmission: date=YYYY-MM-DD(JST) | version=X.Y.Z | tag=X.Y.Z | commit=<40sha> | submission_id=<PartnerCenterID> | workflow_run=<GitHubActionsRunURL> | status=<Published/Rejected/Withdrawn> | note=<optional>
+StoreSubmission: date=YYYY-MM-DD(JST) | version=X.Y.Z | tag=X.Y.Z | commit=<40sha> | submission_id=<PartnerCenterID> | workflow_run=<GitHubActionsRunURL> | status=<Submitted/InCertification/Published/Rejected/Withdrawn> | note=<optional>
 ```
+
+`StoreSubmission:` 行が GitHub Release に記録された時点で、その version tag は固定扱いになる。提出直後は `status=Submitted` で記録し、その後の認定結果に合わせて更新する。
 
 ## 関連ドキュメント
 

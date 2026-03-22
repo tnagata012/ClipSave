@@ -23,7 +23,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 | [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`） | patch init ブランチ作成、任意で PR 作成 | `chore/release-X.Y.(Z+1)-init` |
 | [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
 | [rc-build.yml](../../.github/workflows/rc-build.yml) | `release/*` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 公開候補生成（未署名） | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
-| [release-finalize.yml](../../.github/workflows/release-finalize.yml) | `X.Y.Z` タグ push / 手動 | 確定タグを固定参照して archive を整備し、GitHub Release を更新し、必要時のみ Store package を生成する | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation, 任意で `store-package-*` |
+| [release-finalize.yml](../../.github/workflows/release-finalize.yml) | `X.Y.Z` タグ push / 手動 | version tag `X.Y.Z` と archive を整備し、必要時のみ Store package を生成する。Store 提出前の手動実行では `release/X.Y` の現在 HEAD へ tag を寄せ直せる | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation, 任意で `store-package-*` |
 
 補足:
 
@@ -64,10 +64,12 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 ### Release Finalize 後の後処理
 
 1. `Release Finalize` の成功を確認し、GitHub Release `X.Y.Z` に `*.msixbundle` と `SHA256SUMS.txt` が揃っていること、同じ workflow 実行に対する GitHub Artifact Attestation が `gh attestation verify` で検証可能であることを確認する。
-2. GitHub Release の案内や archive 補完が必要な場合のみ、`Release Finalize` を `release/X.Y` から手動再実行する。既存 archive が揃っている場合、assets は再生成せずそのまま扱う。
-3. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を正本とし、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行する。通常は既定値のまま進めてよい。Store へ出さない版は Archive のみで完結してよい。
-4. 公開直後の短い監視期間を終えたら、通常の RC 更新は止めてよい。次の変更が必要になるまでは branch を静置する。
-5. 現行系列判定や旧系列の扱いは [ReleaseProcess](ReleaseProcess.md) に従う。
+2. Store 提出前に追加修正や archive の差し替えが必要になった場合は、`Release Finalize` を `release/X.Y` から手動再実行する。通常は既定値のままでよく、`X.Y.Z` は現在 HEAD へ付け直され、archive もその commit に揃え直される。
+3. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。GitHub Release は issue 参照だけを持つ。
+4. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を正本とし、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行する。通常は既定値のまま進めてよい。
+5. Partner Center へ提出したら、[StoreSubmission](../distribution/store/StoreSubmission.md) に従って `Store Submission Log` を GitHub Release に記録する。ここで `X.Y.Z` は固定化される。
+6. 公開直後の短い監視期間を終えたら、通常の RC 更新は止めてよい。次の変更が必要になるまでは branch を静置する。
+7. 現行系列判定や旧系列の扱いは [ReleaseProcess](ReleaseProcess.md) に従う。
 
 ### メジャー/マイナーリリース
 
@@ -79,11 +81,12 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 6. `release/X.Y` の安定化を PR で反映する。
 7. `rc-X.Y-latest` と複数の公開候補（`rc-package-*`）を比較し、確定対象コミットを決定する。
 8. tag 前に `Release Notes: X.Y` Issue を見直し、今回の出荷内容として読めるよう公開向け文面を整える。
-9. 確定版を決め、その commit に確定タグ `X.Y.Z` を作成する。
+9. 確定版を決め、その commit に version tag `X.Y.Z` を作成する。
 10. タグ push で `Release Finalize` が走り、GitHub Release `X.Y.Z` にアーカイブ成果物が保存されたことを確認する。
-11. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。GitHub Release は issue 参照だけを持つ。
-12. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を参照し、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行して Store package を作成する。通常は既定値のまま進めてよい。
-13. Store 提出は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) の手順に従って実行する。
+11. Store 提出前に追加修正が必要になった場合は、`Release Finalize` を `release/X.Y` から既定値のまま再実行する。`X.Y.Z` は現在 HEAD へ付け直され、archive も更新される。
+12. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。GitHub Release は issue 参照だけを持つ。
+13. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を参照し、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行して Store package を作成する。通常は既定値のまま進めてよい。
+14. Store 提出は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) の手順に従って実行し、提出直後に `Store Submission Log` を記録する。
 
 ### パッチリリース
 
@@ -96,16 +99,17 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
    - 競合時の解消方針は [ReleaseProcess](ReleaseProcess.md) の「backport 競合解消方針」に従う。
 5. 候補ビルドから確定対象コミットを決定し、確定版を決める。
 6. tag 前に `Release Notes: X.Y` Issue を見直し、今回の patch 版として読めるよう公開向け文面を整える。
-7. その commit に確定タグ `X.Y.Z` を作成する。
+7. その commit に version tag `X.Y.Z` を作成する。
 8. タグ push で `Release Finalize` が走り、GitHub Release `X.Y.Z` にアーカイブ成果物が保存されたことを確認する。
-9. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。必要時のみ `release/X.Y` から手動再実行して GitHub Release を更新する。
-10. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を参照し、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行する。通常は既定値のまま進めてよい。
-11. Store 提出へ進む。
+9. Store 提出前に追加修正が必要になった場合は、`Release Finalize` を `release/X.Y` から既定値のまま再実行する。`X.Y.Z` は現在 HEAD へ付け直され、archive も更新される。
+10. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。必要時のみ `release/X.Y` から手動再実行して GitHub Release を更新する。
+11. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を参照し、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行する。通常は既定値のまま進めてよい。
+12. Store 提出へ進み、提出直後に `Store Submission Log` を記録する。
 
 ### Store 提出
 
 このドキュメントで扱うのは `store-package-*` の生成までとする。
-Partner Center への upload、listing CSV import、審査向け補足、submission ID 記録は [StoreSubmission](../distribution/store/StoreSubmission.md) を正本とする。
+Partner Center への upload、listing CSV import、審査向け補足、submission ID 記録は [StoreSubmission](../distribution/store/StoreSubmission.md) を正本とする。提出直後に GitHub Release の `Store Submission Log` を更新すると、その時点で `X.Y.Z` は固定化される。
 
 ## ロールバック/取り下げ
 

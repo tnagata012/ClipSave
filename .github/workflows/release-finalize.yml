@@ -301,17 +301,7 @@ jobs:
             }
 
             $tagState = "created"
-            $tagCommit = $null
-            for ($attempt = 1; $attempt -le 5 -and -not $tagCommit; $attempt++) {
-              Start-Sleep -Seconds 2
-              git fetch --force origin "refs/tags/$version:refs/tags/$version" *> $null
-              $tagCommit = Get-TagCommit $version
-            }
-
-            if (-not $tagCommit) {
-              Write-Error "Created tag '$version' but failed to resolve it locally."
-              exit 1
-            }
+            $tagCommit = $headCommit
           } elseif ($tagCommit -eq $headCommit) {
             $tagState = "existing_on_head"
           } elseif ($hasStoreSubmission) {
@@ -328,17 +318,7 @@ jobs:
             }
 
             $tagState = "moved_to_head"
-            $tagCommit = $null
-            for ($attempt = 1; $attempt -le 5 -and -not $tagCommit; $attempt++) {
-              Start-Sleep -Seconds 2
-              git fetch --force origin "refs/tags/$version:refs/tags/$version" *> $null
-              $tagCommit = Get-TagCommit $version
-            }
-
-            if (-not $tagCommit) {
-              Write-Error "Moved tag '$version' but failed to resolve it locally."
-              exit 1
-            }
+            $tagCommit = $headCommit
           }
         } elseif (-not $tagCommit) {
           Write-Error "Version tag '$version' does not exist."
@@ -481,7 +461,7 @@ jobs:
     - name: Checkout version tag
       uses: actions/checkout@v4
       with:
-        ref: ${{ steps.tag.outputs.CHECKOUT_REF }}
+        ref: ${{ steps.tag.outputs.TAG_COMMIT }}
         fetch-depth: 0
 
     - name: Checkout workflow tooling

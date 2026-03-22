@@ -6,41 +6,24 @@ on:
     - '*.*.*'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version tag to finalize (e.g., 0.1.0)'
+      create_version_tag:
+        description: 'Create the current configured X.Y.Z tag when missing'
         required: true
-        type: string
+        default: true
+        type: boolean
       build_store_package:
         description: 'Build Partner Center upload package (.msixupload)'
         required: true
-        default: false
+        default: true
         type: boolean
-      prerelease:
-        description: 'GitHub Release prerelease flag (auto keeps existing, default false when new)'
-        required: true
-        default: auto
-        type: choice
-        options:
-        - auto
-        - false
-        - true
-      release_title:
-        description: 'GitHub Release title override (optional)'
-        required: false
-        type: string
-      operator_notes:
-        description: 'GitHub Release Operator Notes override (optional)'
-        required: false
-        type: string
 
 permissions:
   contents: write
   id-token: write
   attestations: write
-  issues: read
 
 concurrency:
-  group: release-finalize-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+  group: release-finalize
   cancel-in-progress: false
 
 env:
@@ -53,62 +36,223 @@ jobs:
     timeout-minutes: 75
 
     steps:
-    - name: Resolve release finalization target
-      id: target
+    - name: Resolve release finalization source
+      id: source
       shell: pwsh
       env:
         BUILD_STORE_PACKAGE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.build_store_package || false }}
+        CREATE_VERSION_TAG_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.create_version_tag || false }}
       run: |
         if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-          $version = "${{ inputs.version }}".Trim()
+          $refType = "${{ github.ref_type }}".Trim()
+          $releaseBranch = "${{ github.ref_name }}".Trim()
           $buildStorePackage = "$env:BUILD_STORE_PACKAGE_INPUT".Trim().ToLowerInvariant()
+          $createVersionTag = "$env:CREATE_VERSION_TAG_INPUT".Trim().ToLowerInvariant()
+
+          if ($refType -ne "branch") {
+            Write-Error "workflow_dispatch must target a branch. Selected ref type: $refType"
+            exit 1
+          }
+          if ($releaseBranch -notmatch '^release/\d+\.\d+$') {
+            Write-Error "workflow_dispatch must target a release branch (release/X.Y). Selected ref: $releaseBranch"
+            exit 1
+          }
+
+          $sourceRef = "refs/heads/$releaseBranch"
+          $version = ""
         } else {
           $version = "${{ github.ref_name }}".Trim()
           $buildStorePackage = "false"
-        }
+          $createVersionTag = "false"
 
-        if ($version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
-          Write-Error "Invalid version format: $version (expected X.Y.Z)"
-          exit 1
+          if ($version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
+            Write-Error "Invalid version format: $version (expected X.Y.Z)"
+            exit 1
+          }
+
+          $releaseBranch = "release/$($matches['major']).$($matches['minor'])"
+          $sourceRef = "refs/tags/$version"
         }
 
         if ($buildStorePackage -notin @("true", "false")) {
           Write-Error "Invalid build_store_package value: $buildStorePackage"
           exit 1
         }
-
-        $checkoutRef = "refs/tags/$version"
-        $releaseBranch = "release/$($matches['major']).$($matches['minor'])"
+        if ($createVersionTag -notin @("true", "false")) {
+          Write-Error "Invalid create_version_tag value: $createVersionTag"
+          exit 1
+        }
 
         echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-        echo "CHECKOUT_REF=$checkoutRef" >> $env:GITHUB_OUTPUT
+        echo "SOURCE_REF=$sourceRef" >> $env:GITHUB_OUTPUT
         echo "RELEASE_BRANCH=$releaseBranch" >> $env:GITHUB_OUTPUT
         echo "BUILD_STORE_PACKAGE=$buildStorePackage" >> $env:GITHUB_OUTPUT
-        echo "Resolved version: $version"
-        echo "Resolved checkout ref: $checkoutRef"
+        echo "CREATE_VERSION_TAG=$createVersionTag" >> $env:GITHUB_OUTPUT
+        echo "Resolved source ref: $sourceRef"
         echo "Resolved release branch: $releaseBranch"
         echo "Build store package: $buildStorePackage"
+        echo "Create version tag when missing: $createVersionTag"
 
-    - name: Verify version tag exists
+    - name: Checkout source ref
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ steps.source.outputs.SOURCE_REF }}
+        fetch-depth: 0
+
+    - name: Resolve release finalization target
+      id: target
+      shell: pwsh
+      run: |
+        $releaseBranch = "${{ steps.source.outputs.RELEASE_BRANCH }}"
+
+        if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+          [xml]$props = Get-Content Directory.Build.props
+          $version = $props.Project.PropertyGroup.Version
+          if ($version) {
+            $version = $version.Trim()
+          }
+
+          if (-not $version) {
+            Write-Error "Directory.Build.props does not define <Version>."
+            exit 1
+          }
+          if ($version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
+            Write-Error "Invalid version format in Directory.Build.props: $version (expected X.Y.Z)"
+            exit 1
+          }
+
+          $expectedReleaseBranch = "release/$($matches['major']).$($matches['minor'])"
+          if ($expectedReleaseBranch -ne $releaseBranch) {
+            Write-Error "Configured version '$version' does not match selected release branch '$releaseBranch'."
+            exit 1
+          }
+        } else {
+          $version = "${{ steps.source.outputs.VERSION }}"
+        }
+
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "BUILD_STORE_PACKAGE=${{ steps.source.outputs.BUILD_STORE_PACKAGE }}" >> $env:GITHUB_OUTPUT
+        echo "RELEASE_BRANCH=$releaseBranch" >> $env:GITHUB_OUTPUT
+        echo "Resolved version: $version"
+
+    - name: Ensure version tag is available
+      id: tag
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        function Get-TagCommit([string]$TagName) {
+          $commit = git rev-list -n 1 "refs/tags/$TagName" 2>$null
+          if ($LASTEXITCODE -ne 0 -or -not $commit) {
+            $global:LASTEXITCODE = 0
+            return $null
+          }
+
+          $commit = $commit.Trim()
+          if ($commit -notmatch '^[0-9a-f]{40}$') {
+            return $null
+          }
+
+          return $commit
+        }
+
         $version = "${{ steps.target.outputs.VERSION }}"
-        $encodedRef = [Uri]::EscapeDataString("tags/$version")
-        gh api "repos/${{ github.repository }}/git/ref/$encodedRef" *> $null
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "Version tag '$version' does not exist."
+        $headCommit = (git rev-parse HEAD).Trim()
+        if (-not $headCommit -or $headCommit -notmatch '^[0-9a-f]{40}$') {
+          Write-Error "Failed to resolve HEAD commit."
           exit 1
         }
-        echo "Verified version tag: $version"
+
+        git fetch --force --tags origin
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Failed to fetch tags from origin."
+          exit 1
+        }
+
+        $tagCommit = Get-TagCommit $version
+        $tagState = "existing"
+
+        if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+          $createVersionTag = "${{ steps.source.outputs.CREATE_VERSION_TAG }}"
+          if (-not $tagCommit) {
+            if ($createVersionTag -ne "true") {
+              Write-Error "Configured version tag '$version' does not exist on GitHub. Re-run with create_version_tag=true or create/push the tag manually."
+              exit 1
+            }
+
+            gh api "repos/${{ github.repository }}/git/refs" --method POST `
+              -f "ref=refs/tags/$version" `
+              -f "sha=$headCommit" *> $null
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "Failed to create version tag '$version' at commit '$headCommit'."
+              exit 1
+            }
+
+            $tagState = "created"
+            $tagCommit = $null
+            for ($attempt = 1; $attempt -le 5 -and -not $tagCommit; $attempt++) {
+              Start-Sleep -Seconds 2
+              git fetch --force origin "refs/tags/$version:refs/tags/$version" *> $null
+              $tagCommit = Get-TagCommit $version
+            }
+
+            if (-not $tagCommit) {
+              Write-Error "Created tag '$version' but failed to resolve it locally."
+              exit 1
+            }
+          } elseif ($tagCommit -eq $headCommit) {
+            $tagState = "existing_on_head"
+          } else {
+            $tagState = "existing_on_prior_commit"
+          }
+        } elseif (-not $tagCommit) {
+          Write-Error "Version tag '$version' does not exist."
+          exit 1
+        } else {
+          $tagState = "event_tag"
+        }
+
+        $checkoutRef = "refs/tags/$version"
+
+        echo "CHECKOUT_REF=$checkoutRef" >> $env:GITHUB_OUTPUT
+        echo "SOURCE_COMMIT=$headCommit" >> $env:GITHUB_OUTPUT
+        echo "TAG_COMMIT=$tagCommit" >> $env:GITHUB_OUTPUT
+        echo "TAG_STATE=$tagState" >> $env:GITHUB_OUTPUT
+        Write-Host "Resolved checkout ref: $checkoutRef"
+        Write-Host "Source commit: $headCommit"
+        Write-Host "Tag commit: $tagCommit"
+        Write-Host "Tag state: $tagState"
+
+    - name: Validate workflow_dispatch release branch state against version tag
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      shell: pwsh
+      run: |
+        $version = "${{ steps.target.outputs.VERSION }}"
+        $headCommit = "${{ steps.tag.outputs.SOURCE_COMMIT }}"
+        $tagCommit = "${{ steps.tag.outputs.TAG_COMMIT }}"
+
+        if ($headCommit -eq $tagCommit) {
+          Write-Host "Selected release branch HEAD matches version tag '$version'."
+          exit 0
+        }
+
+        . ./scripts/release-support.ps1
+
+        $blockingFiles = Get-BlockingFilesAheadOfFinalizedTag -TagCommit $tagCommit -HeadCommit $headCommit
+        if ($blockingFiles.Count -gt 0) {
+          $blockingList = $blockingFiles -join ", "
+          Write-Error "Selected release branch HEAD is ahead of version tag '$version' with product-affecting changes: $blockingList. Release Finalize uses the fixed version tag; start the next patch cycle or rerun from a branch whose configured version matches the finalized commit."
+          exit 1
+        }
+
+        Write-Warning "Selected release branch HEAD is ahead of version tag '$version' only by non-product files. Continuing with $tagCommit."
 
     - name: Verify target release branch exists
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        $branch = "${{ steps.target.outputs.RELEASE_BRANCH }}"
+        $branch = "${{ steps.source.outputs.RELEASE_BRANCH }}"
         $encodedBranch = [Uri]::EscapeDataString($branch)
         gh api "repos/${{ github.repository }}/branches/$encodedBranch" *> $null
         if ($LASTEXITCODE -ne 0) {
@@ -163,7 +307,7 @@ jobs:
         $hasArchiveAssets = "${{ steps.existing_release.outputs.HAS_ARCHIVE_ASSETS }}" -eq "true"
         $buildStorePackage = "${{ steps.target.outputs.BUILD_STORE_PACKAGE }}" -eq "true"
 
-        if ("${{ github.event_name }}" -eq "push") {
+        if ("${{ github.event_name }}" -eq "push" -and -not $hasArchiveAssets) {
           $shouldBuildArchive = $true
           $archiveMode = "tag_push_archive_build"
         } elseif (-not $hasArchiveAssets) {
@@ -186,7 +330,7 @@ jobs:
     - name: Checkout version tag
       uses: actions/checkout@v4
       with:
-        ref: ${{ steps.target.outputs.CHECKOUT_REF }}
+        ref: ${{ steps.tag.outputs.CHECKOUT_REF }}
         fetch-depth: 0
 
     - name: Checkout workflow tooling
@@ -214,16 +358,22 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        ./tooling/scripts/assert-latest-finalized-version.ps1 `
-          -Repository "${{ github.repository }}" `
-          -Version "${{ steps.target.outputs.VERSION }}" `
-          -ReleaseBranch "${{ steps.target.outputs.RELEASE_BRANCH }}"
+        $assertArgs = @{
+          Repository = "${{ github.repository }}"
+          Version = "${{ steps.target.outputs.VERSION }}"
+          ReleaseBranch = "${{ steps.source.outputs.RELEASE_BRANCH }}"
+        }
+        if ("${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE }}" -eq "true") {
+          $assertArgs.AllowMissingFinalizedRelease = $true
+        }
+
+        ./tooling/scripts/assert-latest-finalized-version.ps1 @assertArgs
 
     - name: Validate tagged commit is in target release branch
       shell: pwsh
       run: |
-        $branch = "${{ steps.target.outputs.RELEASE_BRANCH }}"
-        $ref = "${{ steps.target.outputs.CHECKOUT_REF }}"
+        $branch = "${{ steps.source.outputs.RELEASE_BRANCH }}"
+        $ref = "${{ steps.tag.outputs.CHECKOUT_REF }}"
 
         git fetch --no-tags origin "$branch"
         if ($LASTEXITCODE -ne 0) {
@@ -274,7 +424,7 @@ jobs:
           exit 1
         }
 
-        ./scripts/assert-version-policy.ps1 -BranchName "${{ steps.target.outputs.RELEASE_BRANCH }}"
+        ./scripts/assert-version-policy.ps1 -BranchName "${{ steps.source.outputs.RELEASE_BRANCH }}"
         echo "Verified version: $version"
 
     - name: Resolve release build versions
@@ -445,18 +595,13 @@ jobs:
     - name: Resolve GitHub Release presentation
       id: presentation
       shell: pwsh
-      env:
-        GH_TOKEN: ${{ github.token }}
-        INPUT_PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || 'auto' }}
-        INPUT_RELEASE_TITLE: ${{ github.event_name == 'workflow_dispatch' && inputs.release_title || '' }}
-        INPUT_OPERATOR_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.operator_notes || '' }}
       run: |
         . ./tooling/scripts/release-support.ps1
 
         $version = "${{ steps.version.outputs.VERSION }}"
-        $releaseBranch = "${{ steps.target.outputs.RELEASE_BRANCH }}"
+        $releaseBranch = "${{ steps.source.outputs.RELEASE_BRANCH }}"
         $releaseSeries = $releaseBranch.Substring("release/".Length)
-        $checkoutRef = "${{ steps.target.outputs.CHECKOUT_REF }}"
+        $checkoutRef = "${{ steps.tag.outputs.CHECKOUT_REF }}"
         $informationalVersion = "${{ steps.version.outputs.INFORMATIONAL_VERSION }}"
         $fileVersion = "${{ steps.version.outputs.FILE_VERSION }}"
         $msixVersion = "${{ steps.version.outputs.MSIX_VERSION }}"
@@ -473,62 +618,24 @@ jobs:
           $existingBody = Get-Content -Path $existingBodyPath -Raw
         }
 
-        $releaseTitle = $env:INPUT_RELEASE_TITLE.Trim()
-        if (-not $releaseTitle) {
-          if ($hasExistingRelease -and $existingName) {
-            $releaseTitle = $existingName
-          } else {
-            $releaseTitle = $defaultTitle
-          }
+        if ($hasExistingRelease -and $existingName) {
+          $releaseTitle = $existingName
+        } else {
+          $releaseTitle = $defaultTitle
         }
 
-        $prereleaseInput = $env:INPUT_PRERELEASE.Trim().ToLowerInvariant()
-        switch ($prereleaseInput) {
-          "true" { $prerelease = "true" }
-          "false" { $prerelease = "false" }
-          default {
-            if ($hasExistingRelease -and $existingPrerelease) {
-              $prerelease = $existingPrerelease
-            } else {
-              $prerelease = "false"
-            }
-          }
+        if ($hasExistingRelease -and $existingPrerelease) {
+          $prerelease = $existingPrerelease
+        } else {
+          $prerelease = "false"
         }
 
         $releaseNotesIssueTitle = "Release Notes: $releaseSeries"
-        $releaseNotesIssue = Get-GitHubIssueByExactTitle `
-          -Repository "${{ github.repository }}" `
-          -Title $releaseNotesIssueTitle `
-          -AllowMissing
-        $releaseNotesIssueUrl = ""
-        $releaseNotesIssueBody = ""
-        if ($releaseNotesIssue) {
-          $releaseNotesIssueUrl = [string]$releaseNotesIssue.Url
-          $releaseNotesIssueBody = [string]$releaseNotesIssue.Body
-        }
         $releaseNotesSearchQuery = [Uri]::EscapeDataString("is:issue in:title `"$releaseNotesIssueTitle`"")
-        if ($releaseNotesIssueUrl) {
-          $releaseNotesReferenceUrl = $releaseNotesIssueUrl
-        } else {
-          $releaseNotesReferenceUrl = "${{ github.server_url }}/${{ github.repository }}/issues?q=$releaseNotesSearchQuery"
-          Write-Warning "Release notes issue '$releaseNotesIssueTitle' was not found. The GitHub Release will link to an issue search until the issue is created."
-        }
-        $releaseNotesReference = "Release-line notes source: [$releaseNotesIssueTitle]($releaseNotesReferenceUrl)"
-        if (-not [string]::IsNullOrWhiteSpace($releaseNotesIssueBody)) {
-          $releaseNotesSection = @"
-        $releaseNotesReference
+        $releaseNotesReferenceUrl = "${{ github.server_url }}/${{ github.repository }}/issues?q=$releaseNotesSearchQuery"
+        $releaseNotesSection = "See [$releaseNotesIssueTitle]($releaseNotesReferenceUrl)."
 
-        $($releaseNotesIssueBody.Trim())
-        "@
-        } else {
-          $releaseNotesSection = $releaseNotesReference
-        }
-        $releaseNotesSection = $releaseNotesSection.Trim()
-
-        $operatorNotes = $env:INPUT_OPERATOR_NOTES.Trim()
-        if (-not $operatorNotes) {
-          $operatorNotes = Get-MarkdownSection -Body $existingBody -Heading "Operator Notes"
-        }
+        $operatorNotes = Get-MarkdownSection -Body $existingBody -Heading "Operator Notes"
         if (-not $operatorNotes) {
           $operatorNotes = "None."
         }
@@ -714,8 +821,8 @@ jobs:
         | Item | Value |
         |------|-------|
         | Version | `${{ steps.version.outputs.VERSION }}` |
-        | Release Branch | `${{ steps.target.outputs.RELEASE_BRANCH }}` |
-        | Checkout Ref | `${{ steps.target.outputs.CHECKOUT_REF }}` |
+        | Release Branch | `${{ steps.source.outputs.RELEASE_BRANCH }}` |
+        | Checkout Ref | `${{ steps.tag.outputs.CHECKOUT_REF }}` |
         | InformationalVersion | `${{ steps.version.outputs.INFORMATIONAL_VERSION }}` |
         | FileVersion | `${{ steps.version.outputs.FILE_VERSION }}` |
         | Package Version | `${{ steps.version.outputs.MSIX_VERSION }}` |
@@ -731,5 +838,5 @@ jobs:
         | Commit SHA | `${{ steps.version.outputs.COMMIT_SHA }}` |
         | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
-        Existing archive assets are preserved on manual reruns once a finalized archive already exists. `Release Notes` is rebuilt from the current release-line issue and keeps a link back to it, and `Operator Notes` / `Store Submission Log` are preserved across reruns unless explicitly overridden.
+        Existing archive assets are preserved on manual reruns once a finalized archive already exists. `Release Notes` keeps a stable link to the release-line issue search, and `Operator Notes` / `Store Submission Log` are preserved across reruns.
         "@ >> $env:GITHUB_STEP_SUMMARY

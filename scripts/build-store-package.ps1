@@ -6,7 +6,8 @@
 .DESCRIPTION
     Builds a Store upload package (.msixupload) locally for preflight/debugging.
     Final submission packages must be produced by the Release Finalize workflow
-    in Store package mode from a fixed X.Y.Z tag to preserve reproducibility.
+    in Store package mode from a release/X.Y run that resolves and checks out
+    the fixed X.Y.Z tag to preserve reproducibility.
 
 .PARAMETER Version
     Version to build (e.g., "1.0.0"). If not specified, reads from Directory.Build.props
@@ -22,6 +23,28 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Resolve-MSBuildPath {
+    $command = Get-Command msbuild -ErrorAction SilentlyContinue
+    if ($command -and $command.Source) {
+        return $command.Source
+    }
+
+    $vswherePath = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswherePath) {
+        $resolved = & $vswherePath `
+            -latest `
+            -products * `
+            -requires Microsoft.Component.MSBuild `
+            -find MSBuild\**\Bin\MSBuild.exe 2>$null |
+            Select-Object -First 1
+        if ($resolved) {
+            return $resolved.Trim()
+        }
+    }
+
+    throw "MSBuild.exe was not found. Install Visual Studio/Build Tools with MSBuild, or run from a Developer PowerShell where msbuild is available."
+}
 
 # Get project root
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -84,13 +107,15 @@ try {
         Where-Object { $_ -and $_.Trim() -ne "" }
     )
     if ($tagsOnHead -notcontains $Version) {
-        Write-Warning "Current HEAD is not tagged '$Version'. Final Store submission must use Release Finalize workflow with version=$Version and build_store_package=true from refs/tags/$Version."
+        Write-Warning "Current HEAD is not tagged '$Version'. Final Store submission must use Release Finalize from $currentBranch; the workflow resolves version '$Version', can create the tag when missing, and builds from refs/tags/$Version."
     }
 
     Write-Host "`n=== Building Store Package for ClipSave v$Version ===" -ForegroundColor Green
     Write-Host "Branch: $currentBranch" -ForegroundColor Cyan
     Write-Host "InformationalVersion: $informationalVersion" -ForegroundColor Cyan
-    Write-Warning "This script is for local preflight only. Final submission packages must come from the Release Finalize workflow in Store package mode."
+    Write-Warning "This script is for local preflight only. Final submission packages must come from the Release Finalize workflow in Store package mode on the release branch."
+    $msbuildPath = Resolve-MSBuildPath
+    Write-Host "MSBuild: $msbuildPath" -ForegroundColor Cyan
 
     # Verify version in both files
     Write-Host "`nVerifying version consistency..." -ForegroundColor Yellow
@@ -145,19 +170,22 @@ try {
         exit 1
     }
 
-    Write-Host "`nSetting Package.appxmanifest version..." -ForegroundColor Yellow
+    Write-Host "`nPreparing Store Package.appxmanifest..." -ForegroundColor Yellow
     $manifestBackupPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ClipSave.Package.appxmanifest.{0}.bak" -f [guid]::NewGuid())
     Copy-Item $manifestPath $manifestBackupPath -Force
-    [xml]$manifest = Get-Content $manifestPath
-    $ns = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
-    $ns.AddNamespace("appx", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
-    $identity = $manifest.SelectSingleNode("/appx:Package/appx:Identity", $ns)
-    if (-not $identity) {
-        throw "Identity node not found in $manifestPath"
+    & "$projectRoot\scripts\set-package-manifest.ps1" -ProjectRoot $projectRoot -Profile store -Version $msixVersion
+    Write-Host "Prepared Package.appxmanifest for Store profile" -ForegroundColor Cyan
+
+    Write-Host "`nCleaning package intermediates..." -ForegroundColor Yellow
+    & $msbuildPath "$projectRoot\src\ClipSave.Package\ClipSave.Package.wapproj" `
+        /t:Clean `
+        /p:Configuration=Release `
+        /p:Platform=AnyCPU `
+        /verbosity:minimal
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to clean packaging intermediates"
+        exit 1
     }
-    $identity.SetAttribute("Version", $msixVersion)
-    $manifest.Save($manifestPath)
-    Write-Host "Updated Package.appxmanifest version to $msixVersion" -ForegroundColor Cyan
 
     # Build Store package
     Write-Host "`nBuilding Store upload package..." -ForegroundColor Yellow
@@ -166,7 +194,7 @@ try {
         Remove-Item $outputDir -Recurse -Force
     }
 
-    msbuild "$projectRoot\src\ClipSave.Package\ClipSave.Package.wapproj" `
+    & $msbuildPath "$projectRoot\src\ClipSave.Package\ClipSave.Package.wapproj" `
         /p:Configuration=Release `
         /p:Platform=AnyCPU `
         /p:Version="$Version" `
@@ -206,6 +234,16 @@ try {
         exit 1
     }
 
+    & "$projectRoot\scripts\assert-msixupload-identity.ps1" `
+        -PackagePath $msixUpload.FullName `
+        -ExpectedName "tnagata012.ClipSave" `
+        -ExpectedPublisher "CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959" `
+        -ExpectedVersion $msixVersion
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Store package identity validation failed"
+        exit 1
+    }
+
     Write-Host "`n✅ Store package built successfully!" -ForegroundColor Green
     Write-Host "`nPackage location:" -ForegroundColor Cyan
     Write-Host "  $($msixUpload.FullName)" -ForegroundColor White
@@ -213,7 +251,7 @@ try {
 
     Write-Host "`n=== Next Steps ===" -ForegroundColor Green
     Write-Host "1. Use this local package only for preflight/debugging"
-    Write-Host "2. For final submission, run Release Finalize workflow with version=$Version and build_store_package=true"
+    Write-Host "2. For final submission, run Release Finalize from $currentBranch (build_store_package defaults to true; leave create_version_tag=true when '$Version' is not tagged yet)"
     Write-Host "3. Confirm workflow summary shows refs/tags/$Version, Store Package Mode=built, and the expected commit SHA"
     Write-Host "4. Upload the workflow artifact .msixupload in Partner Center"
 

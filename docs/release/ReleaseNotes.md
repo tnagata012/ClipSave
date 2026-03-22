@@ -5,7 +5,7 @@
 ## なぜ `CHANGELOG.md` で運用しないか
 
 1. `Release Notes: Unreleased` と `Release Notes: X.Y` に分けた方が、作業中ドラフトと release line ごとの公開ノートを分離しやすい。
-2. GitHub Release 本文は配布アーカイブの案内に寄せつつ、`Release Finalize` が issue 本文を snapshot として自動反映する方が運用が軽い。
+2. GitHub Release 本文は配布アーカイブの案内に寄せ、公開向け変更履歴の正本は issue 参照に寄せた方が運用が軽い。
 3. repo 内ファイルと GitHub Release 本文を二重更新すると、patch release や backport で転記漏れが起きやすい。
 4. PR、release 準備、Store 前確認が同じ issue title を参照できる。
 
@@ -13,7 +13,7 @@
 
 1. 作業中の一次ソースは `Release Notes: Unreleased` Issue とする。
 2. release line ごとの公開ノートは GitHub Issue `Release Notes: X.Y` とする。
-3. GitHub Release `X.Y.Z` 本文の `Release Notes` セクションは、`Release Notes: X.Y` への参照と、その時点の issue 本文 snapshot を自動で持つ。
+3. GitHub Release `X.Y.Z` 本文の `Release Notes` セクションは、`Release Notes: X.Y` への参照だけを持つ。
 4. `Release Notes: X.Y` はその系列の公開向けメモとして必要に応じて更新する。
 5. patch release でも issue は増やさず、同じ `Release Notes: X.Y` を更新する。
 6. ユーザー影響のある PR は、対応する release-notes issue を更新する。
@@ -39,8 +39,8 @@ Issue title: `Release Notes: Unreleased`
 3. `Release Notes: Unreleased` から、今回の系列で出荷する bullet を手動で移したものを初期内容にする。
 4. patch 版を出すたびに同じ issue を更新する。
 5. issue 本文は GitHub Release からリンクされる公開向けノートとして読みやすく保つ。
-6. GitHub Release `X.Y.Z` はこの issue へのリンクを持つが、release 本文には tag 時点の snapshot も残す。
-7. issue 自体は系列内で後から更新されるため、GitHub Release から辿る issue リンク先は常に系列の最新状態を指す。
+6. GitHub Release `X.Y.Z` はこの issue を参照する。
+7. issue 自体は系列内で後から更新されるため、GitHub Release から辿る先は常に系列の最新状態を指す。
 8. 同じ title の open issue を重複作成しない。
 9. 現行サポート系列である間は open のまま維持し、その系列が [ReleaseProcess](ReleaseProcess.md) の `frozen / unsupported` へ移った時点でクローズする。
 
@@ -69,7 +69,7 @@ Issue title: `Release Notes: Unreleased`
 
 1. `main` 側の user-facing change は引き続き `Release Notes: Unreleased` を更新する。
 2. `release/X.Y` 側の安定化 PR / backport PR は、必要に応じて `Release Notes: X.Y` を更新する。
-3. `Release Notes: X.Y` は、その系列で次に出す版の候補を保持し、tag 時点の内容は GitHub Release 側に snapshot される。
+3. `Release Notes: X.Y` は、その系列で次に出す版の候補を保持する。
 
 ### tag 前
 
@@ -79,10 +79,12 @@ Issue title: `Release Notes: Unreleased`
 ### Release Finalize と再実行
 
 1. tag `X.Y.Z` を push したら `Release Finalize` が GitHub Release `X.Y.Z` を更新する。
-2. workflow は GitHub Release 本文の `Release Notes` セクションに `Release Notes: X.Y` への参照と、その時点の issue 本文 snapshot を入れる。
-3. issue が未作成でも release 自体は publish されるが、参照は検索リンク fallback になり、`store-checklist.ps1` は未整備として扱う。
-4. 既存 archive が揃っている版への再実行は、archive を再生成せず metadata と本文参照を更新する。
-5. workflow は `Release Notes` / `Release Archive (Unsigned)` / `Operator Notes` / `Store Submission Log` の 4 セクションを保持する。
+2. GitHub Release 本文には `Release Notes: X.Y` への参照が入る。
+3. issue が未整備のままでも release 自体は作成されるが、Store 前確認では未整備として扱う。
+4. Store 提出前に `Release Finalize` を `release/X.Y` から手動再実行すると、`X.Y.Z` が現在 HEAD へ付け直され、GitHub Release の archive も更新されることがある。
+5. Store 提出後は `Store Submission Log` の記録をもって `X.Y.Z` が固定化されるため、再実行しても tag は動かさない。
+6. issue 本文を更新しただけなら rerun は不要。再実行は GitHub Release 側の更新や archive 補完が必要な場合だけでよい。
+7. GitHub Release 本文は、配布案内を主としたシンプルな構成を保つ。
 
 ## 記載スタイル
 

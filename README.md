@@ -46,7 +46,7 @@ dotnet run --project src/ClipSave/ClipSave.csproj --configuration Release
 
 - **Validation (optional)**: use Dev/RC artifacts (`dev-latest` / `rc-X.Y-latest`) or a versioned GitHub Release (`X.Y.Z`) `*.msixbundle`
   - `*.msixbundle` files are unsigned validation artifacts.
-  - If you want to install one, see [Validation Artifact Installation](docs/distribution/ArtifactInstallation.md).
+  - If you want to install one, use [`scripts/install-artifact.ps1`](scripts/install-artifact.ps1) as described in [Validation Artifact Installation](docs/distribution/ArtifactInstallation.md).
 
 ## Documentation
 
@@ -71,6 +71,10 @@ If you want to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Security
 
 See [SECURITY.md](SECURITY.md) for the security policy and how to report vulnerabilities.
+
+## Privacy
+
+See [PRIVACY.md](PRIVACY.md) for the privacy policy.
 
 ## License
 

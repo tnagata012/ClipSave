@@ -69,7 +69,7 @@ jobs:
           scripts
         sparse-checkout-cone-mode: true
 
-    - name: Verify current release version has finalized archive
+    - name: Verify current release version is locked for next patch cycle
       id: current
       shell: pwsh
       working-directory: repo
@@ -98,7 +98,7 @@ jobs:
 
         $tagCommit = (git rev-list -n 1 "refs/tags/$version").Trim()
         if (-not $tagCommit -or $tagCommit.Length -ne 40) {
-          throw "Current version '$version' is not finalized yet. Create and push tag '$version' before starting the next patch cycle."
+          throw "Current version '$version' does not have a version tag yet. Create and push tag '$version' before starting the next patch cycle."
         }
 
         $headCommit = (git rev-parse HEAD).Trim()
@@ -112,10 +112,10 @@ jobs:
 
           if ($blockingFiles.Count -gt 0) {
             $blockingList = $blockingFiles -join ", "
-            throw "Release branch HEAD ($headCommit) is ahead of finalized tag '$version' ($tagCommit) with product-affecting changes: $blockingList. Start the next patch cycle only from the finalized commit or after removing those changes."
+            throw "Release branch HEAD ($headCommit) is ahead of locked version tag '$version' ($tagCommit) with product-affecting changes: $blockingList. Start the next patch cycle only from the locked commit or after removing those changes."
           }
 
-          Write-Warning "Release branch HEAD is ahead of finalized tag '$version' only by non-product files. Continuing from HEAD."
+          Write-Warning "Release branch HEAD is ahead of locked version tag '$version' only by non-product files. Continuing from HEAD."
         }
 
         $encodedRef = [Uri]::EscapeDataString("tags/$version")
@@ -132,9 +132,19 @@ jobs:
           throw "Release Finalize archive verification failed for '$version'."
         }
 
+        $releaseSupport = Join-Path $env:GITHUB_WORKSPACE "tooling/scripts/release-support.ps1"
+        . $releaseSupport
+
+        $storeState = Assert-StoreSubmissionRecorded `
+          -Repository "${{ github.repository }}" `
+          -Version $version
+        if ($storeState.StoreSubmissionCommit -ne $tagCommit) {
+          throw "Current version '$version' is recorded in Store Submission Log for commit '$($storeState.StoreSubmissionCommit)', but tag '$version' currently points to '$tagCommit'. Fix the version tag before starting the next patch cycle."
+        }
+
         echo "CURRENT_VERSION=$version" >> $env:GITHUB_OUTPUT
         echo "CURRENT_VERSION_SHA=$tagCommit" >> $env:GITHUB_OUTPUT
-        Write-Host "Current finalized version: $version ($tagCommit)"
+        Write-Host "Current locked version: $version ($tagCommit)"
 
     - name: Resolve patch init target
       id: patch_target
@@ -297,7 +307,7 @@ jobs:
         Automated PR created by **Prepare Patch Release** workflow.
 
         - Release branch: $base
-        - Current finalized version: ${{ steps.current.outputs.CURRENT_VERSION }}
+        - Current locked version: ${{ steps.current.outputs.CURRENT_VERSION }}
         - Patch init branch: $head
         - Version: $version
         - Release notes: update issue `Release Notes: $releaseLine` before tagging

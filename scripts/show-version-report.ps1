@@ -48,7 +48,11 @@ if (Test-Path $propsPath) {
 $manifestPath = Join-Path $projectRoot "src/ClipSave.Package/Package.appxmanifest"
 if (Test-Path $manifestPath) {
     [xml]$manifest = Get-Content $manifestPath
+    $manifestIdentityName = $manifest.Package.Identity.Name
+    $manifestIdentityPublisher = $manifest.Package.Identity.Publisher
     $manifestVersion = $manifest.Package.Identity.Version
+    Write-Host "  Package identity      : $manifestIdentityName" -ForegroundColor White
+    Write-Host "  Package publisher     : $manifestIdentityPublisher" -ForegroundColor White
     Write-Host "  Package.appxmanifest  : $manifestVersion" -ForegroundColor White
 } else {
     Write-Host "  Package.appxmanifest  : Not found" -ForegroundColor Red
@@ -73,22 +77,53 @@ Write-Host ""
 
 # Section 2: Installed Package
 Write-Host "[Installed Package]" -ForegroundColor Yellow
-$package = Get-AppxPackage -Name "*ClipSave*" 2>$null
 
-if ($package) {
-    Write-Host "  Name    : $($package.Name)" -ForegroundColor White
-    Write-Host "  Version : $($package.Version)" -ForegroundColor White
-
-    $versionParts = $package.Version.Split('.')
-    $revision = [int]$versionParts[3]
-
-    if ($revision -eq 0) {
-        Write-Host "  Type    : Non-Dev Build (RC/Archive/Store)" -ForegroundColor Green
-    } else {
-        Write-Host "  Type    : Dev Build (Build #$revision)" -ForegroundColor Yellow
+$packageProfiles = @(
+    @{
+        Label = "Preview"
+        Name = "ClipSave.Preview"
+    },
+    @{
+        Label = "Store"
+        Name = "tnagata012.ClipSave"
     }
-} else {
+)
+
+$installedPackages = @()
+foreach ($profile in $packageProfiles) {
+    $package = @(Get-AppxPackage -Name $profile.Name 2>$null | Sort-Object Version -Descending) | Select-Object -First 1
+    if (-not $package) {
+        continue
+    }
+
+    $packageType = "Store"
+    if ($profile.Label -eq "Preview") {
+        $versionParts = $package.Version.Split('.')
+        $revision = [int]$versionParts[3]
+        if ($revision -eq 0) {
+            $packageType = "Preview (RC/Archive)"
+        } else {
+            $packageType = "Preview Dev (Build #$revision)"
+        }
+    }
+
+    $installedPackages += [pscustomobject]@{
+        Label = $profile.Label
+        Name = $package.Name
+        Version = $package.Version
+        Type = $packageType
+    }
+}
+
+if ($installedPackages.Count -eq 0) {
     Write-Host "  Not installed" -ForegroundColor Gray
+} else {
+    foreach ($package in $installedPackages) {
+        Write-Host "  [$($package.Label)]" -ForegroundColor White
+        Write-Host "    Name    : $($package.Name)" -ForegroundColor White
+        Write-Host "    Version : $($package.Version)" -ForegroundColor White
+        Write-Host "    Type    : $($package.Type)" -ForegroundColor White
+    }
 }
 
 Write-Host ""
@@ -174,7 +209,7 @@ if ($ghAvailable) {
         }
 
         if ($coreVersion) {
-            Write-Host "  Store Hint   : version=$coreVersion (workflow resolves refs/tags/$coreVersion)" -ForegroundColor Cyan
+            Write-Host "  Store Hint   : run Release Finalize from release/X.Y (configured version=$coreVersion, checkout ref resolves to refs/tags/$coreVersion)" -ForegroundColor Cyan
             if ($resolvedReleaseTag) {
                 Write-Host "                 Candidate channel tag: $resolvedReleaseTag (create finalized tag X.Y.Z from adopted commit)" -ForegroundColor Gray
             }

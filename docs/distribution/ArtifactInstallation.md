@@ -16,16 +16,16 @@
 1. Windows の「設定 > プライバシーとセキュリティ > 開発者向け」で開発者モードを ON にする。
 2. `gh attestation verify` を使う場合は GitHub CLI（`gh`）をインストールする。
 3. `gh auth login` で GitHub CLI にログインする。
+4. `Add-AppxPackage -AllowUnsigned` を実行する PowerShell は、管理者として起動する。
 
 ## 導入手順
 
 1. 公式チャネル（GitHub Releases / Actions artifacts）から `*.msixbundle` と `SHA256SUMS.txt` を取得する。
    - 最新候補を試す場合は `dev-latest` / `rc-X.Y-latest` を使う。
    - 特定の確定版を試す場合は GitHub Release `X.Y.Z` を使う。
-2. `SHA256` と GitHub Artifact Attestation を検証する（attestation の別途ダウンロードは不要。推奨: `scripts/verify-artifact.ps1`）。
-3. `Add-AppxPackage -AllowUnsigned` で導入する。
+2. 管理者 PowerShell で `scripts/install-artifact.ps1` を実行する。
 
-以下の例はリポジトリルートで実行し、成果物を `$artifactDir` に置く想定です。
+以下の例は管理者 PowerShell をリポジトリルートで実行し、成果物を `$artifactDir` に置く想定です。
 
 ```powershell
 $artifactDir = ".\artifacts"
@@ -33,34 +33,30 @@ $bundle = @(Get-ChildItem (Join-Path $artifactDir "*.msixbundle"))
 if ($bundle.Count -ne 1) { throw "Expected exactly one .msixbundle, found $($bundle.Count)" }
 $bundlePath = $bundle[0].FullName
 
-# 1) 検証（推奨）
-# この例は Dev チャネル（main 由来）を想定
-.\scripts\verify-artifact.ps1 `
+.\scripts\install-artifact.ps1 `
   -BundlePath $bundlePath `
   -ChecksumPath (Join-Path $artifactDir "SHA256SUMS.txt") `
   -Channel dev `
   -SourceRef refs/heads/main
-
-# RC を検証する場合は -Channel rc を使い、
-# 可能であれば -SourceRef refs/heads/release/X.Y も指定する。
-# 確定版アーカイブを検証する場合は -Channel archive を使い、
-# 可能であれば -SourceRef refs/tags/X.Y.Z も指定する。
-
-# 2) インストール（未署名）
-Add-AppxPackage -Path $bundlePath -AllowUnsigned
 ```
+
+RC を導入する場合は `-Channel rc -SourceRef refs/heads/release/X.Y`、確定版アーカイブを導入する場合は `-Channel archive -SourceRef refs/tags/X.Y.Z` を使います。同一版への入れ替えやダウングレードで既存の Preview package を強制的に外す必要がある場合は `-RemoveExisting` を追加します。
+
+`install-artifact.ps1` は、`SHA256` と GitHub Artifact Attestation の検証、管理者権限チェック、既存 Preview package の削除、`Add-AppxPackage -AllowUnsigned` をまとめて処理します。
 
 ## チャネル切り替え時の注意
 
-Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を導入するとダウングレード判定になるため、先に Dev をアンインストールしてください。
+Dev / RC / Archive は `ClipSave.Preview` identity で配布され、Store 版とは別パッケージとして扱われます。Store 版と Preview 版は共存できますが、設定や LocalState は共有されません。
 
-RC 候補同士、および RC 候補から同版 Archive への切り替えでも、同一 Identity / 同一 package version（`X.Y.Z.0`）のため上書き導入できないことがあります。別候補へ切り替える場合も、必要に応じて既存の ClipSave パッケージを削除してから導入してください。
+Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を導入すると Preview identity 内でダウングレード判定になるため、先に Dev をアンインストールしてください。
+
+RC 候補同士、および RC 候補から同版 Archive への切り替えでも、同一 Preview identity / 同一 package version（`X.Y.Z.0`）のため上書き導入できないことがあります。別候補へ切り替える場合も、必要に応じて既存の Preview パッケージを削除してから導入してください。
 
 確定タグ `X.Y.Z` に対応するアーカイブ版は Store 公開の有無と独立しているため、試験リリースも同じ手順で導入できます。
 GitHub Release 側で `prerelease` 表示になっていても、導入手順や真正性確認の方法は変わりません。
 
 ```powershell
-Get-AppxPackage *ClipSave* | Remove-AppxPackage
+Get-AppxPackage | Where-Object { $_.Name -eq "ClipSave.Preview" } | Remove-AppxPackage
 ```
 
 ## 関連ドキュメント

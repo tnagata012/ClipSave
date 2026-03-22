@@ -10,6 +10,7 @@
 - Store metadata / listing / 審査向け補足の入力方針
 - listing CSV と画像素材の運用
 - 提出記録と証跡の残し方
+- `Store Submission Log` を使った version tag 固定化
 
 このドキュメントでは、以下は扱わない。
 
@@ -23,7 +24,7 @@
 - 対象版が [../../release/ReleaseProcess.md](../../release/ReleaseProcess.md) の Store チャネル進行条件を満たしている。
 - [../../release/ReleaseGuide.md](../../release/ReleaseGuide.md) に従って `Release Finalize` の Store package mode が成功している。
 - workflow summary で `Checkout Ref=refs/tags/X.Y.Z`、`Commit SHA`、`Store Package Mode=built` を確認できる。
-- `store-package-X.Y.Z` から `.msixupload` を取得できる。
+- 同じ run の `store-package-X.Y.Z` artifact から `.msixupload` を取得でき、workflow の Store identity 検証も通っている。GitHub Release `X.Y.Z` assets は使わない。
 
 ## 提出手順
 
@@ -32,13 +33,14 @@
 3. listing CSV を import し、スクリーンショットを含む素材の解決結果を確認する。
 4. 価格と可用性 / プロパティ / 年齢区分 / 申請オプション（表示される項目のみ）を確認して提出する。
 5. 提出直後に Partner Center submission ID、workflow summary の `Commit SHA`、GitHub Actions 実行 URL を保存する。
-6. 認定/公開後、Partner Center submission ID と公開結果を GitHub Release 本文の `Store Submission Log` に追記する。
+6. 提出直後に GitHub Release 本文の `Store Submission Log` へ 1 行追記する。これをもって `X.Y.Z` は固定扱いになる。
+7. 認定/公開後、同じ行の `status` / `note` を更新する。
 
 ## 提出前チェックリスト
 
-- `store-package-X.Y.Z` の `.msixupload` を取得済みであること。
+- `store-package-X.Y.Z` artifact から `.msixupload` を取得済みであること。GitHub Release assets は使わない。
 - workflow summary で `Checkout Ref=refs/tags/X.Y.Z`、`Commit SHA`、`Store Package Mode=built` を確認済みであること。
-- `Privacy policy URL` と `Support contact` が設定済みであること。
+- `Privacy policy URL` に公開済みの [../../../PRIVACY.md](../../../PRIVACY.md) 相当ページを設定し、`Support contact` が設定済みであること。
 - listing CSV の必須項目（`Title`、`ShortDescription`、`ReleaseNotes`、`DesktopScreenshot1`）に空欄がないこと。
 - package upload 後に `制限付き機能` セクションが表示された場合は、`runFullTrust` の利用理由を記入済みであること。表示されない場合は、同内容を `審査向け補足` に記入済みであること。
 
@@ -62,9 +64,11 @@
 |------|--------|
 | Primary category | `Productivity` |
 | Secondary category | `Utilities + tools`（任意） |
-| Privacy policy URL | 有効な公開 URL を設定 |
+| Privacy policy URL | repo 直下の [../../../PRIVACY.md](../../../PRIVACY.md) を公開した URL を設定 |
 | Website | `https://github.com/tnagata012/ClipSave` |
 | Support contact | tnagata012@gmail.com |
+
+Store policy 上、Desktop Bridge / Win32 製品は privacy policy が必須になるため、Partner Center では `PRIVACY.md` を公開した URL を正本として使う。
 
 ### 年齢区分
 
@@ -80,7 +84,8 @@
 |------|--------|
 | 提出ファイル | `.msixupload` |
 | 生成方法 | `.github/workflows/release-finalize.yml` |
-| workflow 入力 | `version=X.Y.Z`, `build_store_package=true` |
+| workflow 実行 | GitHub Actions で `release/X.Y` を選択して実行 |
+| workflow 入力 | 通常は既定値のまま実行 |
 | 対象バージョン | `X.Y.Z.0`（workflow で設定） |
 | 対象デバイス | `Windows.Desktop` を確認 |
 
@@ -92,8 +97,8 @@
 | Import フォルダ | `docs/distribution/store/listing/import/` |
 | CSV | import フォルダ直下に `listingData.csv` を 1 つだけ置く |
 | Listing 素材 | import フォルダの `assets/` 配下 |
-| スクリーンショット | 各言語で `assets/screenshots/<lang>/...` を `DesktopScreenshot1` 以降へ設定 |
-| 画像パス | import 対象フォルダから解決できる相対パス、または Partner Center で解決できる URL のみ |
+| スクリーンショット | 各言語で `import/assets/screenshots/<lang>/...` を `DesktopScreenshot1` 以降へ設定 |
+| 画像パス | `Import folder` 使用時は root フォルダ名を含むパス（例: `import/assets/...`）、または Partner Center で解決できる URL のみ |
 
 ### 申請オプション
 
@@ -104,11 +109,14 @@
 
 `申請オプション` の確認と記入は、package upload 後に行う。
 
-`審査向け補足` テンプレート（日本語）:
+Partner Center の `制限付き機能` セクションで `runFullTrust` の説明欄が表示された場合は、次の `text` を使う。
 
 ```text
-本アプリはグローバルホットキーとトレイ常駐を実現するために runFullTrust を使用します。
-処理対象はユーザーがコピーしたローカルのクリップボード内容のみで、外部通信やテレメトリ送信は行いません。
+ClipSave は、Windows のタスクトレイに常駐するデスクトップユーティリティとして動作し、ユーザーが任意のアプリ使用中でもグローバルホットキー Ctrl+Shift+V で保存処理を実行できる必要があるため、runFullTrust を使用します。
+
+本アプリは、ユーザーが明示的にコピーしたローカルのクリップボード内容のみを対象に、画像・表データ・JSON・Markdown・テキストを判別し、デスクトップまたは現在開いている File Explorer のフォルダーへ保存します。保存先の判定、トレイ常駐、グローバルホットキー登録は Windows デスクトップ API を用いてローカルで実行します。
+
+外部通信、クラウド送信、アカウント連携、テレメトリ送信は行いません。クリップボード内容はユーザーの操作に応じて端末内でのみ処理されます。
 ```
 
 ## listing 素材配置
@@ -122,7 +130,7 @@ Store listing の投入物と編集用ソースを分離する。Partner Center 
 1. `docs/distribution/store/listing/import/` を開く。
 2. フォルダ直下に `listingData.csv` が 1 つだけあることを確認する。
 3. CSV ヘッダーが Partner Center の英語 export と同じ構成 (`Field`,`ID`,`Type (Type)`,`default`,`en`,`ja`) であることを確認する。
-4. CSV の画像フィールドが `assets/...` のように、import 対象フォルダ直下から解決できる相対パスになっていることを確認する。
+4. CSV の画像フィールドが `import/assets/...` のように、root フォルダ名を含むパスになっていることを確認する。
 5. Partner Center では `import` フォルダ自体を選んで import する。
 
 ## listingData 運用ルール
@@ -133,7 +141,7 @@ Store listing の投入物と編集用ソースを分離する。Partner Center 
 4. 文言や画像パスは `default` ではなく `en` / `ja` 列へ入力する。
 5. import 用 CSV は `docs/distribution/store/listing/import/listingData.csv` に 1 つだけ置く。
 6. listing 用画像は `docs/distribution/store/listing/import/assets/` 配下に置き、デザインソースは `docs/distribution/store/listing/design-source/` に分離する。
-7. 画像フィールドには import 対象フォルダ直下から解決できる相対パスのみを入れ、絶対パスや repo ルート基準のパス（例: `src/...`）は入れない。
+7. 画像フィールドには `import/assets/...` のように root フォルダ名を含むパスのみを入れ、絶対パスや repo ルート基準のパス（例: `src/...`）は入れない。
 8. Partner Center から export した CSV や `listingassets/...` URL を保存する場合は `docs/distribution/store/listing/results/` を作成し、入力値の CSV を上書きしない。
 9. ファイル名は `clipsave-store-<用途>-<番号 or 内容>.ext` を基本とし、タイムスタンプ由来の名前を残さない。
 10. `ReleaseNotes` は issue `Release Notes: X.Y` の公開ノートと矛盾しない内容に更新する。
@@ -150,8 +158,10 @@ Store listing の投入物と編集用ソースを分離する。Partner Center 
 GitHub Release 本文には次の 1 行を追記する。
 
 ```text
-StoreSubmission: date=YYYY-MM-DD(JST) | version=X.Y.Z | tag=X.Y.Z | commit=<40sha> | submission_id=<PartnerCenterID> | workflow_run=<GitHubActionsRunURL> | status=<Published/Rejected/Withdrawn> | note=<optional>
+StoreSubmission: date=YYYY-MM-DD(JST) | version=X.Y.Z | tag=X.Y.Z | commit=<40sha> | submission_id=<PartnerCenterID> | workflow_run=<GitHubActionsRunURL> | status=<Submitted/InCertification/Published/Rejected/Withdrawn> | note=<optional>
 ```
+
+`StoreSubmission:` 行が GitHub Release に記録された時点で、その version tag は固定扱いになる。提出直後は `status=Submitted` で記録し、その後の認定結果に合わせて更新する。
 
 ## 関連ドキュメント
 

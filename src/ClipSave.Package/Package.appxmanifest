@@ -8,8 +8,8 @@
   IgnorableNamespaces="uap desktop rescap">
 
   <Identity
-    Name="tnagata012.ClipSave"
-    Publisher="CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959"
+    Name="ClipSave.Preview"
+    Publisher="CN=ClipSavePreview"
     Version="0.2.0.0" />
 
   <Properties>
@@ -24,7 +24,8 @@
   </Dependencies>
 
   <Resources>
-    <Resource Language="x-generate"/>
+    <Resource Language="en"/>
+    <Resource Language="ja"/>
   </Resources>
 
   <Applications>
@@ -32,8 +33,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="ClipSave"
-        Description="ClipSave"
+        DisplayName="ClipSave Preview"
+        Description="ClipSave Preview"
         BackgroundColor="transparent"
         Square150x150Logo="Images\Square150x150Logo.png"
         Square44x44Logo="Images\Square44x44Logo.png">
@@ -46,7 +47,7 @@
                            EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="ClipSaveStartupTask"
                                Enabled="true"
-                               DisplayName="ClipSave" />
+                               DisplayName="ClipSave Preview" />
         </desktop:Extension>
       </Extensions>
     </Application>

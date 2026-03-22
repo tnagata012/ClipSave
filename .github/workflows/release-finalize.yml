@@ -890,6 +890,15 @@ jobs:
       shell: pwsh
       run: ./tooling/scripts/set-package-manifest.ps1 -ProjectRoot "${{ github.workspace }}" -Profile store -Version "${{ steps.version.outputs.MSIX_VERSION }}"
 
+    - name: Clean package intermediates before Store build
+      if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}
+      shell: pwsh
+      run: |
+        msbuild src/ClipSave.Package/ClipSave.Package.wapproj `
+          /t:Clean `
+          /p:Configuration=Release `
+          /p:Platform=AnyCPU
+
     - name: Build Store package
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}
       shell: pwsh
@@ -930,6 +939,12 @@ jobs:
         if ($upload.Name -notmatch $pattern) {
           throw "Store upload filename does not contain expected version '$expectedVersion'. Found: $($upload.Name)"
         }
+
+        ./tooling/scripts/assert-msixupload-identity.ps1 `
+          -PackagePath $upload.FullName `
+          -ExpectedName "tnagata012.ClipSave" `
+          -ExpectedPublisher "CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959" `
+          -ExpectedVersion $expectedVersion
 
         Write-Host "Store upload package validated: $($upload.Name)"
 

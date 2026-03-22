@@ -28,8 +28,10 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 補足:
 
 - 配布対象は `*.msixbundle`（未署名）、Store 提出対象は `.msixupload`。
+- `store-package-*` は GitHub Actions artifact として扱い、GitHub Release `X.Y.Z` の assets には含めない。GitHub Release assets は unsigned archive（`*.msixbundle` + `SHA256SUMS.txt`）だけを保持する。
 - Dev/RC/Archive 配布では `*.msixbundle` と `SHA256SUMS.txt` を公開し、同じ workflow 実行に対する GitHub Artifact Attestation を GitHub 上に記録する。
 - GitHub Artifact Attestation は Release asset として添付せず、`gh attestation verify` で検証する。
+- `Release Finalize` の Store package mode と `build-store-package.ps1` は、生成した `.msixupload` が Store identity を持つことを検証してから成功扱いにする。
 - `.NET` SDK の解決はリポジトリ直下の `global.json` を単一の正本とし、workflow の `actions/setup-dotnet` は `global-json-file: global.json` を参照する。
 - `pr-check.yml` は workflow lint を常時実行し、website-only PR（`site/**`, `.github/workflows/deploy-pages.yml`, `docs/presentation/LandingPage.md` のみ変更）のときはアプリ本体の restore / security / build / test / spec coverage を skip する。
 - `deploy-pages.yml` は `workflow_dispatch` でも `main` 以外では失敗するため、手動実行は `main` を前提とする。
@@ -64,6 +66,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 ### Release Finalize 後の後処理
 
 1. `Release Finalize` の成功を確認し、GitHub Release `X.Y.Z` に `*.msixbundle` と `SHA256SUMS.txt` が揃っていること、同じ workflow 実行に対する GitHub Artifact Attestation が `gh attestation verify` で検証可能であることを確認する。
+   Store 提出対象の `.msixupload` は GitHub Release assets ではなく、同じ run の `store-package-*` artifact から取得する。
 2. Store 提出前に追加修正や archive の差し替えが必要になった場合は、`Release Finalize` を `release/X.Y` から手動再実行する。通常は既定値のままでよく、`X.Y.Z` は現在 HEAD へ付け直され、archive もその commit に揃え直される。
 3. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。GitHub Release は issue 参照だけを持つ。
 4. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を正本とし、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行する。通常は既定値のまま進めてよい。

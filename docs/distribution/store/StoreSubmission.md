@@ -24,7 +24,7 @@
 - 対象版が [../../release/ReleaseProcess.md](../../release/ReleaseProcess.md) の Store チャネル進行条件を満たしている。
 - [../../release/ReleaseGuide.md](../../release/ReleaseGuide.md) に従って `Release Finalize` の Store package mode が成功している。
 - workflow summary で `Checkout Ref=refs/tags/X.Y.Z`、`Commit SHA`、`Store Package Mode=built` を確認できる。
-- `store-package-X.Y.Z` から `.msixupload` を取得できる。
+- 同じ run の `store-package-X.Y.Z` artifact から `.msixupload` を取得でき、workflow の Store identity 検証も通っている。GitHub Release `X.Y.Z` assets は使わない。
 
 ## 提出手順
 
@@ -38,7 +38,7 @@
 
 ## 提出前チェックリスト
 
-- `store-package-X.Y.Z` の `.msixupload` を取得済みであること。
+- `store-package-X.Y.Z` artifact から `.msixupload` を取得済みであること。GitHub Release assets は使わない。
 - workflow summary で `Checkout Ref=refs/tags/X.Y.Z`、`Commit SHA`、`Store Package Mode=built` を確認済みであること。
 - `Privacy policy URL` に公開済みの [../../../PRIVACY.md](../../../PRIVACY.md) 相当ページを設定し、`Support contact` が設定済みであること。
 - listing CSV の必須項目（`Title`、`ShortDescription`、`ReleaseNotes`、`DesktopScreenshot1`）に空欄がないこと。

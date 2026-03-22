@@ -191,7 +191,7 @@ jobs:
             return $null
           }
 
-          $match = [regex]::Match($section, '(?im)^\|\s*\*\*Commit\*\*\s*\|.*?(?<commit>[0-9a-f]{40}).*$')
+          $match = [regex]::Match($section, '(?im)^\s*\|\s*\*\*Commit\*\*\s*\|.*?(?<commit>[0-9a-f]{40}).*$')
           if (-not $match.Success) {
             return $null
           }
@@ -283,6 +283,10 @@ jobs:
           $createVersionTag = "${{ steps.source.outputs.CREATE_VERSION_TAG }}"
           $hasStoreSubmission = "${{ steps.existing_release.outputs.HAS_STORE_SUBMISSION }}" -eq "true"
           if (-not $tagCommit) {
+            if ($hasStoreSubmission) {
+              Write-Error "Version tag '$version' is missing, but Store submission already locked this version. Restore the original tag at the submitted commit instead of recreating it from release branch HEAD."
+              exit 1
+            }
             if ($createVersionTag -ne "true") {
               Write-Error "Configured version tag '$version' does not exist on GitHub. Re-run with create_version_tag=true or create/push the tag manually."
               exit 1

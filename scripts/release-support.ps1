@@ -122,7 +122,7 @@ function Get-ReleaseArchiveCommitFromBody {
         return $null
     }
 
-    $commitMatch = [regex]::Match($section, '(?im)^\|\s*\*\*Commit\*\*\s*\|.*?(?<commit>[0-9a-f]{40}).*$')
+    $commitMatch = [regex]::Match($section, '(?im)^\s*\|\s*\*\*Commit\*\*\s*\|.*?(?<commit>[0-9a-f]{40}).*$')
     if (-not $commitMatch.Success) {
         return $null
     }

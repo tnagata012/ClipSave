@@ -401,15 +401,20 @@ try {
                             } else {
                                 $normalizedContent = ($content -replace "\r\n?", "`n").Trim()
                                 $issueUrl = [string]$notesIssue.Url
-                                $referencesExactIssue = $false
+                                $searchQuery = [Uri]::EscapeDataString("is:issue in:title `"$notesIssueTitle`"")
+                                $searchUrl = "https://github.com/$repo/issues?q=$searchQuery"
+                                $hasReference = $false
                                 if ($issueUrl -and $normalizedContent -match [regex]::Escape($issueUrl)) {
-                                    $referencesExactIssue = $true
+                                    $hasReference = $true
+                                }
+                                if ($normalizedContent -match [regex]::Escape($searchUrl)) {
+                                    $hasReference = $true
                                 }
 
-                                if (-not $referencesExactIssue) {
+                                if (-not $hasReference) {
                                     Write-Host "NOT READY" -ForegroundColor Yellow
-                                    Write-Host "    GitHub Release body does not link to '$notesIssueTitle'." -ForegroundColor Gray
-                                    Write-Host "    Rerun Release Finalize to refresh the issue reference." -ForegroundColor Gray
+                                    Write-Host "    GitHub Release body does not contain a usable '$notesIssueTitle' reference." -ForegroundColor Gray
+                                    Write-Host "    Release body should link to the issue itself or its title search." -ForegroundColor Gray
                                     $allPassed = $false
                                 } else {
                                     Write-Host "READY" -ForegroundColor Green
@@ -461,7 +466,7 @@ try {
 
     if ($allPassed -and $allManualPassed) {
         Write-Host "All checks passed. Ready for Store submission." -ForegroundColor Green
-        Write-Host "`nNext step: Run Release Finalize workflow with version=$targetVersion and build_store_package=true" -ForegroundColor Cyan
+        Write-Host "`nNext step: Run Release Finalize from $targetReleaseBranch (configured version resolves to $targetVersion; build_store_package defaults to true)" -ForegroundColor Cyan
         exit 0
     } else {
         Write-Host "Some checks did not pass:" -ForegroundColor Yellow

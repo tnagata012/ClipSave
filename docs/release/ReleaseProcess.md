@@ -22,7 +22,7 @@
 | `dev-latest`           | `main` の最新検証成果物  | このドキュメント / [Release Guide](ReleaseGuide.md)          |
 | `rc-X.Y-latest`        | `release/X.Y` の最新候補 | このドキュメント / [Release Guide](ReleaseGuide.md)          |
 | `X.Y.Z`                | 確定版を指す固定タグ     | このドキュメント                                             |
-| GitHub Release `X.Y.Z` | 確定版アーカイブと `Release Notes: X.Y` snapshot / 参照 | [Release Guide](ReleaseGuide.md) / [ReleaseNotes](ReleaseNotes.md) |
+| GitHub Release `X.Y.Z` | 確定版アーカイブと `Release Notes: X.Y` 参照 | [Release Guide](ReleaseGuide.md) / [ReleaseNotes](ReleaseNotes.md) |
 | Store package          | 一般ユーザー向け公開物   | [Release Guide](ReleaseGuide.md) / [Store Submission](../distribution/store/StoreSubmission.md) |
 
 関係だけを先に追いたい場合は、次の図を見ると把握しやすいです。
@@ -45,7 +45,7 @@ flowchart LR
 3. 版数の SSOT は `Directory.Build.props` の `Version` (`X.Y.Z`) とする。
 4. Dev/RC は比較・検証用の移動タグであり、履歴の正本ではない。
 5. 確定版は固定タグ `X.Y.Z` を付与した時点で成立する。
-6. `Release Finalize` は確定タグから不変のアーカイブ成果物を GitHub Release `X.Y.Z` に保存し、GitHub Release 本文には `Release Notes: X.Y` の snapshot と参照を置く。
+6. `Release Finalize` は確定タグから不変のアーカイブ成果物を GitHub Release `X.Y.Z` に保存し、GitHub Release 本文には `Release Notes: X.Y` への参照を置く。
 7. Store 公開は確定版の後段にある任意工程であり、確定そのものとは別工程とする。
 
 ## ブランチモデル
@@ -108,12 +108,12 @@ flowchart LR
 - 確定対象コミットを決め、固定タグ `X.Y.Z` を付与する。
 - タグ push または手動実行で `Release Finalize` を実行する。
 - `Release Finalize` 完了により、その系列は finalized 系列として扱う。
-- 既存 archive が揃っている版に対する `workflow_dispatch` の再実行は、archive を再生成せず GitHub Release metadata を調整する。archive が無い/不足している場合だけ backfill する。
+- 既存 archive が揃っている版への手動再実行は、archive を再生成せず GitHub Release を調整する。archive が無い/不足している場合だけ補完する。
 
 ### 4. Distribute
 
 - Archive: `Release Finalize` により GitHub Release `X.Y.Z` に未署名アーカイブを保存する。
-- Store: 一般ユーザー向けに出す版だけ、`build_store_package=true` で Store package を生成する。
+- Store: 一般ユーザー向けに出す版だけ、`Release Finalize` から Store package を生成する。
 - Store 公開の有無は finalized 判定に影響させない。
 
 ### 5. Support
@@ -139,8 +139,8 @@ flowchart LR
 Store 提出へ進める条件は release 文書側で定義し、Partner Center 実務は distribution 文書へ分離する。
 
 1. Store 提出へ進めるのは、repository 全体の最新 finalized version で、かつ一般ユーザー向けに出す版のみとする。
-2. 対象版には固定タグ `X.Y.Z` と GitHub Release `X.Y.Z` が存在し、`Release Finalize` の archive 成果物が揃っていることを前提とする。
-3. Store package の生成は `Release Finalize` の `build_store_package=true` に限定する。
+2. 対象版は `release/X.Y` の現行版数 `X.Y.Z` と対応する固定タグ `X.Y.Z` を正本とする。必要なら `Release Finalize` で GitHub Release や archive を補完してから進める。
+3. Store package の生成は `Release Finalize` から行う。
 4. `store-package-*` を取得できた時点で、release 側の handoff は完了とする。
 5. 以後の Partner Center での package upload、listing import、審査向け補足、submission ID 記録は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) を正本とする。
 

@@ -487,7 +487,7 @@ jobs:
     - name: Checkout workflow tooling
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.repository.default_branch }}
+        ref: ${{ steps.source.outputs.RELEASE_BRANCH }}
         path: tooling
         fetch-depth: 1
         sparse-checkout: |

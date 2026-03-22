@@ -6,7 +6,8 @@
 .DESCRIPTION
     Builds a Store upload package (.msixupload) locally for preflight/debugging.
     Final submission packages must be produced by the Release Finalize workflow
-    in Store package mode from a fixed X.Y.Z tag to preserve reproducibility.
+    in Store package mode from a release/X.Y run that resolves and checks out
+    the fixed X.Y.Z tag to preserve reproducibility.
 
 .PARAMETER Version
     Version to build (e.g., "1.0.0"). If not specified, reads from Directory.Build.props
@@ -106,13 +107,13 @@ try {
         Where-Object { $_ -and $_.Trim() -ne "" }
     )
     if ($tagsOnHead -notcontains $Version) {
-        Write-Warning "Current HEAD is not tagged '$Version'. Final Store submission must use Release Finalize workflow with version=$Version and build_store_package=true from refs/tags/$Version."
+        Write-Warning "Current HEAD is not tagged '$Version'. Final Store submission must use Release Finalize from $currentBranch; the workflow resolves version '$Version', can create the tag when missing, and builds from refs/tags/$Version."
     }
 
     Write-Host "`n=== Building Store Package for ClipSave v$Version ===" -ForegroundColor Green
     Write-Host "Branch: $currentBranch" -ForegroundColor Cyan
     Write-Host "InformationalVersion: $informationalVersion" -ForegroundColor Cyan
-    Write-Warning "This script is for local preflight only. Final submission packages must come from the Release Finalize workflow in Store package mode."
+    Write-Warning "This script is for local preflight only. Final submission packages must come from the Release Finalize workflow in Store package mode on the release branch."
     $msbuildPath = Resolve-MSBuildPath
     Write-Host "MSBuild: $msbuildPath" -ForegroundColor Cyan
 
@@ -229,7 +230,7 @@ try {
 
     Write-Host "`n=== Next Steps ===" -ForegroundColor Green
     Write-Host "1. Use this local package only for preflight/debugging"
-    Write-Host "2. For final submission, run Release Finalize workflow with version=$Version and build_store_package=true"
+    Write-Host "2. For final submission, run Release Finalize from $currentBranch (build_store_package defaults to true; leave create_version_tag=true when '$Version' is not tagged yet)"
     Write-Host "3. Confirm workflow summary shows refs/tags/$Version, Store Package Mode=built, and the expected commit SHA"
     Write-Host "4. Upload the workflow artifact .msixupload in Partner Center"
 

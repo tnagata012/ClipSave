@@ -209,7 +209,7 @@ if ($ghAvailable) {
         }
 
         if ($coreVersion) {
-            Write-Host "  Store Hint   : version=$coreVersion (workflow resolves refs/tags/$coreVersion)" -ForegroundColor Cyan
+            Write-Host "  Store Hint   : run Release Finalize from release/X.Y (configured version=$coreVersion, checkout ref resolves to refs/tags/$coreVersion)" -ForegroundColor Cyan
             if ($resolvedReleaseTag) {
                 Write-Host "                 Candidate channel tag: $resolvedReleaseTag (create finalized tag X.Y.Z from adopted commit)" -ForegroundColor Gray
             }

@@ -440,6 +440,10 @@ function Get-BlockingFilesAheadOfFinalizedTag {
         '^docs/',
         '^site/',
         '^\.github/workflows/deploy-pages\.yml$',
+        '^\.github/workflows/release-finalize\.yml$',
+        '^scripts/build-store-package\.ps1$',
+        '^scripts/show-version-report\.ps1$',
+        '^scripts/store-checklist\.ps1$',
         '^[^/]+\.md$'
     )
 

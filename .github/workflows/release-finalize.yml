@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       create_version_tag:
-        description: 'Create the current configured X.Y.Z tag when missing'
+        description: 'Create or move the current configured X.Y.Z tag to the selected release branch HEAD'
         required: true
         default: true
         type: boolean
@@ -91,7 +91,7 @@ jobs:
         echo "Resolved source ref: $sourceRef"
         echo "Resolved release branch: $releaseBranch"
         echo "Build store package: $buildStorePackage"
-        echo "Create version tag when missing: $createVersionTag"
+        echo "Create/move version tag to release branch HEAD: $createVersionTag"
 
     - name: Checkout source ref
       uses: actions/checkout@v4
@@ -135,7 +135,114 @@ jobs:
         echo "RELEASE_BRANCH=$releaseBranch" >> $env:GITHUB_OUTPUT
         echo "Resolved version: $version"
 
-    - name: Ensure version tag is available
+    - name: Read existing GitHub Release metadata
+      id: existing_release
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        function Get-MarkdownSection([string]$Body, [string]$Heading) {
+          if ([string]::IsNullOrWhiteSpace($Body) -or [string]::IsNullOrWhiteSpace($Heading)) {
+            return $null
+          }
+
+          $pattern = "(?ms)^##\s+$([regex]::Escape($Heading))\s*\r?\n(?<content>.*?)(?=^\s*##\s+|\z)"
+          $match = [regex]::Match($Body, $pattern)
+          if (-not $match.Success) {
+            return $null
+          }
+
+          return $match.Groups["content"].Value.Trim()
+        }
+
+        function Get-StoreSubmissionState([string]$Body) {
+          $section = Get-MarkdownSection -Body $Body -Heading "Store Submission Log"
+          if ([string]::IsNullOrWhiteSpace($section)) {
+            return [PSCustomObject]@{
+              HasSubmission = $false
+              Commit = $null
+              Status = $null
+            }
+          }
+
+          $matches = [regex]::Matches($section, '(?im)^\s*StoreSubmission:\s*(?<line>.+)$')
+          if ($matches.Count -eq 0) {
+            return [PSCustomObject]@{
+              HasSubmission = $false
+              Commit = $null
+              Status = $null
+            }
+          }
+
+          $latestLine = $matches[$matches.Count - 1].Groups['line'].Value.Trim()
+          $commitMatch = [regex]::Match($latestLine, '\bcommit=(?<commit>[0-9a-f]{40})\b')
+          $statusMatch = [regex]::Match($latestLine, '\bstatus=(?<status>[^|]+?)(?=\s*(?:\||$))')
+
+          return [PSCustomObject]@{
+            HasSubmission = $true
+            Commit = if ($commitMatch.Success) { $commitMatch.Groups['commit'].Value.Trim() } else { $null }
+            Status = if ($statusMatch.Success) { $statusMatch.Groups['status'].Value.Trim() } else { $null }
+          }
+        }
+
+        function Get-ArchiveCommit([string]$Body) {
+          $section = Get-MarkdownSection -Body $Body -Heading "Release Archive (Unsigned)"
+          if ([string]::IsNullOrWhiteSpace($section)) {
+            return $null
+          }
+
+          $match = [regex]::Match($section, '(?im)^\|\s*\*\*Commit\*\*\s*\|.*?(?<commit>[0-9a-f]{40}).*$')
+          if (-not $match.Success) {
+            return $null
+          }
+
+          return $match.Groups['commit'].Value.Trim()
+        }
+
+        $version = "${{ steps.target.outputs.VERSION }}"
+        $repo = "${{ github.repository }}"
+        $bodyPath = Join-Path $env:RUNNER_TEMP "existing-release-body.md"
+
+        $json = gh release view $version --repo $repo --json name,body,isPrerelease,assets 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $json) {
+          echo "HAS_RELEASE=false" >> $env:GITHUB_OUTPUT
+          echo "HAS_ARCHIVE_ASSETS=false" >> $env:GITHUB_OUTPUT
+          echo "HAS_STORE_SUBMISSION=false" >> $env:GITHUB_OUTPUT
+          echo "STORE_SUBMISSION_COMMIT=" >> $env:GITHUB_OUTPUT
+          echo "STORE_SUBMISSION_STATUS=" >> $env:GITHUB_OUTPUT
+          echo "ARCHIVE_COMMIT=" >> $env:GITHUB_OUTPUT
+          exit 0
+        }
+
+        $release = $json | ConvertFrom-Json
+        $name = ""
+        if ($release.name) {
+          $name = [string]$release.name
+        }
+        $body = ""
+        if ($release.body) {
+          $body = [string]$release.body
+        }
+        $isPrerelease = ([string]$release.isPrerelease).ToLowerInvariant()
+        $assetNames = @($release.assets | ForEach-Object { [string]$_.name } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        $bundleAssets = @($assetNames | Where-Object { $_ -match '\.msixbundle$' })
+        $hasChecksum = $assetNames -contains "SHA256SUMS.txt"
+        $hasArchiveAssets = ($bundleAssets.Count -eq 1 -and $hasChecksum).ToString().ToLowerInvariant()
+        $storeSubmission = Get-StoreSubmissionState -Body $body
+        $archiveCommit = Get-ArchiveCommit -Body $body
+
+        Set-Content -Path $bodyPath -Value $body -Encoding utf8
+        echo "HAS_RELEASE=true" >> $env:GITHUB_OUTPUT
+        echo "HAS_ARCHIVE_ASSETS=$hasArchiveAssets" >> $env:GITHUB_OUTPUT
+        echo "HAS_STORE_SUBMISSION=$($storeSubmission.HasSubmission.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+        echo "STORE_SUBMISSION_COMMIT=$($storeSubmission.Commit)" >> $env:GITHUB_OUTPUT
+        echo "STORE_SUBMISSION_STATUS=$($storeSubmission.Status)" >> $env:GITHUB_OUTPUT
+        echo "ARCHIVE_COMMIT=$archiveCommit" >> $env:GITHUB_OUTPUT
+        echo "NAME=$name" >> $env:GITHUB_OUTPUT
+        echo "IS_PRERELEASE=$isPrerelease" >> $env:GITHUB_OUTPUT
+        echo "BODY_PATH=$bodyPath" >> $env:GITHUB_OUTPUT
+
+    - name: Ensure version tag is aligned
       id: tag
       shell: pwsh
       env:
@@ -174,6 +281,7 @@ jobs:
 
         if ("${{ github.event_name }}" -eq "workflow_dispatch") {
           $createVersionTag = "${{ steps.source.outputs.CREATE_VERSION_TAG }}"
+          $hasStoreSubmission = "${{ steps.existing_release.outputs.HAS_STORE_SUBMISSION }}" -eq "true"
           if (-not $tagCommit) {
             if ($createVersionTag -ne "true") {
               Write-Error "Configured version tag '$version' does not exist on GitHub. Re-run with create_version_tag=true or create/push the tag manually."
@@ -202,8 +310,31 @@ jobs:
             }
           } elseif ($tagCommit -eq $headCommit) {
             $tagState = "existing_on_head"
-          } else {
+          } elseif ($hasStoreSubmission) {
+            $tagState = "locked_on_prior_commit"
+          } elseif ($createVersionTag -ne "true") {
             $tagState = "existing_on_prior_commit"
+          } else {
+            gh api "repos/${{ github.repository }}/git/refs/tags/$version" --method PATCH `
+              -f "sha=$headCommit" `
+              -F "force=true" *> $null
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "Failed to move version tag '$version' to commit '$headCommit'."
+              exit 1
+            }
+
+            $tagState = "moved_to_head"
+            $tagCommit = $null
+            for ($attempt = 1; $attempt -le 5 -and -not $tagCommit; $attempt++) {
+              Start-Sleep -Seconds 2
+              git fetch --force origin "refs/tags/$version:refs/tags/$version" *> $null
+              $tagCommit = Get-TagCommit $version
+            }
+
+            if (-not $tagCommit) {
+              Write-Error "Moved tag '$version' but failed to resolve it locally."
+              exit 1
+            }
           }
         } elseif (-not $tagCommit) {
           Write-Error "Version tag '$version' does not exist."
@@ -223,6 +354,27 @@ jobs:
         Write-Host "Tag commit: $tagCommit"
         Write-Host "Tag state: $tagState"
 
+    - name: Validate Store-submitted version tag lock
+      if: ${{ steps.existing_release.outputs.HAS_STORE_SUBMISSION == 'true' }}
+      shell: pwsh
+      run: |
+        $version = "${{ steps.target.outputs.VERSION }}"
+        $tagCommit = "${{ steps.tag.outputs.TAG_COMMIT }}".Trim()
+        $storeSubmissionCommit = "${{ steps.existing_release.outputs.STORE_SUBMISSION_COMMIT }}".Trim()
+        $storeSubmissionStatus = "${{ steps.existing_release.outputs.STORE_SUBMISSION_STATUS }}".Trim()
+
+        if (-not $storeSubmissionCommit) {
+          Write-Error "GitHub Release '$version' already has a Store Submission Log entry, but the recorded commit could not be parsed. Fix the Store Submission Log before rerunning Release Finalize."
+          exit 1
+        }
+
+        if ($tagCommit -ne $storeSubmissionCommit) {
+          Write-Error "Version tag '$version' points to '$tagCommit', but Store submission status '$storeSubmissionStatus' already locked this version to '$storeSubmissionCommit'. Start the next patch cycle instead of retagging '$version'."
+          exit 1
+        }
+
+        Write-Host "Store-submitted version '$version' remains locked to commit '$storeSubmissionCommit'."
+
     - name: Validate workflow_dispatch release branch state against version tag
       if: ${{ github.event_name == 'workflow_dispatch' }}
       shell: pwsh
@@ -230,6 +382,8 @@ jobs:
         $version = "${{ steps.target.outputs.VERSION }}"
         $headCommit = "${{ steps.tag.outputs.SOURCE_COMMIT }}"
         $tagCommit = "${{ steps.tag.outputs.TAG_COMMIT }}"
+        $createVersionTag = "${{ steps.source.outputs.CREATE_VERSION_TAG }}"
+        $hasStoreSubmission = "${{ steps.existing_release.outputs.HAS_STORE_SUBMISSION }}" -eq "true"
 
         if ($headCommit -eq $tagCommit) {
           Write-Host "Selected release branch HEAD matches version tag '$version'."
@@ -241,11 +395,21 @@ jobs:
         $blockingFiles = Get-BlockingFilesAheadOfFinalizedTag -TagCommit $tagCommit -HeadCommit $headCommit
         if ($blockingFiles.Count -gt 0) {
           $blockingList = $blockingFiles -join ", "
-          Write-Error "Selected release branch HEAD is ahead of version tag '$version' with product-affecting changes: $blockingList. Release Finalize uses the fixed version tag; start the next patch cycle or rerun from a branch whose configured version matches the finalized commit."
+          if ($hasStoreSubmission) {
+            Write-Error "Selected release branch HEAD is ahead of Store-submitted version tag '$version' with product-affecting changes: $blockingList. The tag is fixed after Store submission; start the next patch cycle instead of retagging '$version'."
+          } else {
+            Write-Error "Selected release branch HEAD is ahead of version tag '$version' with product-affecting changes: $blockingList. Re-run with create_version_tag=true to retarget '$version' before Store submission, or start the next patch cycle."
+          }
           exit 1
         }
 
-        Write-Warning "Selected release branch HEAD is ahead of version tag '$version' only by non-product files. Continuing with $tagCommit."
+        if ($hasStoreSubmission) {
+          Write-Warning "Selected release branch HEAD is ahead of Store-submitted version tag '$version' only by non-product files. Continuing with fixed commit $tagCommit."
+        } elseif ($createVersionTag -ne "true") {
+          Write-Warning "Selected release branch HEAD is ahead of version tag '$version' only by non-product files. Continuing with existing tag because create_version_tag=false."
+        } else {
+          Write-Warning "Selected release branch HEAD is ahead of version tag '$version' only by non-product files. Continuing with commit $tagCommit."
+        }
 
     - name: Verify target release branch exists
       shell: pwsh
@@ -261,53 +425,31 @@ jobs:
         }
         echo "Verified release branch: $branch"
 
-    - name: Read existing GitHub Release metadata
-      id: existing_release
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        $version = "${{ steps.target.outputs.VERSION }}"
-        $repo = "${{ github.repository }}"
-        $bodyPath = Join-Path $env:RUNNER_TEMP "existing-release-body.md"
-
-        $json = gh release view $version --repo $repo --json name,body,isPrerelease,assets 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $json) {
-          echo "HAS_RELEASE=false" >> $env:GITHUB_OUTPUT
-          echo "HAS_ARCHIVE_ASSETS=false" >> $env:GITHUB_OUTPUT
-          exit 0
-        }
-
-        $release = $json | ConvertFrom-Json
-        $name = ""
-        if ($release.name) {
-          $name = [string]$release.name
-        }
-        $body = ""
-        if ($release.body) {
-          $body = [string]$release.body
-        }
-        $isPrerelease = ([string]$release.isPrerelease).ToLowerInvariant()
-        $assetNames = @($release.assets | ForEach-Object { [string]$_.name } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        $bundleAssets = @($assetNames | Where-Object { $_ -match '\.msixbundle$' })
-        $hasChecksum = $assetNames -contains "SHA256SUMS.txt"
-        $hasArchiveAssets = ($bundleAssets.Count -eq 1 -and $hasChecksum).ToString().ToLowerInvariant()
-
-        Set-Content -Path $bodyPath -Value $body -Encoding utf8
-        echo "HAS_RELEASE=true" >> $env:GITHUB_OUTPUT
-        echo "HAS_ARCHIVE_ASSETS=$hasArchiveAssets" >> $env:GITHUB_OUTPUT
-        echo "NAME=$name" >> $env:GITHUB_OUTPUT
-        echo "IS_PRERELEASE=$isPrerelease" >> $env:GITHUB_OUTPUT
-        echo "BODY_PATH=$bodyPath" >> $env:GITHUB_OUTPUT
-
     - name: Resolve archive handling mode
       id: archive_mode
       shell: pwsh
       run: |
         $hasArchiveAssets = "${{ steps.existing_release.outputs.HAS_ARCHIVE_ASSETS }}" -eq "true"
         $buildStorePackage = "${{ steps.target.outputs.BUILD_STORE_PACKAGE }}" -eq "true"
+        $tagState = "${{ steps.tag.outputs.TAG_STATE }}".Trim()
+        $archiveCommit = "${{ steps.existing_release.outputs.ARCHIVE_COMMIT }}".Trim()
+        $tagCommit = "${{ steps.tag.outputs.TAG_COMMIT }}".Trim()
+        $archiveNeedsRefresh = $false
 
-        if ("${{ github.event_name }}" -eq "push" -and -not $hasArchiveAssets) {
+        if ($hasArchiveAssets -and $archiveCommit -and $archiveCommit -ne $tagCommit) {
+          $archiveNeedsRefresh = $true
+        }
+        if ("${{ github.event_name }}" -eq "push" -and $hasArchiveAssets -and -not $archiveCommit) {
+          $archiveNeedsRefresh = $true
+        }
+
+        if ($tagState -eq "moved_to_head") {
+          $shouldBuildArchive = $true
+          $archiveMode = "retag_archive_rebuild"
+        } elseif ($archiveNeedsRefresh) {
+          $shouldBuildArchive = $true
+          $archiveMode = "stale_archive_rebuild"
+        } elseif ("${{ github.event_name }}" -eq "push" -and -not $hasArchiveAssets) {
           $shouldBuildArchive = $true
           $archiveMode = "tag_push_archive_build"
         } elseif (-not $hasArchiveAssets) {
@@ -326,6 +468,8 @@ jobs:
         Write-Host "Archive mode: $archiveMode"
         Write-Host "Build archive: $shouldBuildArchive"
         Write-Host "Build binaries: $shouldBuildBinaries"
+        Write-Host "Archive commit from GitHub Release: $archiveCommit"
+        Write-Host "Archive needs refresh: $archiveNeedsRefresh"
 
     - name: Checkout version tag
       uses: actions/checkout@v4
@@ -662,7 +806,7 @@ jobs:
         | **Commit** | [``$($commitSha)``](${{ github.server_url }}/${{ github.repository }}/commit/$commitSha) |
         | **Build** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
-        > This GitHub Release archives an immutable verification artifact. Store package generation, if needed, is a separate mode of this workflow.
+        > This GitHub Release keeps the current verification archive for this version. Before Store submission is recorded, rerunning `Release Finalize` from `release/X.Y` may replace it. After Store submission is recorded, the tag and archive are treated as fixed.
         "@
         }
         $archiveSection = $archiveSection.Trim()
@@ -792,6 +936,14 @@ jobs:
       run: |
         $archiveMode = "${{ steps.archive_mode.outputs.ARCHIVE_MODE }}"
         switch ($archiveMode) {
+          "retag_archive_rebuild" {
+            $archiveModeLabel = "rebuilt after moving version tag"
+            $archiveArtifact = "release-archive-${{ steps.version.outputs.VERSION }}"
+          }
+          "stale_archive_rebuild" {
+            $archiveModeLabel = "rebuilt to match current version tag"
+            $archiveArtifact = "release-archive-${{ steps.version.outputs.VERSION }}"
+          }
           "tag_push_archive_build" {
             $archiveModeLabel = "built from tag push"
             $archiveArtifact = "release-archive-${{ steps.version.outputs.VERSION }}"
@@ -815,6 +967,37 @@ jobs:
           $storeArtifact = "not built"
         }
 
+        $tagState = "${{ steps.tag.outputs.TAG_STATE }}"
+        switch ($tagState) {
+          "created" {
+            $tagStateLabel = "created at release branch HEAD"
+          }
+          "event_tag" {
+            $tagStateLabel = "tag push run"
+          }
+          "moved_to_head" {
+            $tagStateLabel = "moved to release branch HEAD"
+          }
+          "existing_on_head" {
+            $tagStateLabel = "already on release branch HEAD"
+          }
+          "locked_on_prior_commit" {
+            $tagStateLabel = "fixed by Store submission"
+          }
+          "existing_on_prior_commit" {
+            $tagStateLabel = "kept on prior commit"
+          }
+          default {
+            $tagStateLabel = $tagState
+          }
+        }
+
+        if ("${{ steps.existing_release.outputs.HAS_STORE_SUBMISSION }}" -eq "true") {
+          $storeLock = "locked by Store Submission Log"
+        } else {
+          $storeLock = "movable until Store submission is recorded"
+        }
+
         @"
         ## Release Finalize Complete
 
@@ -829,6 +1012,8 @@ jobs:
         | Release Title | `${{ steps.presentation.outputs.RELEASE_TITLE }}` |
         | Prerelease | `${{ steps.presentation.outputs.PRERELEASE }}` |
         | Release Notes | [`${{ steps.presentation.outputs.RELEASE_NOTES_TITLE }}`](${{ steps.presentation.outputs.RELEASE_NOTES_URL }}) |
+        | Version Tag State | ``$($tagStateLabel)`` |
+        | Store Lock | ``$($storeLock)`` |
         | Archive Mode | ``$($archiveModeLabel)`` |
         | Release Archive Artifact | ``$($archiveArtifact)`` |
         | Store Package Mode | ``$($storeMode)`` |
@@ -838,5 +1023,5 @@ jobs:
         | Commit SHA | `${{ steps.version.outputs.COMMIT_SHA }}` |
         | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
-        Existing archive assets are preserved on manual reruns once a finalized archive already exists. `Release Notes` keeps a stable link to the release-line issue search, and `Operator Notes` / `Store Submission Log` are preserved across reruns.
+        `Release Notes` keeps a stable link to the release-line issue search, and `Operator Notes` / `Store Submission Log` are preserved across reruns. Before Store submission is recorded, `create_version_tag=true` can move `X.Y.Z` to the current `release/X.Y` HEAD and rebuild the archive. After Store submission is recorded, the tag is fixed and only non-product reruns are allowed.
         "@ >> $env:GITHUB_STEP_SUMMARY

@@ -176,6 +176,17 @@ try {
     & "$projectRoot\scripts\set-package-manifest.ps1" -ProjectRoot $projectRoot -Profile store -Version $msixVersion
     Write-Host "Prepared Package.appxmanifest for Store profile" -ForegroundColor Cyan
 
+    Write-Host "`nCleaning package intermediates..." -ForegroundColor Yellow
+    & $msbuildPath "$projectRoot\src\ClipSave.Package\ClipSave.Package.wapproj" `
+        /t:Clean `
+        /p:Configuration=Release `
+        /p:Platform=AnyCPU `
+        /verbosity:minimal
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to clean packaging intermediates"
+        exit 1
+    }
+
     # Build Store package
     Write-Host "`nBuilding Store upload package..." -ForegroundColor Yellow
     $outputDir = Join-Path $projectRoot "StorePackage"
@@ -220,6 +231,16 @@ try {
     $expectedPattern = "_$([regex]::Escape($msixVersion))_"
     if ($msixUpload.Name -notmatch $expectedPattern) {
         Write-Error "Store upload filename does not contain expected version '$msixVersion'. Found: $($msixUpload.Name)"
+        exit 1
+    }
+
+    & "$projectRoot\scripts\assert-msixupload-identity.ps1" `
+        -PackagePath $msixUpload.FullName `
+        -ExpectedName "tnagata012.ClipSave" `
+        -ExpectedPublisher "CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959" `
+        -ExpectedVersion $msixVersion
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Store package identity validation failed"
         exit 1
     }
 

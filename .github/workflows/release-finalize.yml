@@ -396,7 +396,10 @@ jobs:
 
         . ./scripts/release-support.ps1
 
-        $blockingFiles = Get-BlockingFilesAheadOfFinalizedTag -TagCommit $tagCommit -HeadCommit $headCommit
+        $blockingFiles = Get-BlockingFilesAheadOfFinalizedTag `
+          -TagCommit $tagCommit `
+          -HeadCommit $headCommit `
+          -AllowReleaseFinalizeTooling
         if ($blockingFiles.Count -gt 0) {
           $blockingList = $blockingFiles -join ", "
           if ($hasStoreSubmission) {

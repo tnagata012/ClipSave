@@ -757,6 +757,10 @@ jobs:
         $fileVersion = "${{ steps.version.outputs.FILE_VERSION }}"
         $msixVersion = "${{ steps.version.outputs.MSIX_VERSION }}"
         $commitSha = "${{ steps.version.outputs.COMMIT_SHA }}"
+        $serverUrl = "${{ github.server_url }}"
+        $repository = "${{ github.repository }}"
+        $runNumber = "${{ github.run_number }}"
+        $runId = "${{ github.run_id }}"
         $defaultTitle = "Version $version (Release Archive)"
         $shouldBuildArchive = "${{ steps.archive_mode.outputs.SHOULD_BUILD_ARCHIVE }}" -eq "true"
 
@@ -798,23 +802,23 @@ jobs:
 
         $archiveSection = Get-MarkdownSection -Body $existingBody -Heading "Release Archive (Unsigned)"
         if ($shouldBuildArchive -or -not $archiveSection) {
-          $archiveSection = @"
+          $archiveSection = @'
         | Item | Value |
         |------|-------|
-        | **Version** | ``$($version)`` |
-        | **Release Branch** | ``$($releaseBranch)`` |
-        | **Checkout Ref** | ``$($checkoutRef)`` |
-        | **InformationalVersion** | ``$($informationalVersion)`` |
-        | **FileVersion** | ``$($fileVersion)`` |
-        | **Package Version** | ``$($msixVersion)`` |
+        | **Version** | `{0}` |
+        | **Release Branch** | `{1}` |
+        | **Checkout Ref** | `{2}` |
+        | **InformationalVersion** | `{3}` |
+        | **FileVersion** | `{4}` |
+        | **Package Version** | `{5}` |
         | **Signing** | `unsigned (verification archive)` |
-        | **Checksum** | ``SHA256SUMS.txt`` |
-        | **Provenance** | ``GitHub Artifact Attestation`` |
-        | **Commit** | [``$($commitSha)``](${{ github.server_url }}/${{ github.repository }}/commit/$commitSha) |
-        | **Build** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+        | **Checksum** | `SHA256SUMS.txt` |
+        | **Provenance** | `GitHub Artifact Attestation` |
+        | **Commit** | [`{6}`]({7}/{8}/commit/{6}) |
+        | **Build** | [#{9}]({7}/{8}/actions/runs/{10}) |
 
         > This GitHub Release keeps the current verification archive for this version. Before Store submission is recorded, rerunning `Release Finalize` from `release/X.Y` may replace it. After Store submission is recorded, the tag and archive are treated as fixed.
-        "@
+        '@ -f $version, $releaseBranch, $checkoutRef, $informationalVersion, $fileVersion, $msixVersion, $commitSha, $serverUrl, $repository, $runNumber, $runId
         }
         $archiveSection = $archiveSection.Trim()
 
@@ -1005,30 +1009,52 @@ jobs:
           $storeLock = "movable until Store submission is recorded"
         }
 
-        @"
+        $summary = @'
         ## Release Finalize Complete
 
         | Item | Value |
         |------|-------|
-        | Version | `${{ steps.version.outputs.VERSION }}` |
-        | Release Branch | `${{ steps.source.outputs.RELEASE_BRANCH }}` |
-        | Checkout Ref | `${{ steps.tag.outputs.CHECKOUT_REF }}` |
-        | InformationalVersion | `${{ steps.version.outputs.INFORMATIONAL_VERSION }}` |
-        | FileVersion | `${{ steps.version.outputs.FILE_VERSION }}` |
-        | Package Version | `${{ steps.version.outputs.MSIX_VERSION }}` |
-        | Release Title | `${{ steps.presentation.outputs.RELEASE_TITLE }}` |
-        | Prerelease | `${{ steps.presentation.outputs.PRERELEASE }}` |
-        | Release Notes | [`${{ steps.presentation.outputs.RELEASE_NOTES_TITLE }}`](${{ steps.presentation.outputs.RELEASE_NOTES_URL }}) |
-        | Version Tag State | ``$($tagStateLabel)`` |
-        | Store Lock | ``$($storeLock)`` |
-        | Archive Mode | ``$($archiveModeLabel)`` |
-        | Release Archive Artifact | ``$($archiveArtifact)`` |
-        | Store Package Mode | ``$($storeMode)`` |
-        | Store Artifact | ``$($storeArtifact)`` |
+        | Version | `{0}` |
+        | Release Branch | `{1}` |
+        | Checkout Ref | `{2}` |
+        | InformationalVersion | `{3}` |
+        | FileVersion | `{4}` |
+        | Package Version | `{5}` |
+        | Release Title | `{6}` |
+        | Prerelease | `{7}` |
+        | Release Notes | [`{8}`]({9}) |
+        | Version Tag State | `{10}` |
+        | Store Lock | `{11}` |
+        | Archive Mode | `{12}` |
+        | Release Archive Artifact | `{13}` |
+        | Store Package Mode | `{14}` |
+        | Store Artifact | `{15}` |
         | Checksum | `SHA256SUMS.txt` |
         | Provenance | `GitHub Artifact Attestation` |
-        | Commit SHA | `${{ steps.version.outputs.COMMIT_SHA }}` |
-        | Build | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+        | Commit SHA | `{16}` |
+        | Build | [#{17}]({18}/{19}/actions/runs/{20}) |
 
         `Release Notes` keeps a stable link to the release-line issue search, and `Operator Notes` / `Store Submission Log` are preserved across reruns. Before Store submission is recorded, `create_version_tag=true` can move `X.Y.Z` to the current `release/X.Y` HEAD and rebuild the archive. After Store submission is recorded, the tag is fixed and only non-product reruns are allowed.
-        "@ >> $env:GITHUB_STEP_SUMMARY
+        '@ -f `
+          "${{ steps.version.outputs.VERSION }}", `
+          "${{ steps.source.outputs.RELEASE_BRANCH }}", `
+          "${{ steps.tag.outputs.CHECKOUT_REF }}", `
+          "${{ steps.version.outputs.INFORMATIONAL_VERSION }}", `
+          "${{ steps.version.outputs.FILE_VERSION }}", `
+          "${{ steps.version.outputs.MSIX_VERSION }}", `
+          "${{ steps.presentation.outputs.RELEASE_TITLE }}", `
+          "${{ steps.presentation.outputs.PRERELEASE }}", `
+          "${{ steps.presentation.outputs.RELEASE_NOTES_TITLE }}", `
+          "${{ steps.presentation.outputs.RELEASE_NOTES_URL }}", `
+          $tagStateLabel, `
+          $storeLock, `
+          $archiveModeLabel, `
+          $archiveArtifact, `
+          $storeMode, `
+          $storeArtifact, `
+          "${{ steps.version.outputs.COMMIT_SHA }}", `
+          "${{ github.run_number }}", `
+          "${{ github.server_url }}", `
+          "${{ github.repository }}", `
+          "${{ github.run_id }}"
+        $summary >> $env:GITHUB_STEP_SUMMARY

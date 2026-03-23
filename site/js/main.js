@@ -103,6 +103,10 @@
     }
   });
 
+  // Track the download section separately (no longer in nav as a hash link)
+  const downloadSection = document.querySelector("#download");
+  const lastNavLink = navLinks.length > 0 ? navLinks[navLinks.length - 1] : null;
+
   function updateActiveNav() {
     const scrollY = window.scrollY + 120;
 
@@ -117,6 +121,8 @@
     navLinks.forEach((link) => link.classList.remove("active"));
     if (currentSection) {
       currentSection.link.classList.add("active");
+    } else if (downloadSection && lastNavLink && scrollY >= downloadSection.offsetTop + 120) {
+      lastNavLink.classList.add("active");
     }
   }
 

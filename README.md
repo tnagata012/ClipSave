@@ -1,6 +1,6 @@
 # ClipSave
 
-[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Live-0078D4?logo=microsoft&logoColor=white)](https://apps.microsoft.com/detail/9NC18Q1NM59P)
+[<img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" height="44">](https://apps.microsoft.com/detail/9NC18Q1NM59P)
 [![Dev Build](https://github.com/tnagata012/ClipSave/actions/workflows/dev-build.yml/badge.svg?branch=main)](https://github.com/tnagata012/ClipSave/actions/workflows/dev-build.yml)
 [![RC Build](https://github.com/tnagata012/ClipSave/actions/workflows/rc-build.yml/badge.svg)](https://github.com/tnagata012/ClipSave/actions/workflows/rc-build.yml)
 [![Dev Channel](https://img.shields.io/badge/Dev%20Channel-dev--latest-2f6feb)](https://github.com/tnagata012/ClipSave/releases/tag/dev-latest)

@@ -125,6 +125,7 @@ try {
     }
 
     $versionSeries = "release/$($matches['major']).$($matches['minor'])"
+    $branchBaseVersion = "$($matches['major']).$($matches['minor']).0"
 
     $targetReleaseBranch = $ReleaseBranch
     if ($targetReleaseBranch) {
@@ -160,8 +161,13 @@ try {
     Write-Host "=== Microsoft Store Deployment Checklist ===" -ForegroundColor Green
     Write-Host "Target Version : $targetVersion" -ForegroundColor Cyan
     Write-Host "Target Branch  : $targetReleaseBranch" -ForegroundColor Cyan
+    Write-Host "RC Base Version: $branchBaseVersion" -ForegroundColor Cyan
     Write-Host "Working Branch : $currentBranch" -ForegroundColor Cyan
     Write-Host "Working Version: $workingVersion`n" -ForegroundColor Cyan
+    if (-not $versionSpecified -and $targetVersion -eq $branchBaseVersion) {
+        Write-Warning "release/X.Y keeps repository version X.Y.0. For patch releases beyond the initial X.Y.0 line, rerun this checklist with -Version X.Y.Z."
+        Write-Host ""
+    }
 
     $allPassed = $true
     $ghAvailable = Get-Command gh -ErrorAction SilentlyContinue
@@ -293,7 +299,7 @@ try {
             Write-Host "    Could not resolve GitHub repository from remote.origin.url." -ForegroundColor Gray
             $allPassed = $false
         } else {
-            $candidateArtifactName = "rc-package-$targetVersion"
+            $candidateArtifactName = "rc-package-$branchBaseVersion"
             $missingArtifacts = @()
             $queryFailed = $false
 
@@ -438,7 +444,7 @@ try {
     Write-Host "Please confirm the following items:`n"
 
     $checklist = @(
-        "RC package artifact (rc-package-$targetVersion, unsigned) reviewed for at least 24 hours",
+        "Selected RC candidate build (artifact family rc-package-$branchBaseVersion, unsigned) reviewed for at least 24 hours",
         "Confirmed tag X.Y.Z (=$targetVersion) created and pushed",
         "Release archive GitHub Release X.Y.Z (=$targetVersion) published by Release Finalize",
         "No critical bugs reported",
@@ -466,7 +472,7 @@ try {
 
     if ($allPassed -and $allManualPassed) {
         Write-Host "All checks passed. Ready for Store submission." -ForegroundColor Green
-        Write-Host "`nNext step: Run Release Finalize from $targetReleaseBranch with patch=$(($targetVersion.Split('.'))[2]) (latest successful RC candidate is adopted automatically)" -ForegroundColor Cyan
+        Write-Host "`nNext step: Run Release Finalize from $targetReleaseBranch with explicit patch=$(($targetVersion.Split('.'))[2]) (the release branch stays $branchBaseVersion and the latest successful RC candidate is adopted automatically)" -ForegroundColor Cyan
         exit 0
     } else {
         Write-Host "Some checks did not pass:" -ForegroundColor Yellow

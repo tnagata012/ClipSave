@@ -310,7 +310,8 @@ jobs:
 
           > Unsigned package by channel policy. Verify `SHA256SUMS.txt` and GitHub Artifact Attestation (`gh attestation verify`) before use.
           > This floating release tag always points to the latest candidate for `${{ github.ref_name }}` and can be replaced by a newer build.
-          > RC package version uses `X.Y.Z.B` and the build segment tracks the branch-scoped `rc-build` counter.
+          > RC package version uses the release-branch base version `X.Y.0.B`, and the build segment tracks the branch-scoped `rc-build` counter.
+          > `Release Finalize` keeps the source build number `B` but rewrites the patch segment to the operator-selected finalized version `X.Y.Z.B`.
           > The `B` counter resets when a new `release/X.Y` branch starts.
         files: |
           output/**/*.msixbundle

@@ -1,4 +1,4 @@
-# Shared helpers for resolving which release series can be prepared from main.
+# Shared helpers for resolving release series from an explicit X.Y input.
 
 function Get-SemVerInfo {
     [CmdletBinding()]
@@ -67,47 +67,20 @@ function Resolve-PrepareReleaseSeries {
     param(
         [Parameter(Mandatory = $true)]
         [string]$MainVersion,
-        [string]$RequestedSeries = $null
+        [Parameter(Mandatory = $true)]
+        [string]$RequestedSeries
     )
 
     $main = Get-SemVerInfo -Version $MainVersion -Label "Current main version"
-    $nextMinorSeries = "$($main.Major).$($main.Minor + 1)"
-    $nextMajorSeries = "$($main.Major + 1).0"
-
-    if ($main.Patch -eq 0) {
-        $defaultSeries = $main.Series
-        $allowedExplicitSeries = @($main.Series, $nextMajorSeries)
-    } else {
-        $defaultSeries = $nextMinorSeries
-        $allowedExplicitSeries = @($main.Series, $nextMinorSeries, $nextMajorSeries)
+    if ($main.Version -ne "0.0.1") {
+        throw "Current main version must stay fixed at 0.0.1. Actual: '$($main.Version)'"
     }
 
-    $requestedTrimmed = if ([string]::IsNullOrWhiteSpace($RequestedSeries)) { $null } else { $RequestedSeries.Trim() }
-    if ([string]::IsNullOrWhiteSpace($requestedTrimmed)) {
-        $resolvedSeries = $defaultSeries
-        $source = "default"
-    } else {
-        $requested = Get-ReleaseSeriesInfo -Series $requestedTrimmed -Label "Requested release series"
-        if ($allowedExplicitSeries -notcontains $requested.Series) {
-            $allowedList = ($allowedExplicitSeries | Select-Object -Unique) -join ", "
-            throw "Requested release series '$($requested.Series)' is not allowed from current main version '$($main.Version)'. Default release series: '$defaultSeries'. Allowed explicit series: $allowedList."
-        }
-
-        $resolvedSeries = $requested.Series
-        $source = "input"
-    }
-
-    $resolved = Get-ReleaseSeriesInfo -Series $resolvedSeries -Label "Resolved release series"
+    $requested = Get-ReleaseSeriesInfo -Series $RequestedSeries -Label "Requested release series"
 
     return [PSCustomObject]@{
         CurrentMainVersion     = $main.Version
-        CurrentMainSeries      = $main.Series
-        CurrentMainPatch       = $main.Patch
-        DefaultReleaseSeries   = $defaultSeries
-        AllowedExplicitSeries  = @($allowedExplicitSeries | Select-Object -Unique)
-        ResolvedReleaseSeries  = $resolved.Series
-        ResolvedReleaseVersion = $resolved.Version
-        ResolutionSource       = $source
-        NextMajorSeries        = $nextMajorSeries
+        ResolvedReleaseSeries  = $requested.Series
+        ResolvedReleaseVersion = $requested.Version
     }
 }

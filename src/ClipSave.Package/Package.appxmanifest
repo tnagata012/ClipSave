@@ -10,7 +10,7 @@
   <Identity
     Name="ClipSave.Preview"
     Publisher="CN=ClipSavePreview"
-    Version="0.2.0.0" />
+    Version="0.0.1.0" />
 
   <Properties>
     <DisplayName>ClipSave</DisplayName>

@@ -5,17 +5,8 @@ on:
     inputs:
       version:
         description: 'Release series (X.Y)'
-        required: false
-        type: string
-      next_main_version:
-        description: 'Next main version after branching (optional, defaults to next minor)'
-        required: false
-        type: string
-      create_main_bump_pr:
-        description: 'Create PR for main version bump branch'
         required: true
-        default: true
-        type: boolean
+        type: string
       auto_create_release_line_issue:
         description: 'Auto-create/reopen release-line notes issue'
         required: true
@@ -26,7 +17,6 @@ permissions:
   actions: write
   contents: write
   issues: write
-  pull-requests: write
 
 concurrency:
   group: prepare-release
@@ -66,65 +56,43 @@ jobs:
           -MainVersion $mainVersion `
           -RequestedSeries "${{ inputs.version }}"
 
-        $releaseVersion = $resolution.ResolvedReleaseVersion
-        $releaseSeries = $resolution.ResolvedReleaseSeries
-
-        echo "RELEASE_VERSION=$releaseVersion" >> $env:GITHUB_OUTPUT
-        echo "RELEASE_SERIES=$releaseSeries" >> $env:GITHUB_OUTPUT
+        echo "RELEASE_VERSION=$($resolution.ResolvedReleaseVersion)" >> $env:GITHUB_OUTPUT
+        echo "RELEASE_SERIES=$($resolution.ResolvedReleaseSeries)" >> $env:GITHUB_OUTPUT
         echo "CURRENT_MAIN_VERSION=$($resolution.CurrentMainVersion)" >> $env:GITHUB_OUTPUT
-        echo "RELEASE_SERIES_SOURCE=$($resolution.ResolutionSource)" >> $env:GITHUB_OUTPUT
         Write-Host "Current main version: $($resolution.CurrentMainVersion)"
-        Write-Host "Resolved release series: $releaseSeries ($($resolution.ResolutionSource))"
-        Write-Host "Resolved release version: $releaseVersion"
+        Write-Host "Resolved release series: $($resolution.ResolvedReleaseSeries)"
+        Write-Host "Resolved release version: $($resolution.ResolvedReleaseVersion)"
 
-    - name: Resolve branch targets
-      id: targets
+    - name: Resolve branch target
+      id: target
       shell: pwsh
       run: |
+        $releaseSeries = "${{ steps.version.outputs.RELEASE_SERIES }}".Trim()
         $releaseVersion = "${{ steps.version.outputs.RELEASE_VERSION }}".Trim()
-        if ($releaseVersion -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.0$') {
-          throw "Invalid resolved version format: $releaseVersion (expected X.Y.0)"
+        if ($releaseSeries -notmatch '^(?<major>\d+)\.(?<minor>\d+)$') {
+          throw "Invalid release series format: $releaseSeries"
+        }
+        if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$') {
+          throw "Invalid resolved version format: $releaseVersion"
         }
 
-        $major = [int]$matches['major']
-        $minor = [int]$matches['minor']
-        $nextMainVersion = "${{ inputs.next_main_version }}".Trim()
-        if (-not $nextMainVersion) {
-          $nextMainVersion = "$major.$($minor + 1).0"
-        }
-
-        if ($nextMainVersion -notmatch '^(?<nextMajor>\d+)\.(?<nextMinor>\d+)\.(?<nextPatch>\d+)$') {
-          throw "Invalid next main version format: $nextMainVersion (expected X.Y.Z)"
-        }
-
-        $nextMajor = [int]$matches['nextMajor']
-        $nextMinor = [int]$matches['nextMinor']
-        $nextPatch = [int]$matches['nextPatch']
-        if ($nextPatch -ne 0) {
-          throw "Next main version must use a .0 patch version. Actual: $nextMainVersion"
-        }
-
-        $releaseVersionTuple = @($major, $minor, 0)
-        $nextVersionTuple = @($nextMajor, $nextMinor, $nextPatch)
-        $isGreater =
-          ($nextVersionTuple[0] -gt $releaseVersionTuple[0]) -or
-          ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -gt $releaseVersionTuple[1]) -or
-          ($nextVersionTuple[0] -eq $releaseVersionTuple[0] -and $nextVersionTuple[1] -eq $releaseVersionTuple[1] -and $nextVersionTuple[2] -gt $releaseVersionTuple[2])
-        if (-not $isGreater) {
-          throw "Next main version must be greater than release version $releaseVersion. Actual: $nextMainVersion"
-        }
-
-        $nextMainVersion = "$nextMajor.$nextMinor.$nextPatch"
-
-        $releaseBranch = "release/$major.$minor"
-        $mainBumpBranch = "chore/bump-main-to-$nextMainVersion"
-
+        $releaseBranch = "release/$releaseSeries"
         echo "RELEASE_BRANCH=$releaseBranch" >> $env:GITHUB_OUTPUT
-        echo "NEXT_MAIN_VERSION=$nextMainVersion" >> $env:GITHUB_OUTPUT
-        echo "MAIN_BUMP_BRANCH=$mainBumpBranch" >> $env:GITHUB_OUTPUT
         Write-Host "Release branch: $releaseBranch"
-        Write-Host "Main bump branch: $mainBumpBranch"
-        Write-Host "Next main version: $nextMainVersion"
+
+    - name: Validate main fixed version
+      shell: pwsh
+      run: |
+        ./scripts/assert-version-policy.ps1 -BranchName "main"
+        if ($LASTEXITCODE -ne 0) {
+          throw "Version validation failed on main."
+        }
+
+        [xml]$props = Get-Content Directory.Build.props
+        $version = [string]$props.Project.PropertyGroup.Version
+        if ($version.Trim() -ne "0.0.1") {
+          throw "main must stay fixed at 0.0.1. Actual: $version"
+        }
 
     - name: Resolve unreleased release-notes issue
       id: release_notes
@@ -136,7 +104,6 @@ jobs:
 
         $repo = "${{ github.repository }}"
         $unreleasedTitle = "Release Notes: Unreleased"
-
         $unreleasedIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $unreleasedTitle -AllowMissing
 
         echo "UNRELEASED_TITLE=$unreleasedTitle" >> $env:GITHUB_OUTPUT
@@ -149,7 +116,7 @@ jobs:
           Write-Warning "Release Notes: Unreleased was not found."
         }
 
-    - name: Inspect existing prepare branches
+    - name: Inspect existing release branch
       id: branch_state
       shell: pwsh
       run: |
@@ -160,100 +127,34 @@ jobs:
             $global:LASTEXITCODE = 0
             return $true
           }
-
           if ($exitCode -eq 2) {
             $global:LASTEXITCODE = 0
             return $false
           }
-
           throw "Failed to inspect origin/$BranchName (git ls-remote exit code $exitCode)."
         }
 
-        function Get-VersionFromGitObject([string]$ObjectRef) {
-          $content = git show $ObjectRef 2>$null
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($content -join "`n"))) {
-            throw "Failed to read '$ObjectRef'."
-          }
-
-          $text = ($content -join "`n")
-          $match = [regex]::Match($text, '<Version>(?<value>[^<]+)</Version>')
-          if (-not $match.Success) {
-            throw "Version element was not found in '$ObjectRef'."
-          }
-
-          return $match.Groups['value'].Value.Trim()
-        }
-
-        function Assert-RemoteBranchState([string]$GitRef, [string]$ExpectedVersion, [string]$BranchName = "") {
-          $assertArgs = @{
-            GitRef = $GitRef
-          }
-          if ($BranchName) {
-            $assertArgs.BranchName = $BranchName
-          }
-
-          & ./scripts/assert-version-policy.ps1 @assertArgs
-          if ($LASTEXITCODE -ne 0) {
-            throw "Version validation failed on '$GitRef'."
-          }
-
-          $actualVersion = Get-VersionFromGitObject ($GitRef + ":Directory.Build.props")
-          if ($actualVersion -ne $ExpectedVersion) {
-            throw "$GitRef has version '$actualVersion' but expected '$ExpectedVersion'."
-          }
-        }
-
-        $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
-        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
-        $releaseVersion = "${{ steps.version.outputs.RELEASE_VERSION }}"
-        $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}"
-        $releaseSeries = "${{ steps.version.outputs.RELEASE_SERIES }}"
-
-        ./scripts/assert-version-policy.ps1 -BranchName "main"
-        if ($LASTEXITCODE -ne 0) {
-          throw "Version validation failed on main."
-        }
+        $releaseBranch = "${{ steps.target.outputs.RELEASE_BRANCH }}"
 
         $releaseExists = Get-RemoteBranchExists $releaseBranch
-        $mainBumpExists = Get-RemoteBranchExists $mainBumpBranch
-
         if ($releaseExists) {
           git fetch --no-tags origin "$releaseBranch"
           if ($LASTEXITCODE -ne 0) {
             throw "Failed to fetch origin/$releaseBranch."
           }
 
-          Assert-RemoteBranchState -GitRef "origin/$releaseBranch" -ExpectedVersion $releaseVersion -BranchName $releaseBranch
-        }
-
-        if ($mainBumpExists) {
-          git fetch --no-tags origin "$mainBumpBranch"
+          ./scripts/assert-version-policy.ps1 -GitRef "origin/$releaseBranch" -BranchName $releaseBranch
           if ($LASTEXITCODE -ne 0) {
-            throw "Failed to fetch origin/$mainBumpBranch."
+            throw "Version validation failed on origin/$releaseBranch."
           }
-
-          Assert-RemoteBranchState -GitRef "origin/$mainBumpBranch" -ExpectedVersion $nextMainVersion
         }
 
-        if (-not $releaseExists) {
-          if ($mainBumpExists) {
-            throw "Unexpected prepare-release state. Main bump branch '$mainBumpBranch' exists, but release branch '$releaseBranch' does not."
-          }
-
-          $branchMode = "create_all"
-        } elseif (-not $mainBumpExists) {
-          $branchMode = "create_main_bump_only"
-          Write-Warning "Release branch already exists and will be reused. Missing main bump branch '$mainBumpBranch' will be recreated from the current main branch."
-        } else {
-          $branchMode = "reuse_existing"
-        }
+        $branchMode = if ($releaseExists) { "reuse_existing" } else { "create_new" }
 
         echo "BRANCH_MODE=$branchMode" >> $env:GITHUB_OUTPUT
         echo "RELEASE_EXISTS=$($releaseExists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-        echo "MAIN_BUMP_EXISTS=$($mainBumpExists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
         Write-Host "Branch mode: $branchMode"
         Write-Host "Release branch exists: $releaseExists"
-        Write-Host "Main bump branch exists: $mainBumpExists"
 
     - name: Ensure release-line notes issue
       id: line_issue
@@ -271,10 +172,8 @@ jobs:
         $lineAction = "skipped"
 
         if (-not $autoCreateLineIssue) {
-          Write-Host "Auto-create is disabled. Release-line issue was not queried or created."
-
           echo "LINE_TITLE=$lineTitle" >> $env:GITHUB_OUTPUT
-          echo "LINE_URL=$($lineIssue.Url)" >> $env:GITHUB_OUTPUT
+          echo "LINE_URL=" >> $env:GITHUB_OUTPUT
           echo "LINE_ACTION=$lineAction" >> $env:GITHUB_OUTPUT
           exit 0
         }
@@ -300,20 +199,13 @@ jobs:
           ) -join "`r`n"
 
           Set-Content -Path $bodyPath -Value $body -Encoding utf8
-
-          $createdUrl = gh issue create `
-            --repo $repo `
-            --title $lineTitle `
-            --body-file $bodyPath 2>$null
+          $createdUrl = gh issue create --repo $repo --title $lineTitle --body-file $bodyPath 2>$null
           if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($createdUrl)) {
             throw "Failed to create release-line issue '$lineTitle'."
           }
 
-          $lineIssue = [PSCustomObject]@{
-            Url = $createdUrl.Trim()
-          }
+          $lineIssue = [PSCustomObject]@{ Url = $createdUrl.Trim() }
           $lineAction = "created"
-          Write-Host "Created release-line issue: $($lineIssue.Url)"
         } elseif (([string]$lineIssue.State).Trim().ToLowerInvariant() -ne "open") {
           gh issue reopen $lineIssue.Number --repo $repo *> $null
           if ($LASTEXITCODE -ne 0) {
@@ -322,75 +214,20 @@ jobs:
 
           $lineIssue = Get-GitHubIssueByExactTitle -Repository $repo -Title $lineTitle
           $lineAction = "reopened"
-          Write-Host "Reopened release-line issue: $($lineIssue.Url)"
-        } else {
-          Write-Host "Reusing release-line issue: $($lineIssue.Url)"
         }
 
         echo "LINE_TITLE=$lineTitle" >> $env:GITHUB_OUTPUT
         echo "LINE_URL=$($lineIssue.Url)" >> $env:GITHUB_OUTPUT
         echo "LINE_ACTION=$lineAction" >> $env:GITHUB_OUTPUT
 
-    - name: Create release and main bump branches
-      if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'create_all' }}
+    - name: Create release branch
+      if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'create_new' }}
       shell: pwsh
       run: |
-        $scriptArgs = @{
-          Version = "${{ steps.version.outputs.RELEASE_SERIES }}".Trim()
-          MainBranch = "main"
-          Push = $true
-        }
-
-        $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}".Trim()
-        if ($nextMainVersion -ne "") {
-          $scriptArgs.NextMainVersion = $nextMainVersion
-        }
-
-        & ./scripts/create-release-branch.ps1 @scriptArgs
-
-    - name: Create missing main bump branch
-      if: ${{ steps.branch_state.outputs.BRANCH_MODE == 'create_main_bump_only' }}
-      shell: pwsh
-      run: |
-        $mainBranch = "main"
-        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}".Trim()
-        $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}".Trim()
-        . ./scripts/version-file-support.ps1
-
-        git checkout $mainBranch
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to checkout $mainBranch."
-        }
-
-        git checkout -b $mainBumpBranch
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to create missing main bump branch '$mainBumpBranch'."
-        }
-
-        $versionFiles = Set-RepositoryVersionFiles -ProjectRoot (Get-Location).Path -Version $nextMainVersion
-        Write-Host "Updated Directory.Build.props to $($versionFiles.Version)"
-        Write-Host "Updated Package.appxmanifest to $($versionFiles.ManifestVersion)"
-
-        git add Directory.Build.props src/ClipSave.Package/Package.appxmanifest
-        git diff --staged --quiet
-        if ($LASTEXITCODE -ne 0) {
-          git commit -m "chore: bump main version to $nextMainVersion"
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to commit version update on '$mainBumpBranch'."
-          }
-        } else {
-          Write-Host "No version changes detected for '$mainBumpBranch'."
-        }
-
-        ./scripts/assert-version-policy.ps1 -BranchName $mainBranch
-        if ($LASTEXITCODE -ne 0) {
-          throw "Version validation failed on '$mainBumpBranch'."
-        }
-
-        git push -u origin $mainBumpBranch
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to push '$mainBumpBranch'."
-        }
+        & ./scripts/create-release-branch.ps1 `
+          -Version "${{ steps.version.outputs.RELEASE_SERIES }}" `
+          -MainBranch "main" `
+          -Push
 
     - name: Ensure RC Build
       id: rc_build
@@ -398,7 +235,14 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
+        $releaseBranch = "${{ steps.target.outputs.RELEASE_BRANCH }}"
+        if ("${{ steps.branch_state.outputs.BRANCH_MODE }}" -eq "create_new") {
+          echo "RC_BUILD_ACTION=push_triggered" >> $env:GITHUB_OUTPUT
+          echo "RC_BUILD_URL=" >> $env:GITHUB_OUTPUT
+          Write-Host "RC Build will start from the release-branch push."
+          exit 0
+        }
+
         $repo = "${{ github.repository }}"
         $releaseHeadRef = git ls-remote --heads origin $releaseBranch
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseHeadRef)) {
@@ -406,10 +250,6 @@ jobs:
         }
 
         $releaseHeadSha = ($releaseHeadRef -split "\s+")[0].Trim()
-        if (-not $releaseHeadSha) {
-          throw "Failed to parse HEAD sha for origin/$releaseBranch."
-        }
-
         $existingRunJson = gh run list `
           --repo $repo `
           --workflow rc-build.yml `
@@ -420,173 +260,48 @@ jobs:
           throw "Failed to query existing RC Build runs for '$releaseBranch'."
         }
 
-        try {
-          $existingRuns = @($existingRunJson | ConvertFrom-Json)
-        } catch {
-          throw "Failed to parse RC Build run query result."
-        }
-
+        $existingRuns = @($existingRunJson | ConvertFrom-Json)
         $existingRun = $existingRuns |
-          Where-Object { $_.headSha -eq $releaseHeadSha } |
+          Where-Object {
+            $_.headSha -eq $releaseHeadSha -and (
+              ([string]$_.status).Trim().ToLowerInvariant() -ne "completed" -or
+              ([string]$_.conclusion).Trim().ToLowerInvariant() -eq "success"
+            )
+          } |
           Select-Object -First 1
         if ($existingRun) {
           echo "RC_BUILD_ACTION=already_present" >> $env:GITHUB_OUTPUT
           echo "RC_BUILD_URL=$($existingRun.url)" >> $env:GITHUB_OUTPUT
-          Write-Host "Existing RC Build run already covers '$releaseBranch' at $releaseHeadSha."
           exit 0
         }
 
-        $maxAttempts = 5
-
-        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-          gh workflow run rc-build.yml --repo $repo --ref $releaseBranch *> $null
-          if ($LASTEXITCODE -eq 0) {
-            echo "RC_BUILD_ACTION=dispatched" >> $env:GITHUB_OUTPUT
-            Write-Host "Dispatched RC Build for '$releaseBranch'."
-            exit 0
-          }
-
-          if ($attempt -lt $maxAttempts) {
-            Write-Warning "Failed to dispatch RC Build for '$releaseBranch' on attempt $attempt/$maxAttempts. Retrying in 3 seconds."
-            Start-Sleep -Seconds 3
-          }
-        }
-
-        throw "Failed to dispatch RC Build for '$releaseBranch'."
-
-    - name: Ensure main bump PR and dispatch PR Check
-      id: main_bump_pr
-      if: ${{ inputs.create_main_bump_pr && (steps.branch_state.outputs.BRANCH_MODE == 'create_all' || steps.branch_state.outputs.BRANCH_MODE == 'create_main_bump_only' || steps.branch_state.outputs.MAIN_BUMP_EXISTS == 'true') }}
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        $version = "${{ steps.version.outputs.RELEASE_VERSION }}"
-        if ($version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.0$') {
-          throw "Invalid resolved version format: $version (expected X.Y.0)"
-        }
-
-        $major = [int]$matches['major']
-        $minor = [int]$matches['minor']
-        $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}"
-        $head = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
-        $base = "main"
-        $repo = "${{ github.repository }}"
-
-        function Get-OpenMainBumpPr() {
-          $prJson = gh pr list `
-            --repo $repo `
-            --head $head `
-            --base $base `
-            --state open `
-            --json number,url 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to query existing pull requests."
-          }
-
-          try {
-            $prs = $prJson | ConvertFrom-Json
-          } catch {
-            throw "Failed to parse pull request query result."
-          }
-
-          if ($null -eq $prs) {
-            return @()
-          }
-
-          if ($prs -isnot [System.Array]) {
-            return @($prs)
-          }
-
-          return $prs
-        }
-
-        $createdPr = $false
-        $pr = @(Get-OpenMainBumpPr) | Select-Object -First 1
-
-        $title = "chore: bump main version to $nextMainVersion"
-        $body = @"
-        Automated PR created by **Prepare Release** workflow.
-
-        - Release branch: release/$major.$minor
-        - Target branch: main
-        - Main bump branch: $head
-        - Release notes: review `${{ steps.line_issue.outputs.LINE_TITLE }}` and move the shipped bullets from `Release Notes: Unreleased`
-        "@
-
-        if (-not $pr) {
-          gh pr create --repo $repo --base $base --head $head --title $title --body $body *> $null
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to create pull request: $head -> $base"
-          }
-          $createdPr = $true
-        }
-
-        $pr = @(Get-OpenMainBumpPr) | Select-Object -First 1
-        if (-not $pr) {
-          throw "Failed to resolve the open pull request for '$head -> $base'."
-        }
-
-        if ($createdPr) {
-          Write-Host "Created PR: #$($pr.number) ($head -> $base)"
-        } else {
-          Write-Host "Using existing PR: #$($pr.number) ($head -> $base)"
-        }
-
-        if ($pr.url) {
-          Write-Host "PR URL: $($pr.url)"
-        }
-
-        gh workflow run pr-check.yml `
-          --repo $repo `
-          --ref $head `
-          -f pr_number=$([string]$pr.number) *> $null
+        gh workflow run rc-build.yml --repo $repo --ref $releaseBranch *> $null
         if ($LASTEXITCODE -ne 0) {
-          throw "Failed to dispatch PR Check for PR #$($pr.number)."
+          throw "Failed to dispatch RC Build for '$releaseBranch'."
         }
 
-        echo "PR_URL=$($pr.url)" >> $env:GITHUB_OUTPUT
-        echo "PR_CHECK_TRIGGERED=true" >> $env:GITHUB_OUTPUT
-        Write-Host "Dispatched PR Check for PR #$($pr.number)."
-
-    - name: Explain skipped main bump PR creation
-      if: ${{ inputs.create_main_bump_pr && steps.branch_state.outputs.BRANCH_MODE != 'create_all' && steps.branch_state.outputs.BRANCH_MODE != 'create_main_bump_only' && steps.branch_state.outputs.MAIN_BUMP_EXISTS != 'true' }}
-      shell: pwsh
-      run: |
-        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
-        Write-Warning "Main bump PR creation was skipped because '$mainBumpBranch' does not exist on origin. Prepare Release reruns reuse the existing release branch but do not recreate a deleted main bump branch."
+        echo "RC_BUILD_ACTION=dispatched" >> $env:GITHUB_OUTPUT
 
     - name: Summary
       shell: pwsh
       run: |
-        $version = "${{ steps.version.outputs.RELEASE_VERSION }}"
-        $nextMainVersion = "${{ steps.targets.outputs.NEXT_MAIN_VERSION }}"
-        $releaseBranch = "${{ steps.targets.outputs.RELEASE_BRANCH }}"
-        $mainBumpBranch = "${{ steps.targets.outputs.MAIN_BUMP_BRANCH }}"
-        $prRequested = "${{ inputs.create_main_bump_pr }}".Trim().ToLowerInvariant() -eq "true"
+        $releaseVersion = "${{ steps.version.outputs.RELEASE_VERSION }}"
+        $releaseBranch = "${{ steps.target.outputs.RELEASE_BRANCH }}"
         $branchMode = "${{ steps.branch_state.outputs.BRANCH_MODE }}"
-        $mainBumpExists = "${{ steps.branch_state.outputs.MAIN_BUMP_EXISTS }}".Trim().ToLowerInvariant() -eq "true"
-        $unreleasedIssue = "${{ steps.release_notes.outputs.UNRELEASED_URL }}".Trim()
-        if (-not $unreleasedIssue) {
-          $unreleasedIssue = "create manually (`${{ steps.release_notes.outputs.UNRELEASED_TITLE }}`)"
-        }
         $lineIssue = "${{ steps.line_issue.outputs.LINE_URL }}".Trim()
         $lineIssueAction = "${{ steps.line_issue.outputs.LINE_ACTION }}".Trim()
         $rcBuildAction = "${{ steps.rc_build.outputs.RC_BUILD_ACTION }}".Trim()
         $rcBuildUrl = "${{ steps.rc_build.outputs.RC_BUILD_URL }}".Trim()
-        $mainBumpPrUrl = "${{ steps.main_bump_pr.outputs.PR_URL }}".Trim()
-        $prCheckTriggered = "${{ steps.main_bump_pr.outputs.PR_CHECK_TRIGGERED }}".Trim()
+        $unreleasedIssue = "${{ steps.release_notes.outputs.UNRELEASED_URL }}".Trim()
+
+        if (-not $unreleasedIssue) {
+          $unreleasedIssue = "create manually (`${{ steps.release_notes.outputs.UNRELEASED_TITLE }}`)"
+        }
         if (-not $lineIssue) {
           $lineIssue = "create manually (`${{ steps.line_issue.outputs.LINE_TITLE }}`)"
         }
         if (-not $lineIssueAction) {
           $lineIssueAction = "reused"
-        }
-        if (-not $mainBumpPrUrl) {
-          $mainBumpPrUrl = "not created"
-        }
-        if (-not $prCheckTriggered) {
-          $prCheckTriggered = "false"
         }
         if (-not $rcBuildAction) {
           $rcBuildAction = "not_needed"
@@ -595,35 +310,22 @@ jobs:
           $rcBuildUrl = "n/a"
         }
 
-        if (-not $prRequested) {
-          $prStatus = "disabled"
-        } elseif ($branchMode -eq "create_all" -or $branchMode -eq "create_main_bump_only" -or $mainBumpExists) {
-          $prStatus = "attempted"
-        } else {
-          $prStatus = "skipped (missing main bump branch)"
-        }
-
         @"
         ## Release Preparation Complete
 
         | Item | Value |
         |------|-------|
-        | Release Version | $version |
+        | Release Version | $releaseVersion |
         | Release Branch | $releaseBranch |
-        | Main Bump Branch | $mainBumpBranch |
-        | Next Main Version | $nextMainVersion |
+        | Branch Prep Mode | `$branchMode` |
         | RC Build | `$rcBuildAction` |
         | RC Build Run | $rcBuildUrl |
-        | Main Bump PR | $prStatus |
-        | Main Bump PR URL | $mainBumpPrUrl |
-        | PR Check Dispatch | `$prCheckTriggered` |
-        | Branch Prep Mode | `$branchMode` |
         | Unreleased Notes | $unreleasedIssue |
         | Release Line Notes | $lineIssue |
         | Release Line Notes Action | `$lineIssueAction` |
 
         Next steps:
         1. Manually move the shipped bullets from `${{ steps.release_notes.outputs.UNRELEASED_TITLE }}` into `${{ steps.line_issue.outputs.LINE_TITLE }}`.
-        2. Review `${{ steps.line_issue.outputs.LINE_TITLE }}` before tagging so it is ready to be linked from GitHub Release $version.
-        3. If `${{ inputs.create_main_bump_pr }}` was requested but `Main Bump PR` is `skipped (missing main bump branch)`, recreate `$mainBumpBranch` manually before opening the PR.
+        2. Review `${{ steps.line_issue.outputs.LINE_TITLE }}` before RC / finalize.
+        3. Keep `main` at `0.0.1`; version bump PR is not used.
         "@ >> $env:GITHUB_STEP_SUMMARY

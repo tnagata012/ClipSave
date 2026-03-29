@@ -12,14 +12,19 @@
 .PARAMETER Version
     Version to build (e.g., "1.0.0"). If not specified, reads from Directory.Build.props
 
+.PARAMETER Build
+    Build number to append as the 4th segment (e.g., "57"). Defaults to 1 for local preflight.
+
 .EXAMPLE
     .\build-store-package.ps1
-    .\build-store-package.ps1 -Version "1.2.0"
+    .\build-store-package.ps1 -Version "1.2.0" -Build 57
 #>
 
 param(
     [Parameter(Mandatory=$false)]
-    [string]$Version
+    [string]$Version,
+    [Parameter(Mandatory=$false)]
+    [int]$Build = 1
 )
 
 $ErrorActionPreference = "Stop"
@@ -80,11 +85,16 @@ try {
     }
 
     $versionMatch = [regex]::Match($Version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$')
+    if ($Build -le 0 -or $Build -gt 65535) {
+        Write-Error "Invalid build number: $Build (expected 1..65535)"
+        exit 1
+    }
+
     $segments = @(
         [int]$versionMatch.Groups['major'].Value,
         [int]$versionMatch.Groups['minor'].Value,
         [int]$versionMatch.Groups['patch'].Value,
-        0
+        $Build
     )
     if ($segments | Where-Object { $_ -lt 0 -or $_ -gt 65535 }) {
         Write-Error "MSIX version segments must be within 0..65535. Resolved segments: $($segments -join '.')"
@@ -98,19 +108,19 @@ try {
     }
 
     $assemblyVersion = "$($versionMatch.Groups['major'].Value).$($versionMatch.Groups['minor'].Value).0.0"
-    $fileVersionValue = "$Version.0"
-    $informationalVersion = "$Version+sha.$shortSha"
-    $msixVersion = "$Version.0"
+    $fileVersionValue = "$Version.$Build"
+    $informationalVersion = "$Version-build.$Build+sha.$shortSha"
+    $msixVersion = "$Version.$Build"
 
     $tagsOnHead = @(
         git tag --points-at HEAD 2>$null |
         Where-Object { $_ -and $_.Trim() -ne "" }
     )
     if ($tagsOnHead -notcontains $Version) {
-        Write-Warning "Current HEAD is not tagged '$Version'. Final Store submission must use Release Finalize from $currentBranch; the workflow resolves version '$Version', can create the tag when missing, and builds from refs/tags/$Version."
+        Write-Warning "Current HEAD is not tagged '$Version'. Final Store submission must use Release Finalize from $currentBranch with explicit patch input. The workflow adopts the latest successful RC candidate and uses create_version_tag=true when the tag must move."
     }
 
-    Write-Host "`n=== Building Store Package for ClipSave v$Version ===" -ForegroundColor Green
+    Write-Host "`n=== Building Store Package for ClipSave v$Version (build $Build) ===" -ForegroundColor Green
     Write-Host "Branch: $currentBranch" -ForegroundColor Cyan
     Write-Host "InformationalVersion: $informationalVersion" -ForegroundColor Cyan
     Write-Warning "This script is for local preflight only. Final submission packages must come from the Release Finalize workflow in Store package mode on the release branch."
@@ -251,8 +261,8 @@ try {
 
     Write-Host "`n=== Next Steps ===" -ForegroundColor Green
     Write-Host "1. Use this local package only for preflight/debugging"
-    Write-Host "2. For final submission, run Release Finalize from $currentBranch (build_store_package defaults to true; leave create_version_tag=true when '$Version' is not tagged yet)"
-    Write-Host "3. Confirm workflow summary shows refs/tags/$Version, Store Package Mode=built, and the expected commit SHA"
+    Write-Host "2. For final submission, run Release Finalize from $currentBranch with patch=$($versionMatch.Groups['patch'].Value) (latest successful RC candidate is adopted automatically)"
+    Write-Host "3. Confirm workflow summary shows refs/tags/$Version, Package Version=$msixVersion, Store Package Mode=built, and the expected commit SHA"
     Write-Host "4. Upload the workflow artifact .msixupload in Partner Center"
 
     Write-Host "`nTip: Run .\scripts\store-checklist.ps1 to verify pre-submission requirements" -ForegroundColor Yellow

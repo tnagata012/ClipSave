@@ -15,52 +15,53 @@
 
 ## 全体像
 
-| 要素                   | 役割                     | 正本                                                         |
-| ---------------------- | ------------------------ | ------------------------------------------------------------ |
-| `main`                 | 次期開発の幹             | このドキュメント                                             |
-| `release/X.Y`          | 安定化と現行系列サポート | このドキュメント                                             |
-| `dev-latest`           | `main` の最新検証成果物  | このドキュメント / [Release Guide](ReleaseGuide.md)          |
-| `rc-X.Y-latest`        | `release/X.Y` の最新候補 | このドキュメント / [Release Guide](ReleaseGuide.md)          |
-| `X.Y.Z`                | 現行版を指す version tag | このドキュメント                                             |
-| GitHub Release `X.Y.Z` | 確定版アーカイブと `Release Notes: X.Y` 参照 | [Release Guide](ReleaseGuide.md) / [ReleaseNotes](ReleaseNotes.md) |
-| Store package          | 一般ユーザー向け公開物   | [Release Guide](ReleaseGuide.md) / [Store Submission](../distribution/store/StoreSubmission.md) |
-
-関係だけを先に追いたい場合は、次の図を見ると把握しやすいです。
+| 要素 | 役割 | 正本 |
+| ---- | ---- | ---- |
+| `main` | 次期開発の幹 | このドキュメント |
+| `release/X.Y` | 安定化と現行系列サポート | このドキュメント |
+| `dev-latest` | `main` の最新検証成果物 | このドキュメント / [Release Guide](ReleaseGuide.md) |
+| `rc-X.Y-latest` | `release/X.Y` の最新候補 | このドキュメント / [Release Guide](ReleaseGuide.md) |
+| version tag `X.Y.Z` | patch line を指す version tag | このドキュメント |
+| GitHub Release `X.Y.Z` | patch line 向けの archive / notes 参照 | [Release Guide](ReleaseGuide.md) / [ReleaseNotes](ReleaseNotes.md) |
+| Store package | 一般ユーザー向け公開物 | [Release Guide](ReleaseGuide.md) / [Store Submission](../distribution/store/StoreSubmission.md) |
 
 ```mermaid
 flowchart LR
-  main[main] -->|Dev Build| dev[dev-latest / dev-package-*]
+  main[main] -->|Dev Build| dev[dev-latest / dev-package-0.0.1.B]
   main -->|Prepare Release| release[release/X.Y]
-  release -->|RC Build| rc[rc-X.Y-latest / rc-package-*]
-  release -->|tag X.Y.Z| tag[version tag X.Y.Z]
-  tag -->|Release Finalize| finalize[Release Finalize]
-  finalize --> archive[GitHub Release X.Y.Z / release-archive-*]
-  finalize -->|必要な版のみ| store[store-package-* / Store Submission]
+  release -->|RC Build| rc[rc-X.Y-latest / rc-package-X.Y.Z.B]
+  release -->|patch version PR| release
+  release -->|Release Finalize patch=Z| tag[tag X.Y.Z]
+  tag --> archive[GitHub Release X.Y.Z / release-archive-X.Y.Z.B]
+  tag --> store[store-package-X.Y.Z.B]
 ```
 
 ## 基本モデル
 
 1. 開発の正本は常に `main` とする。
-2. メジャー/マイナー開始時にだけ `release/X.Y` を作成し、公開品質の安定化を行う。
-3. 版数の SSOT は `Directory.Build.props` の `Version` (`X.Y.Z`) とする。
-4. Dev/RC は比較・検証用の移動タグであり、履歴の正本ではない。
-5. `X.Y.Z` は `release/X.Y` の現行版を指す version tag とする。
-6. `Release Finalize` は version tag `X.Y.Z` が指す commit の archive を GitHub Release `X.Y.Z` に揃え、GitHub Release 本文には `Release Notes: X.Y` への参照を置く。
-7. Store へ提出するまでは、`Release Finalize` の手動実行で `X.Y.Z` を `release/X.Y` の現在 HEAD へ付け直してよい。
-8. Partner Center へ提出したら GitHub Release 本文の `Store Submission Log` に submission を記録し、その時点で `X.Y.Z` と archive を固定する。
+2. `main` の repository version は固定で `0.0.1` とし、release 準備のたびに version bump しない。
+3. `release/X.Y` の repository version は `X.Y.Z` とし、`PATCH` がその系列の公開順序を表す。
+4. 配布物の package / file version は 4 桁とし、4 桁目 `B` を build 番号として使う。
+5. Dev の配布版は MSIX 都合のため予約済み preview line `0.0.1.B` を使う。
+6. RC / Archive / Store の配布版は `X.Y.Z.B` を使い、`B` は `release/X.Y` ごとの `rc-build` カウンターを採用する。
+7. `release/X.Y` を新しく作ると、その branch の `B` は 1 から数え直す。
+8. `B=0` は配布版として使わない。`.0` を確定版にする運用はやめる。
+9. version tag は引き続き `X.Y.Z` とし、GitHub Release `X.Y.Z` は patch line を表す。
+10. `Release Finalize` は branch 上の現在値を暗黙採用するのではなく、選択した `release/X.Y` と手動入力の `patch=Z` から `version=X.Y.Z` を解決し、`rc-X.Y-latest` の最新成功候補から `build=B` を自動採用して archive / Store package を揃える。
+11. `Prepare Release` による main bump PR と、patch 開始専用 workflow は廃止する。
 
 ## ブランチモデル
 
 ### ブランチ種別
 
-| ブランチ      | 寿命   | 用途                         |
-| ------------- | ------ | ---------------------------- |
-| `main`        | 永続   | 次期開発の幹                 |
+| ブランチ | 寿命 | 用途 |
+| ---- | ---- | ---- |
+| `main` | 永続 | 次期開発の幹 |
 | `release/X.Y` | 中長期 | 公開安定化、現行系列サポート |
-| `feature/*`   | 短命   | 機能追加                     |
-| `fix/*`       | 短命   | 不具合修正、backport         |
-| `docs/*`      | 短命   | ドキュメント更新             |
-| `chore/*`     | 短命   | 運用、自動化、雑務           |
+| `feature/*` | 短命 | 機能追加 |
+| `fix/*` | 短命 | 不具合修正、backport |
+| `docs/*` | 短命 | ドキュメント更新 |
+| `chore/*` | 短命 | 運用、自動化、雑務 |
 
 ### 命名ルール
 
@@ -74,7 +75,7 @@ flowchart LR
 2. 修正の正本は常に `main` とし、release 側は必要分のみ backport する。
 3. `release/X.Y` から `main` へマージしない。
 4. `main` / `release/X.Y` への直 push は行わない。
-5. 緊急修正も `hotfix/*` ではなく通常のパッチリリース手順で扱う。
+5. 緊急修正も `hotfix/*` ではなく、通常の patch release 手順で扱う。
 
 ### backport 競合解消方針
 
@@ -88,115 +89,123 @@ flowchart LR
 - `main` / `release/*` は Branch protection または Ruleset で保護する。
 - ブランチ命名と保護の定義は `.github/rulesets/` を正本とし、GitHub 側で変更したら同時に更新する。
 - PR レビュー運用は [../../.github/CODEOWNERS](../../.github/CODEOWNERS) を基準にし、現行ルールでは Code Owner のレビューを必須とする。
-- 承認必須人数や自己マージ可否などの PR ルールは、リポジトリ設定と Ruleset の実態を正本とし、メンバー構成が変わった時点で見直す。
 
 ## 系列ライフサイクル
 
 ### 1. Prepare
 
-- 安定した `main` から `release/X.Y` を作成する。
-- 同時に `main` は次系列へ進める。
-- この時点では旧系列がまだ現行サポート系列であってもよい。
+- `main` から `release/X.Y` を作成する。
+- `release/X.Y` 側だけを対象系列の `X.Y.Z` へ進める。
+- `main` は `0.0.1` のまま維持する。release 準備で main bump PR は作らない。
 
 ### 2. Stabilize
 
 - `release/X.Y` では新機能開発を行わず、安定化と必要な修正だけを扱う。
 - 候補比較には `rc-X.Y-latest` と RC 成果物を使う。
-- 修正は `main` を正本とし、必要なものだけ backport する。
+- RC の package version は `X.Y.Z.B` とし、`B` は同じ `release/X.Y` branch の中で build ごとに増える。
+- 新しい `release/X.Y` を切ると、その branch の `B` は 1 から始まる。
 
 ### 3. Finalize
 
-- 確定対象コミットを決め、version tag `X.Y.Z` を付与する。
-- タグ push または手動実行で `Release Finalize` を実行する。
-- `Release Finalize` 完了により、その系列は finalized 系列として扱う。
-- Store 提出前の手動再実行では、既定値のまま実行すると `X.Y.Z` を `release/X.Y` の現在 HEAD へ付け直し、archive もその commit に揃え直す。
-- Store 提出記録後の手動再実行では、`X.Y.Z` は固定とし、非製品差分の保守だけを許可する。
+- 確定対象は、その時点の現行サポート patch line と、その patch line に対する最新成功 RC build `X.Y.Z.B` の組で決める。
+- `Release Finalize` は選択した `release/X.Y` と手動入力の `patch=Z` から `version` を解決し、Store 提出前は `rc-X.Y-latest` の最新成功候補を採用して tag / archive / Store package を揃える。
+- 4 桁目 `B=0` は無効とし、配布版には使わない。
+- Store 提出前の手動再実行では、同じ patch line に対して `patch=Z` を指定し、その時点の最新成功 RC 候補を採用して archive / Store package を差し替えてよい。
+- Store 提出記録後は、その patch line の採用 commit を固定とする。
 
 ### 4. Distribute
 
-- Archive: `Release Finalize` により GitHub Release `X.Y.Z` に未署名アーカイブを保存する。Store 提出記録前は差し替え可、提出記録後は固定とする。
+- Archive: GitHub Release `X.Y.Z` に、採用した最新成功 RC build の archive（`X.Y.Z.B`）を保持する。
 - Store: 一般ユーザー向けに出す版だけ、`Release Finalize` から Store package を生成する。
-- Store 公開の有無は finalized 判定に影響させないが、tag 固定化の境界は `Store Submission Log` 記録時点とする。
+- Store 公開の有無は finalized 判定に影響させないが、採用 commit 固定の境界は `Store Submission Log` 記録時点とする。
 
 ### 5. Support
 
 - ClipSave は latest-only 運用とし、能動サポート対象は常に最新 finalized 系列 1 つのみとする。
-- 現行系列である間だけ、patch release、Store 再提出、`Release Finalize` 再実行を通常運用として行う。
-- PR / RC / patch init を workflow で一律停止しない。hard gate は Store package 生成時だけに置く。
+- 現行系列である間だけ、patch release、Store 再提出、`Release Finalize` 実行 / 再実行を通常運用として行う。
+- PR / RC を workflow で一律停止しない。hard gate は Store package 生成時だけに置く。
 
 ### 6. End of support
 
-- 新しい系列 `release/A.B` の最初の version tag `A.B.Z` を Finalize した時点で、旧系列 `release/X.Y` は `frozen / unsupported` へ移る。
-- 旧系列は remote に残すが、通常の patch、RC 更新、Store 再提出は行わない。
-- 旧系列の既存 version tag `X.Y.Z` に対する `Release Finalize` 再実行は、アーカイブや GitHub Release メタデータ保守に限って例外的に許容する。
+- 新しい系列 `release/A.B` の最初の finalize が完了した時点で、旧系列 `release/X.Y` は `frozen / unsupported` へ移る。
+- 旧系列は remote に残すが、通常の patch、RC 更新、`Release Finalize`、Store 再提出は行わない。
+- 旧系列の既存 tag / GitHub Release は履歴として保持し、採用 build の差し替えには使わない。
 
 ## latest-only の判断基準
 
 - 切替基準は Store 公開有無ではなく Finalize 完了とする。
 - 新系列を archive-only で Finalize した場合でも、その時点で旧系列はサポート対象から外れる。
-- 同一系列内でも Store package mode を許可するのは最新 finalized version のみとする。
+- `Release Finalize` の実行対象も、現行サポート系列の current patch line のみに限定する。
+- 同一系列内でも Store package mode を許可するのは、最新 finalized patch line のみとする。
 
 ## Store チャネルへの進行条件
 
-Store 提出へ進める条件は release 文書側で定義し、Partner Center 実務は distribution 文書へ分離する。
-
-1. Store 提出へ進めるのは、repository 全体の最新 finalized version で、かつ一般ユーザー向けに出す版のみとする。
-2. 対象版は `release/X.Y` の現行版数 `X.Y.Z` と対応する version tag `X.Y.Z` を正本とする。必要なら Store 提出前に `Release Finalize` で tag と GitHub Release / archive を揃えてから進める。
+1. Store 提出へ進めるのは、repository 全体の最新 finalized patch line で、かつ一般ユーザー向けに出す版のみとする。
+2. 対象の patch line は version tag `X.Y.Z` を正本とし、実際の package version は `X.Y.Z.B` とする。
 3. Store package の生成は `Release Finalize` から行う。
-4. Partner Center へ提出したら GitHub Release 本文の `Store Submission Log` に submission ID と commit を記録し、その時点で `X.Y.Z` を固定する。
+4. Partner Center へ提出したら GitHub Release 本文の `Store Submission Log` に submission ID と commit を記録し、その時点で採用 commit を固定する。
 5. `store-package-*` を取得できた時点で、release 側の handoff 自体は完了としてよい。
-6. 以後の Partner Center での package upload、listing import、審査向け補足、submission ID 記録は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) を正本とする。
 
 ## 版数とタグ
 
 ### SemVer
 
-| 要素    | 意味                 | 例                |
-| ------- | -------------------- | ----------------- |
-| `MAJOR` | 破壊的変更           | `1.9.5` → `2.0.0` |
-| `MINOR` | 後方互換な機能追加   | `1.0.1` → `1.1.0` |
+| 要素 | 意味 | 例 |
+| ---- | ---- | ---- |
+| `MAJOR` | 破壊的変更 | `1.9.5` → `2.0.0` |
+| `MINOR` | 後方互換な機能追加 | `1.0.1` → `1.1.0` |
 | `PATCH` | 後方互換な不具合修正 | `1.0.0` → `1.0.1` |
+| `BUILD` | 同一 patch line 内の配布 build | `1.0.1.12` → `1.0.1.13` |
 
-### 属性マッピング
+### repository version と配布 version
 
-| 属性                                | 非 Dev                 | Dev                              | 用途                   |
-| ----------------------------------- | ---------------------- | -------------------------------- | ---------------------- |
-| `Directory.Build.props` (`Version`) | `X.Y.Z`                | `X.Y.Z`                          | SSOT                   |
-| `InformationalVersion`              | `X.Y.Z+sha.<shortSha>` | `X.Y.Z-dev.<run>+sha.<shortSha>` | 追跡、判定             |
-| `AssemblyVersion`                   | `X.Y.0.0`              | `X.Y.0.0`                        | バインディング互換維持 |
-| `FileVersion`                       | `X.Y.Z.0`              | `X.Y.Z.<run>`                    | DLL 判定補助           |
-| MSIX Version                        | `X.Y.Z.0`              | `X.Y.Z.<run>`                    | パッケージ版数         |
+| 文脈 | repository 上の版数 | 配布時の package / file version | 用途 |
+| ---- | ---- | ---- | ---- |
+| `main` | `0.0.1` | `0.0.1.B` | Dev preview line |
+| `release/X.Y` | `X.Y.Z` | `X.Y.Z.B` | RC / Archive / Store |
 
 補足:
 
-- `Package.appxmanifest` はリポジトリ上で `X.Y.Z.0` を保持する。
-- Dev 版数の `<run>` は CI が一時注入し、版数ファイルはコミットしない。
-- ローカル手動ビルドの `InformationalVersion` 既定値は `$(Version).local` とする。
+- `Directory.Build.props` の `Version` は repository 上では常に 3 桁とする。
+- `Package.appxmanifest` は repository 上では `Version.0` を保持する。
+- Dev / RC / Archive / Store の 4 桁目 `B` は CI / finalize 時に注入し、repository にはコミットしない。
+- `B` は正の整数とし、配布 build に `0` は使わない。
+- RC の `B` は branch ごとのカウンターであり、`release/0.1` と `release/0.2` では独立して数える。
 
 ### タグ種別
 
-| 種別             | 形式            | 更新可否     | 用途                                     |
-| ---------------- | --------------- | ------------ | ---------------------------------------- |
-| Dev チャネルタグ | `dev-latest`    | 可（移動）   | `main` の最新検証成果物                  |
-| RC チャネルタグ  | `rc-X.Y-latest` | 可（移動）   | `release/X.Y` の最新候補                 |
-| version tag      | `X.Y.Z`         | 提出前は可（移動）、提出後は不可（固定） | 現行版の commit と archive を識別 |
+| 種別 | 形式 | 更新可否 | 用途 |
+| ---- | ---- | ---- | ---- |
+| Dev チャネルタグ | `dev-latest` | 可（移動） | `main` の最新検証成果物 |
+| RC チャネルタグ | `rc-X.Y-latest` | 可（移動） | `release/X.Y` の最新候補 |
+| version tag | `X.Y.Z` | patch line ごとに固定 | finalize / archive / store の基準 |
+
+補足:
+
+- `dev-latest` / `rc-X.Y-latest` は floating tag として、docs-only を含む対象 branch の最新 commit へ追随させる。
 
 ### 判定ルール
 
-| 場面     | 判定情報                                   | ルール                                                       |
-| -------- | ------------------------------------------ | ------------------------------------------------------------ |
-| CI/CD    | `InformationalVersion` + 実行ブランチ/参照 | `release/X.Y` または version tag `X.Y.Z` 実行で、`-dev.` を含まなければ非 Dev |
-| DLL 確認 | `FileVersion`                              | 4 番目が `0` なら非 Dev                                      |
-| 配布物   | 配布チャネル                               | `rc-X.Y-latest` は最新候補、GitHub Release `X.Y.Z` は現行版アーカイブ |
+| 場面 | 判定情報 | ルール |
+| ---- | ---- | ---- |
+| Dev 配布物 | package / file version | `0.0.1.B` を使う |
+| RC / Archive / Store 配布物 | package / file version | `X.Y.Z.B` を使う |
+| 配布 build の有効性 | 4 桁目 `B` | `B > 0` 必須 |
+| 配布物 | 配布チャネル | `rc-X.Y-latest` は最新候補、GitHub Release `X.Y.Z` は patch line 用の archive 窓口 |
 
 ### 検証ルール
 
-`assert-version-policy.ps1` では次を検証する。
+`assert-version-policy.ps1` では repository 上の version files を検証する。
 
 1. `Directory.Build.props` が `X.Y.Z` 形式
 2. `Package.appxmanifest` が `X.Y.Z.0` 形式
 3. 両者の `X.Y.Z` が一致
 4. `release/X.Y` ではブランチ名と版数の `X.Y` が一致
+
+補足:
+
+- `main` の `0.0.1` もこのルールに含める。
+- Dev / RC / Archive / Store で注入する build 番号は、この検証対象外とする。
 
 ## 版数更新ルール
 
@@ -206,61 +215,44 @@ Store 提出へ進める条件は release 文書側で定義し、Partner Center
 - `main` / `release/X.Y` への直 push は行わない。
 - `Prepare Release` による初期作成コミットだけを例外とする。
 
-### メジャー/マイナー開始
+### メジャー / マイナー開始
 
-- `release/X.Y` 作成時に `main` を次系列へ進める。
-- 安定化中は `X.Y.0` を維持する。
-- 確定対象コミットを決めたら version tag `X.Y.Z` を付与する。
-- Store 提出前までは、必要なら `Release Finalize` の手動再実行で `X.Y.Z` を `release/X.Y` の現在 HEAD へ付け直してよい。
-- 実行手順は [Release Guide](ReleaseGuide.md) を参照する。
+- `Prepare Release` は explicit な `X.Y` を入力として `release/X.Y` を作成する。
+- `release/X.Y` 作成後も `main` は `0.0.1` のまま維持する。
+- main を次系列へ進めるための bump PR は作らない。
 
 ### パッチリリース
 
 - patch release は現行サポート系列でのみ行う。
-- 前回確定版が `X.Y.Z` の場合、次回は `X.Y.(Z+1)` とする。
-- `PATCH` を更新する PR は当該サイクルで 1 回のみとする。
-- patch init 開始には、現行版 `X.Y.Z` の version tag、archive 成果物（`*.msixbundle`, `SHA256SUMS.txt`）が揃った GitHub Release `X.Y.Z`、および `Store Submission Log` による提出記録が存在することを要件とする。
-- `release/X.Y` HEAD は、その提出記録で固定された commit を基準に見る。HEAD がその commit の先に進んでいても、差分が `docs/**`, `site/**`, `.github/workflows/deploy-pages.yml`, `.github/workflows/release-finalize.yml`, `scripts/build-store-package.ps1`, `scripts/show-version-report.ps1`, `scripts/store-checklist.ps1`, repo ルートの `*.md` に限られる場合は patch init を許容する。
-- 既存タグに GitHub Release がない、または archive 成果物が揃っていない場合は、先に `Release Finalize` を手動実行して補完する。
-- Store 提出記録が無い場合は、先に Store 提出を行って `Store Submission Log` を記録してから patch init を開始する。
-- 実行手順は [Release Guide](ReleaseGuide.md) を参照する。
+- 前回の patch line が `X.Y.Z` なら、次回は `X.Y.(Z+1)` とする。
+- `PATCH` を上げるのは `release/X.Y` 向けの通常 PR とし、専用の patch init workflow は使わない。
+- `PATCH` 更新 PR がマージされた後、RC Build が `X.Y.(Z+1).B` を発行する。
+- `B` はその `release/X.Y` branch で継続し、新しい release branch を切るとリセットされる。
+- finalize では、その時点の `release/X.Y` が持つ patch line に対して、`rc-X.Y-latest` の最新成功候補を自動採用する。
 
 ### Dev Build
 
-- CI が `InformationalVersion` / `FileVersion` / MSIX Version を一時注入する。
-- リポジトリ上の版数ファイルは変更しない。
+- `main` の Dev Build は repository version `0.0.1` を保持したまま、配布時だけ `0.0.1.B` を注入する。
+- Dev build のために repository 上の版数ファイルは変更しない。
 
 ## Unsigned Channel Identity ポリシー
 
 Dev / RC / Archive は Store 版と別の unsigned 用 Identity（`Identity Name` / `Publisher`）を採用する。
 
 - unsigned 用 Identity は `ClipSave.Preview` とし、Publisher には Unsigned marker を含める。詳細な manifest 値は `scripts/set-package-manifest.ps1` を正本とする。
-- リポジトリ上の `Package.appxmanifest` はローカル deploy 用の signed Preview identity を既定値として保持する。
 - Store 提出物は従来どおり `tnagata012.ClipSave` / `CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959` を使う。
-- Dev / RC / Archive workflow は unsigned Preview identity へ一時切り替える。
-- `Release Finalize` の archive build は古い tag を backfill する場合に備えて unsigned Preview identity へ正規化する。
-- `Release Finalize` の Store package モードと `build-store-package.ps1` は、Store package 作成時だけ一時的に Store identity へ切り替える。
-- 利点: unsigned package を Store identity から切り離し、手動インストールや切り替えの扱いを明確にできる。
-- 注意: Store 版と Preview 版は package family が分かれるため、設定と LocalState は自動共有されない。
-- 注意: Dev（例: `1.1.0.42`）の後に RC/Archive（`1.1.0.0`）を入れると Preview identity 内ではダウングレード判定になるため、先に Dev をアンインストールする。
-- 注意: RC 候補同士、および RC 候補から同版 Archive への切り替えでも、同一 Preview identity / 同一 package version（`X.Y.Z.0`）のためアンインストールが必要になることがある。
-
-再検討トリガー:
-
-- Dev/RC 切り替え頻度増加により摩擦が継続した場合
-- Store 版と Preview 版の設定分離コストが無視できなくなった場合
-- 共存インストール要件が明確化した場合
-- 配布チャネル分離が製品要件化した場合
+- Dev は `0.0.1.B`、RC / Archive は `X.Y.Z.B` を使うため、channel をまたぐ切り替えでは上書き導入できないことがある。
+- RC 候補から同じ build を採用した Archive へ切り替える場合は、同一 package version のためアンインストールが必要になることがある。
 
 ## 文書の責務分担
 
-| 文書                                                         | 何を正本にするか                            |
-| ------------------------------------------------------------ | ------------------------------------------- |
-| [ReleaseGuide](ReleaseGuide.md)                              | workflow、成果物、リリース実行ガイド        |
-| [ReleaseNotes](ReleaseNotes.md)                              | `Release Notes: Unreleased` / `Release Notes: X.Y` / GitHub Release 参照の運用ルール     |
-| [../distribution/Signing](../distribution/Signing.md)        | 署名方針と配布安全性                        |
+| 文書 | 何を正本にするか |
+| ---- | ---- |
+| [ReleaseGuide](ReleaseGuide.md) | workflow、成果物、リリース実行ガイド |
+| [ReleaseNotes](ReleaseNotes.md) | `Release Notes: Unreleased` / `Release Notes: X.Y` / GitHub Release 参照の運用ルール |
+| [../distribution/Signing](../distribution/Signing.md) | 署名方針と配布安全性 |
 | [../distribution/store/StoreSubmission](../distribution/store/StoreSubmission.md) | Partner Center 提出、listing 運用、提出記録 |
-| [../distribution/ArtifactInstallation](../distribution/ArtifactInstallation.md) | 未署名アーティファクトの検証・導入手順      |
+| [../distribution/ArtifactInstallation](../distribution/ArtifactInstallation.md) | 未署名アーティファクトの検証・導入手順 |
 
 ## 関連ドキュメント
 

@@ -638,7 +638,7 @@ function Assert-StoreSubmissionRecorded {
         throw "GitHub Release '$Version' does not have the finalized archive assets yet. Expected exactly one .msixbundle and SHA256SUMS.txt. Assets: $assetList"
     }
     if (-not $state.HasStoreSubmission) {
-        throw "GitHub Release '$Version' does not have a Store Submission Log entry yet. Record the Partner Center submission before starting the next patch cycle."
+        throw "GitHub Release '$Version' does not have a Store Submission Log entry yet. Record the Partner Center submission before selecting a newer patch line."
     }
     if (-not $state.StoreSubmissionCommit) {
         throw "GitHub Release '$Version' has a Store Submission Log entry but no parsable commit. Fix the Store Submission Log before continuing."
@@ -940,14 +940,14 @@ function Assert-ReleaseFinalizeTargetVersion {
     $latestSemVer = [Version]$latestVersion
 
     if ($targetSemVer -lt $latestSemVer) {
-        throw "Target version '$targetVersion' is older than the latest finalized version '$latestVersion'. Release Finalize is allowed only for the current patch line on the active release branch."
+        throw "Target version '$targetVersion' is older than the latest finalized version '$latestVersion'. Release Finalize cannot target an older patch line."
     }
 
     if (-not $Quiet) {
         if ($targetVersion -eq $latestVersion) {
-            Write-Host "[OK] $targetVersion is the current finalized patch line." -ForegroundColor Green
+            Write-Host "[OK] $targetVersion matches the latest finalized version and can be rerun." -ForegroundColor Green
         } else {
-            Write-Host "[OK] $targetVersion is newer than the latest finalized version '$latestVersion' and can become the next current patch line." -ForegroundColor Green
+            Write-Host "[OK] $targetVersion is newer than the latest finalized version '$latestVersion' and can become a new finalized patch line." -ForegroundColor Green
         }
     }
 

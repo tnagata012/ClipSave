@@ -48,9 +48,9 @@ RC を導入する場合は `-Channel rc -SourceRef refs/heads/release/X.Y`、�
 
 Dev / RC / Archive は `ClipSave.Preview` identity で配布され、Store 版とは別パッケージとして扱われます。Store 版と Preview 版は共存できますが、設定や LocalState は共有されません。
 
-Dev（例: `0.0.1.42`）と RC / Archive（例: `0.1.3.57`）は version line が異なるため、channel を切り替えると Preview identity 内で上書き導入できないことがあります。必要に応じて先に既存 Preview package をアンインストールしてください。
+Dev（例: `0.0.1.42`）と RC / Archive（例: RC=`0.1.0.57`, Archive=`0.1.3.57`）は version line が異なるため、channel を切り替えると Preview identity 内で上書き導入できないことがあります。必要に応じて先に既存 Preview package をアンインストールしてください。
 
-RC 候補同士は build 番号が増えていれば通常は上書き導入できますが、古い build へ戻す場合や、RC 候補から同じ build を採用した Archive（`X.Y.Z.B`）へ切り替える場合は、同一 Preview identity / 同一 package version のため上書き導入できないことがあります。必要に応じて既存の Preview パッケージを削除してから導入してください。
+RC 候補同士は build 番号が増えていれば通常は上書き導入できます。RC 候補から同じ build を採用した Archive へ切り替える場合、初回 `X.Y.0` finalize では同一 package version のため上書き導入できないことがあります。`Z>0` の patch finalize では archive `X.Y.Z.B` が RC `X.Y.0.B` より新しいため、通常は上書き導入できます。古い build へ戻す場合は、必要に応じて既存の Preview パッケージを削除してから導入してください。
 
 確定タグ `X.Y.Z` に対応するアーカイブ版は Store 公開の有無と独立しているため、試験リリースも同じ手順で導入できます。
 GitHub Release 側で `prerelease` 表示になっていても、導入手順や真正性確認の方法は変わりません。

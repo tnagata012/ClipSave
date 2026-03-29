@@ -98,12 +98,22 @@ foreach ($profile in $packageProfiles) {
 
     $packageType = "Store"
     if ($profile.Label -eq "Preview") {
-        $versionParts = $package.Version.Split('.')
-        $revision = [int]$versionParts[3]
-        if ($revision -eq 0) {
-            $packageType = "Preview (RC/Archive)"
+        $versionMatch = [regex]::Match([string]$package.Version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\.(?<build>\d+)$')
+        if ($versionMatch.Success) {
+            $major = [int]$versionMatch.Groups['major'].Value
+            $minor = [int]$versionMatch.Groups['minor'].Value
+            $patch = [int]$versionMatch.Groups['patch'].Value
+            $build = [int]$versionMatch.Groups['build'].Value
+
+            if ($major -eq 0 -and $minor -eq 0 -and $patch -eq 1) {
+                $packageType = "Preview Dev (Build #$build)"
+            } elseif ($patch -eq 0) {
+                $packageType = "Preview RC / Initial Archive (Build #$build)"
+            } else {
+                $packageType = "Preview Finalized Archive ($major.$minor.$patch, Build #$build)"
+            }
         } else {
-            $packageType = "Preview Dev (Build #$revision)"
+            $packageType = "Preview"
         }
     }
 
@@ -209,7 +219,11 @@ if ($ghAvailable) {
         }
 
         if ($coreVersion) {
-            Write-Host "  Store Hint   : run Release Finalize from release/X.Y with explicit patch=$(($coreVersion.Split('.'))[2]) (latest successful RC candidate is adopted automatically)" -ForegroundColor Cyan
+            if ($currentBranch -and $currentBranch -match '^release/\d+\.\d+$') {
+                Write-Host "  Store Hint   : run Release Finalize from $currentBranch with explicit patch=Z (the release branch stays $coreVersion and the selected archive/store package becomes X.Y.Z.B)" -ForegroundColor Cyan
+            } else {
+                Write-Host "  Store Hint   : run Release Finalize from release/X.Y with explicit patch=Z (release branches stay X.Y.0 and the selected archive/store package becomes X.Y.Z.B)" -ForegroundColor Cyan
+            }
             if ($resolvedReleaseTag) {
                 Write-Host "                 Candidate channel tag: $resolvedReleaseTag (adopt the intended RC build into the finalized archive)" -ForegroundColor Gray
             }
@@ -228,6 +242,7 @@ if ($currentBranch) {
 
     if ($currentBranch -match '^release/') {
         Write-Host "  Type    : Release branch" -ForegroundColor Green
+        Write-Host "  Policy  : repository version stays X.Y.0; Release Finalize chooses patch Z" -ForegroundColor Gray
     } elseif ($currentBranch -eq 'main') {
         Write-Host "  Type    : Main branch (trunk)" -ForegroundColor Cyan
     } else {

@@ -22,7 +22,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 | [prepare-release.yml](../../.github/workflows/prepare-release.yml) | 手動（`X.Y`） | `release/X.Y` 作成 + `Release Notes: X.Y` の自動確保 / 再利用 | `release/X.Y` |
 | [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
 | [rc-build.yml](../../.github/workflows/rc-build.yml) | `release/*` push / 手動 | 公開候補生成（未署名） | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
-| [release-finalize.yml](../../.github/workflows/release-finalize.yml) | 手動（`release/X.Y` を選択して実行） | 選択した `release/X.Y` と手動入力の `patch=Z` から `version=X.Y.Z` を解決し、`rc-X.Y-latest` の最新成功候補を採用して archive / Store package を整備する | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, 任意で `store-package-*`, GitHub 上に記録される Artifact Attestation |
+| [release-finalize.yml](../../.github/workflows/release-finalize.yml) | 手動（`release/X.Y` を選択して実行） | 選択した `release/X.Y` と手動入力の `patch` から `version=X.Y.Z` を解決し、`rc-X.Y-latest` の最新成功候補を採用して archive / Store package を整備する | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, 任意で `store-package-*`, GitHub 上に記録される Artifact Attestation |
 
 補足:
 
@@ -37,6 +37,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 - `rc-X.Y-latest` の GitHub Release は候補版として常に `prerelease` 表示にする。
 - `Release Finalize` は現行サポート系列の current patch line に対してだけ実行し、過去 patch line や旧系列の補修には使わない。
 - `Release Finalize` の build は手動指定せず、Store 提出前は `rc-X.Y-latest` の最新成功候補を自動採用する。
+- `Release Finalize` の `patch` 入力は `X.Y.Z` の `Z` を指す。メジャー / マイナー系列の初回 finalize は `patch=0`、以後の patch release は対象の `Z` を入れる。
 
 ## 実行前チェック
 
@@ -77,7 +78,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 5. `release/X.Y` の安定化を PR で反映する。
 6. `rc-X.Y-latest` と必要な RC 成果物を確認し、採用したい候補が latest RC として見えていることを確認する。
 7. `Release Notes: X.Y` Issue を見直し、今回の出荷内容として読めるよう公開向け文面を整える。
-8. `Release Finalize` を `release/X.Y` から実行し、対象の `patch=Z` を指定して GitHub Release `X.Y.Z` と archive / Store package を揃える。
+8. `Release Finalize` を `release/X.Y` から実行し、初回リリースでは `patch=0` を指定して GitHub Release `X.Y.0` と archive / Store package を揃える。
 9. Store 提出前に別候補を採用し直す必要が出た場合は、release branch を更新して RC Build を通し、同じ patch line `X.Y.Z` に対して `Release Finalize` を再実行する。
 10. Store 提出は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) の手順に従って実行し、提出直後に `Store Submission Log` を記録する。
 

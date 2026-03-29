@@ -85,7 +85,7 @@ Store policy 上、Desktop Bridge / Win32 製品は privacy policy が必須に�
 | 提出ファイル | `.msixupload` |
 | 生成方法 | `.github/workflows/release-finalize.yml` |
 | workflow 実行 | GitHub Actions で `release/X.Y` を選択して実行 |
-| workflow 入力 | `patch=Z` を明示し、通常は `build_store_package=true` / `create_version_tag=true` のまま実行 |
+| workflow 入力 | `patch` に対象の `Z` を入れる（初回 `X.Y.0` リリースは `patch=0`）。通常は `build_store_package=true` / `create_version_tag=true` のまま実行 |
 | 対象バージョン | `X.Y.Z.B`（`B > 0`。`B` は対象 `release/X.Y` branch の RC カウンター） |
 | 対象デバイス | `Windows.Desktop` を確認 |
 

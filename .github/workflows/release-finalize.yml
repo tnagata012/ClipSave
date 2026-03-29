@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       patch:
-        description: 'Target patch number (Z)'
+        description: 'Target patch number (Z, use 0 for the first X.Y.0 release)'
         required: true
         type: string
       create_version_tag:

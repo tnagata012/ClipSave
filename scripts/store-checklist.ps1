@@ -254,10 +254,10 @@ try {
                 ReleaseBranch = $targetReleaseBranch
             }
 
-            & "$projectRoot\scripts\assert-latest-finalized-version.ps1" @latestArgs *>$null
-            if ($LASTEXITCODE -eq 0) {
+            try {
+                Assert-LatestFinalizedVersion @latestArgs | Out-Null
                 Write-Host "PASS" -ForegroundColor Green
-            } else {
+            } catch {
                 Write-Host "FAIL" -ForegroundColor Red
                 Write-Host "    Store submission is allowed only for the latest finalized version." -ForegroundColor Gray
                 $allPassed = $false
@@ -466,7 +466,7 @@ try {
 
     if ($allPassed -and $allManualPassed) {
         Write-Host "All checks passed. Ready for Store submission." -ForegroundColor Green
-        Write-Host "`nNext step: Run Release Finalize from $targetReleaseBranch (configured version resolves to $targetVersion; build_store_package defaults to true)" -ForegroundColor Cyan
+        Write-Host "`nNext step: Run Release Finalize from $targetReleaseBranch with patch=$(($targetVersion.Split('.'))[2]) (latest successful RC candidate is adopted automatically)" -ForegroundColor Cyan
         exit 0
     } else {
         Write-Host "Some checks did not pass:" -ForegroundColor Yellow

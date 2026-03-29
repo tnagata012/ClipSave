@@ -23,7 +23,7 @@
 
 - 対象版が [../../release/ReleaseProcess.md](../../release/ReleaseProcess.md) の Store チャネル進行条件を満たしている。
 - [../../release/ReleaseGuide.md](../../release/ReleaseGuide.md) に従って `Release Finalize` の Store package mode が成功している。
-- workflow summary で `Checkout Ref=refs/tags/X.Y.Z`、`Commit SHA`、`Store Package Mode=built` を確認できる。
+- workflow summary で `Checkout Ref=refs/tags/X.Y.Z`、`Commit SHA`、`Package Version=X.Y.Z.B`、`Store Package Mode=built` を確認できる。
 - 同じ run の `store-package-X.Y.Z` artifact から `.msixupload` を取得でき、workflow の Store identity 検証も通っている。GitHub Release `X.Y.Z` assets は使わない。
 
 ## 提出手順
@@ -39,7 +39,7 @@
 ## 提出前チェックリスト
 
 - `store-package-X.Y.Z` artifact から `.msixupload` を取得済みであること。GitHub Release assets は使わない。
-- workflow summary で `Checkout Ref=refs/tags/X.Y.Z`、`Commit SHA`、`Store Package Mode=built` を確認済みであること。
+- workflow summary で `Checkout Ref=refs/tags/X.Y.Z`、`Commit SHA`、`Package Version=X.Y.Z.B`、`Store Package Mode=built` を確認済みであること。
 - `Privacy policy URL` に公開済みの [../../../PRIVACY.md](../../../PRIVACY.md) 相当ページを設定し、`Support contact` が設定済みであること。
 - listing CSV の必須項目（`Title`、`ShortDescription`、`ReleaseNotes`、`DesktopScreenshot1`）に空欄がないこと。
 - package upload 後に `制限付き機能` セクションが表示された場合は、`runFullTrust` の利用理由を記入済みであること。表示されない場合は、同内容を `審査向け補足` に記入済みであること。
@@ -85,8 +85,8 @@ Store policy 上、Desktop Bridge / Win32 製品は privacy policy が必須に�
 | 提出ファイル | `.msixupload` |
 | 生成方法 | `.github/workflows/release-finalize.yml` |
 | workflow 実行 | GitHub Actions で `release/X.Y` を選択して実行 |
-| workflow 入力 | 通常は既定値のまま実行 |
-| 対象バージョン | `X.Y.Z.0`（workflow で設定） |
+| workflow 入力 | `patch` に対象の `Z` を入れる（初回 `X.Y.0` リリースは `patch=0`）。通常は `build_store_package=true` / `create_version_tag=true` のまま実行 |
+| 対象バージョン | `X.Y.Z.B`（`B > 0`。`B` は対象 `release/X.Y` branch の RC カウンター） |
 | 対象デバイス | `Windows.Desktop` を確認 |
 
 ### ストア登録情報（Listing）

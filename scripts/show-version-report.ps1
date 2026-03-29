@@ -209,9 +209,9 @@ if ($ghAvailable) {
         }
 
         if ($coreVersion) {
-            Write-Host "  Store Hint   : run Release Finalize from release/X.Y (configured version=$coreVersion, checkout ref resolves to refs/tags/$coreVersion)" -ForegroundColor Cyan
+            Write-Host "  Store Hint   : run Release Finalize from release/X.Y with explicit patch=$(($coreVersion.Split('.'))[2]) (latest successful RC candidate is adopted automatically)" -ForegroundColor Cyan
             if ($resolvedReleaseTag) {
-                Write-Host "                 Candidate channel tag: $resolvedReleaseTag (create finalized tag X.Y.Z from adopted commit)" -ForegroundColor Gray
+                Write-Host "                 Candidate channel tag: $resolvedReleaseTag (adopt the intended RC build into the finalized archive)" -ForegroundColor Gray
             }
         }
     }

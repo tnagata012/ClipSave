@@ -8,7 +8,7 @@
 - GitHub Actions workflow の役割と生成物を整理する
 - Dev / RC / Archive / Store の各チャネルで何を配るかを揃える
 - メジャー/マイナー、パッチ、`Release Finalize` 後処理の実行手順をまとめる
-- ロールバック/取り下げ時の基本対応を明文化する
+- ロールバック / 取り下げ時の基本対応を明文化する
 
 このドキュメントでは、ブランチ設計方針と版数・タグのルールは [ReleaseProcess](ReleaseProcess.md)、署名方針は [Signing](../distribution/Signing.md) を正本とします。
 Partner Center / listing の実務手順は [StoreSubmission](../distribution/store/StoreSubmission.md)、GitHub Release Notes の具体運用は [ReleaseNotes](ReleaseNotes.md) に分離し、ここでは扱いません。
@@ -16,47 +16,44 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 ## ワークフロー一覧
 
 | ワークフロー | トリガー | 用途 | 主な生成物 |
-| ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| ---- | ---- | ---- | ---- |
 | [pr-check.yml](../../.github/workflows/pr-check.yml) | PR（`main`, `release/*`） | 品質ゲート | `TestResults/**/*.trx` |
 | [deploy-pages.yml](../../.github/workflows/deploy-pages.yml) | `main` push（`site/**`） / 手動（`main` のみ） | GitHub Pages 公開 | GitHub Pages site artifact |
-| [prepare-release.yml](../../.github/workflows/prepare-release.yml) | 手動（`X.Y`。内部で `X.Y.0` に展開） | `release/X.Y` 作成 + `Release Notes: X.Y` の自動確保 + `main` 側 bump ブランチ作成、任意で PR 作成 | `release/X.Y`, `chore/bump-main-to-*` |
-| [prepare-patch-release.yml](../../.github/workflows/prepare-patch-release.yml) | 手動（`release/X.Y`） | patch init ブランチ作成、任意で PR 作成 | `chore/release-X.Y.(Z+1)-init` |
-| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
-| [rc-build.yml](../../.github/workflows/rc-build.yml) | `release/*` push（`docs/**`, `*.md`, `site/**`, `.github/workflows/deploy-pages.yml` のみ変更時は除く） / 手動 | 公開候補生成（未署名） | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
-| [release-finalize.yml](../../.github/workflows/release-finalize.yml) | `X.Y.Z` タグ push / 手動 | version tag `X.Y.Z` と archive を整備し、必要時のみ Store package を生成する。Store 提出前の手動実行では `release/X.Y` の現在 HEAD へ tag を寄せ直せる | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation, 任意で `store-package-*` |
+| [prepare-release.yml](../../.github/workflows/prepare-release.yml) | 手動（`X.Y`） | `release/X.Y` 作成 + `Release Notes: X.Y` の自動確保 / 再利用 | `release/X.Y` |
+| [dev-build.yml](../../.github/workflows/dev-build.yml) | `main` push / 手動 | 開発成果物生成（未署名） | `dev-package-*`, `dev-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
+| [rc-build.yml](../../.github/workflows/rc-build.yml) | `release/*` push / 手動 | 公開候補生成（未署名） | `rc-package-*`, `rc-X.Y-latest`, `SHA256SUMS.txt`, GitHub 上に記録される Artifact Attestation |
+| [release-finalize.yml](../../.github/workflows/release-finalize.yml) | 手動（`release/X.Y` を選択して実行） | 選択した `release/X.Y` と手動入力の `patch` から `version=X.Y.Z` を解決し、`rc-X.Y-latest` の最新成功候補を採用して archive / Store package を整備する | `release-archive-*`, GitHub Release `X.Y.Z`, `SHA256SUMS.txt`, 任意で `store-package-*`, GitHub 上に記録される Artifact Attestation |
 
 補足:
 
-- 配布対象は `*.msixbundle`（未署名）、Store 提出対象は `.msixupload`。
-- `store-package-*` は GitHub Actions artifact として扱い、GitHub Release `X.Y.Z` の assets には含めない。GitHub Release assets は unsigned archive（`*.msixbundle` + `SHA256SUMS.txt`）だけを保持する。
-- Dev/RC/Archive 配布では `*.msixbundle` と `SHA256SUMS.txt` を公開し、同じ workflow 実行に対する GitHub Artifact Attestation を GitHub 上に記録する。
-- GitHub Artifact Attestation は Release asset として添付せず、`gh attestation verify` で検証する。
-- `Release Finalize` の Store package mode と `build-store-package.ps1` は、生成した `.msixupload` が Store identity を持つことを検証してから成功扱いにする。
-- `.NET` SDK の解決はリポジトリ直下の `global.json` を単一の正本とし、workflow の `actions/setup-dotnet` は `global-json-file: global.json` を参照する。
-- `pr-check.yml` は workflow lint を常時実行し、website-only PR（`site/**`, `.github/workflows/deploy-pages.yml`, `docs/presentation/LandingPage.md` のみ変更）のときはアプリ本体の restore / security / build / test / spec coverage を skip する。
-- `deploy-pages.yml` は `workflow_dispatch` でも `main` 以外では失敗するため、手動実行は `main` を前提とする。
+- patch 開始に専用 workflow は使わない。`release/X.Y` 向け PR で `PATCH` を更新する。
+- `main` を次系列へ進める bump PR は作らない。
+- Dev 配布版の package version は `0.0.1.B`、RC / Archive / Store 配布版は `X.Y.Z.B` を使う。
+- RC の `B` は `release/X.Y` branch ごとのカウンターで、新しい release branch を切ると 1 から始まる。
+- `B=0` は配布版に使わない。
+- `main=0.0.1` を preview line として固定し、release branch の `X.Y.Z` と配布 version line を分けることで、Dev と RC / Archive / Store の役割を見分けやすくする。
+- `AssemblyVersion` は配布 build 識別子ではなく互換性用に扱い、実際の配布物識別は `FileVersion` / package version / `InformationalVersion` で行う。
+- `dev-latest` / `rc-X.Y-latest` は floating tag として、docs-only を含む各 branch の最新 commit に追随させる。
 - `rc-X.Y-latest` の GitHub Release は候補版として常に `prerelease` 表示にする。
-- `Prepare Release` は `release/X.Y` が既に存在していても、その branch を再利用して継続できる。`main` 側 bump ブランチだけが欠けている rerun では、その branch を再作成して PR 作成まで進める。
+- `Release Finalize` は現行サポート系列の current patch line に対してだけ実行し、過去 patch line や旧系列の補修には使わない。
+- `Release Finalize` の build は手動指定せず、Store 提出前は `rc-X.Y-latest` の最新成功候補を自動採用する。
+- `Release Finalize` の `patch` 入力は `X.Y.Z` の `Z` を指す。メジャー / マイナー系列の初回 finalize は `patch=0`、以後の patch release は対象の `Z` を入れる。
 
 ## 実行前チェック
 
 1. 実行対象ブランチ（`main` または `release/X.Y`）と対象版が意図どおりであることを確認する。
 2. `./scripts/assert-version-policy.ps1` が成功することを確認する。
 3. `./scripts/run-tests.ps1` と `./scripts/run-security-checks.ps1` が成功することを確認する。
-4. チャネル別の署名方針（Dev/RC は未署名許容、Stable は Store 正本）を理解したうえで、検証対象を明確化する（詳細は [../distribution/Signing.md](../distribution/Signing.md)）。
+4. チャネル別の署名方針（Dev / RC は未署名許容、Stable は Store 正本）を理解したうえで、検証対象を明確化する。
 
 ## 成果物チャネル
 
 | チャネル | 配布元 | 用途 |
-| -------- | ------------------------------------------------------------ | ---------------------------------- |
-| Dev | `dev-latest` / `dev-package-*` + `SHA256SUMS.txt` | 検証配布（未署名） |
-| RC | `rc-X.Y-latest` / `rc-package-*` + `SHA256SUMS.txt` | 公開候補比較（未署名） |
-| Archive | GitHub Release `X.Y.Z` / `release-archive-*` + `SHA256SUMS.txt` | 確定版の固定配布・再検証（未署名） |
+| ---- | ---- | ---- |
+| Dev | `dev-latest` / `dev-package-*` + `SHA256SUMS.txt` | 検証配布（未署名、package version=`0.0.1.B`） |
+| RC | `rc-X.Y-latest` / `rc-package-*` + `SHA256SUMS.txt` | 公開候補比較（未署名、package version=`X.Y.Z.B`） |
+| Archive | GitHub Release `X.Y.Z` / `release-archive-*` + `SHA256SUMS.txt` | 確定 build の固定配布 / 再検証（未署名、package version=`X.Y.Z.B`） |
 | Store | `store-package-*`（`.msixupload`） | Partner Center 提出 |
-
-補足:
-
-- Dev/RC/Archive の各チャネルには GitHub Artifact Attestation が同じ workflow 実行に紐づいて記録されるが、attestation 自体は配布 asset に同梱しない。
 
 ## 実運用手順
 
@@ -66,80 +63,61 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 ### Release Finalize 後の後処理
 
 1. `Release Finalize` の成功を確認し、GitHub Release `X.Y.Z` に `*.msixbundle` と `SHA256SUMS.txt` が揃っていること、同じ workflow 実行に対する GitHub Artifact Attestation が `gh attestation verify` で検証可能であることを確認する。
-   Store 提出対象の `.msixupload` は GitHub Release assets ではなく、同じ run の `store-package-*` artifact から取得する。
-2. Store 提出前に追加修正や archive の差し替えが必要になった場合は、`Release Finalize` を `release/X.Y` から手動再実行する。通常は既定値のままでよく、`X.Y.Z` は現在 HEAD へ付け直され、archive もその commit に揃え直される。
-3. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。GitHub Release は issue 参照だけを持つ。
-4. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を正本とし、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行する。通常は既定値のまま進めてよい。
-5. Partner Center へ提出したら、[StoreSubmission](../distribution/store/StoreSubmission.md) に従って `Store Submission Log` を GitHub Release に記録する。ここで `X.Y.Z` は固定化される。
-6. 公開直後の短い監視期間を終えたら、通常の RC 更新は止めてよい。次の変更が必要になるまでは branch を静置する。
-7. 現行系列判定や旧系列の扱いは [ReleaseProcess](ReleaseProcess.md) に従う。
+2. Store 提出対象の `.msixupload` は GitHub Release assets ではなく、同じ run の `store-package-*` artifact から取得する。
+3. Store 提出前に追加修正や archive の差し替えが必要になった場合は、同じ current patch line に対して `Release Finalize` を `release/X.Y` から手動再実行し、対象の `patch=Z` を指定する。最新成功 RC 候補は自動採用される。
+4. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。GitHub Release は issue 参照だけを持つ。
+5. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を正本とし、条件を満たす場合のみ `Release Finalize` で Store package を作成する。
+6. Partner Center へ提出したら、[StoreSubmission](../distribution/store/StoreSubmission.md) に従って `Store Submission Log` を GitHub Release に記録する。ここで採用 commit が固定化される。
 
-### メジャー/マイナーリリース
+### メジャー / マイナーリリース
 
-1. `Prepare Release`（推奨、workflow 入力は `X.Y`。内部で `X.Y.0` に展開）または `create-release-branch.ps1`（`-Version X.Y`）で `release/X.Y` を作成する。
-2. 必要に応じて `next_main_version` / `-NextMainVersion` を指定し、`main` を次の近接系列ではなく将来系列（例: `0.5.0`）へ進める。
-3. `chore/bump-main-to-* -> main` の PR をレビューしてマージする。`Prepare Release` workflow は既定でこの PR を自動作成する。
-4. `Prepare Release` workflow が `Release Notes: X.Y` Issue を自動作成または再利用する。`create-release-branch.ps1` だけを使う場合は手動で作成または更新する。
-5. `Release Notes: Unreleased` から今回の系列で出す bullet を `Release Notes: X.Y` へ手動で移す。
-6. `release/X.Y` の安定化を PR で反映する。
-7. `rc-X.Y-latest` と複数の公開候補（`rc-package-*`）を比較し、確定対象コミットを決定する。
-8. tag 前に `Release Notes: X.Y` Issue を見直し、今回の出荷内容として読めるよう公開向け文面を整える。
-9. 確定版を決め、その commit に version tag `X.Y.Z` を作成する。
-10. タグ push で `Release Finalize` が走り、GitHub Release `X.Y.Z` にアーカイブ成果物が保存されたことを確認する。
-11. Store 提出前に追加修正が必要になった場合は、`Release Finalize` を `release/X.Y` から既定値のまま再実行する。`X.Y.Z` は現在 HEAD へ付け直され、archive も更新される。
-12. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。GitHub Release は issue 参照だけを持つ。
-13. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を参照し、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行して Store package を作成する。通常は既定値のまま進めてよい。
-14. Store 提出は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) の手順に従って実行し、提出直後に `Store Submission Log` を記録する。
+1. `Prepare Release` または `create-release-branch.ps1` で `release/X.Y` を作成する。
+2. `main` の repository version は `0.0.1` のまま維持する。
+3. `Prepare Release` が `Release Notes: X.Y` Issue を自動作成または再利用する。手元スクリプトだけを使う場合は手動で作成または更新する。
+4. `Release Notes: Unreleased` から今回の系列で出す bullet を `Release Notes: X.Y` へ手動で移す。
+5. `release/X.Y` の安定化を PR で反映する。
+6. `rc-X.Y-latest` と必要な RC 成果物を確認し、採用したい候補が latest RC として見えていることを確認する。
+7. `Release Notes: X.Y` Issue を見直し、今回の出荷内容として読めるよう公開向け文面を整える。
+8. `Release Finalize` を `release/X.Y` から実行し、初回リリースでは `patch=0` を指定して GitHub Release `X.Y.0` と archive / Store package を揃える。
+9. Store 提出前に別候補を採用し直す必要が出た場合は、release branch を更新して RC Build を通し、同じ patch line `X.Y.Z` に対して `Release Finalize` を再実行する。
+10. Store 提出は [../distribution/store/StoreSubmission.md](../distribution/store/StoreSubmission.md) の手順に従って実行し、提出直後に `Store Submission Log` を記録する。
 
 ### パッチリリース
 
 対象は [ReleaseProcess](ReleaseProcess.md) で定義した現行サポート系列のみとする。
 
-1. [ReleaseProcess](ReleaseProcess.md) の「パッチリリース」にある patch init 前提を確認したうえで、`Prepare Patch Release`（推奨）または `create-patch-release-branch.ps1` で patch init ブランチを作成する。
-2. patch init PR（`chore/release-X.Y.(Z+1)-init -> release/X.Y`）をマージする。`Prepare Patch Release` workflow は既定でこの PR を自動作成する。
+1. `release/X.Y` 向けの通常 PR で `PATCH` を `X.Y.(Z+1)` へ更新する。patch 開始専用 workflow は使わない。
+2. `PATCH` 更新 PR をマージする。
 3. 不具合修正を `main` へマージする。
 4. `release/X.Y` をベースにした `fix/*` backport ブランチで必要コミットを `cherry-pick -x` し、PR で `release/X.Y` へ反映する。
-   - 競合時の解消方針は [ReleaseProcess](ReleaseProcess.md) の「backport 競合解消方針」に従う。
-5. 候補ビルドから確定対象コミットを決定し、確定版を決める。
+5. `rc-X.Y-latest` と必要な RC 成果物を確認し、採用したい候補が latest RC として見えていることを確認する。
 6. tag 前に `Release Notes: X.Y` Issue を見直し、今回の patch 版として読めるよう公開向け文面を整える。
-7. その commit に version tag `X.Y.Z` を作成する。
-8. タグ push で `Release Finalize` が走り、GitHub Release `X.Y.Z` にアーカイブ成果物が保存されたことを確認する。
-9. Store 提出前に追加修正が必要になった場合は、`Release Finalize` を `release/X.Y` から既定値のまま再実行する。`X.Y.Z` は現在 HEAD へ付け直され、archive も更新される。
-10. `Release Notes: X.Y` を更新しただけなら `Release Finalize` の再実行は不要。必要時のみ `release/X.Y` から手動再実行して GitHub Release を更新する。
-11. Store へ進める条件は [ReleaseProcess](ReleaseProcess.md) の「Store チャネルへの進行条件」を参照し、条件を満たす場合のみ `Release Finalize` を `release/X.Y` から実行する。通常は既定値のまま進めてよい。
-12. Store 提出へ進み、提出直後に `Store Submission Log` を記録する。
+7. `Release Finalize` を `release/X.Y` から実行し、対象の `patch=Z+1` を指定する。
+8. GitHub Release `X.Y.(Z+1)` に archive 成果物が保存されたことを確認する。
+9. Store 提出前に追加修正が必要になった場合は、release branch を更新して RC Build を通し、同じ patch line に対して `Release Finalize` を再実行する。
+10. Store へ進める条件を満たす場合のみ、Store package を生成して提出する。
 
 ### Store 提出
 
 このドキュメントで扱うのは `store-package-*` の生成までとする。
-Partner Center への upload、listing CSV import、審査向け補足、submission ID 記録は [StoreSubmission](../distribution/store/StoreSubmission.md) を正本とする。提出直後に GitHub Release の `Store Submission Log` を更新すると、その時点で `X.Y.Z` は固定化される。
+Partner Center への upload、listing CSV import、審査向け補足、submission ID 記録は [StoreSubmission](../distribution/store/StoreSubmission.md) を正本とする。
 
-## ロールバック/取り下げ
+## ロールバック / 取り下げ
 
 ### Dev / RC 配布物
 
 1. 問題のある配布リンクを停止または更新する。
 2. `main`（必要なら `release/X.Y`）へ復旧 PR を反映する。
 3. 修正版を再ビルドして差し替える。
-4. 確定版 GitHub Release `X.Y.Z` に問題がある場合は削除せず、取り下げ理由を本文に追記し、次版を作る。
+4. GitHub Release `X.Y.Z` に紐づく archive build に問題がある場合は削除せず、現行サポート系列の current patch line かつ Store 提出前であれば release branch を更新して RC Build を通し、`Release Finalize` を再実行して latest RC 候補へ差し替える。条件を外れる場合は次の patch line を作る。
 
 ### Store 提出後
 
-1. Partner Center 側で該当提出の公開を停止/取り下げする。
-2. 必要なら最新のサポート対象 `release/X.Y` で次のパッチ版を準備する。
+1. Partner Center 側で該当提出の公開を停止 / 取り下げする。
+2. 必要なら最新のサポート対象 `release/X.Y` で次の patch line を準備する。
 3. 新版 `.msixupload` を再提出する。
 
-## 補足
-
-### なぜ Store 提出を手動運用にするか
-
-| 理由 | 内容 |
-| -------------- | ---------------------------- |
-| 審査プロセス | Microsoft 側審査が必要 |
-| メタデータ更新 | 説明文・画像更新に人手が必要 |
-| リスク管理 | 段階的リリース判断が必要 |
-
-### 便利コマンド
+## 便利コマンド
 
 ```powershell
 .\scripts\show-version-report.ps1
@@ -147,7 +125,7 @@ Partner Center への upload、listing CSV import、審査向け補足、submiss
 .\scripts\run-tests.ps1 -Configuration Release
 .\scripts\run-security-checks.ps1 -Configuration Release
 .\scripts\store-checklist.ps1 -Version X.Y.Z
-.\scripts\verify-artifact.ps1 -BundlePath .\ClipSave.Package_X.Y.Z.W_AnyCPU.msixbundle -Channel dev -SourceRef refs/heads/main
+.\scripts\verify-artifact.ps1 -BundlePath .\ClipSave.Package_X.Y.Z.B_AnyCPU.msixbundle -Channel archive -SourceRef refs/tags/X.Y.Z
 ```
 
 ## 関連ドキュメント

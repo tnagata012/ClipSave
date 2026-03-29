@@ -3,11 +3,6 @@ name: Dev Build
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'site/**'
-      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -76,19 +71,21 @@ jobs:
       run: |
         [xml]$props = Get-Content Directory.Build.props
         $version = $props.Project.PropertyGroup.Version
-        $match = [regex]::Match($version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$')
-        if (-not $match.Success) {
-          Write-Error "Invalid version format in Directory.Build.props (expected X.Y.Z): $version"
+        if ($version) {
+          $version = $version.Trim()
+        }
+        if ($version -ne "0.0.1") {
+          Write-Error "main must stay fixed at 0.0.1 for Dev Build. Actual: $version"
           exit 1
         }
 
-        $coreVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
         $runNumber = [int]"${{ github.run_number }}"
         $shortSha = "${{ github.sha }}".Substring(0, 7)
+        $devPackageVersion = "0.0.1.$runNumber"
         $segments = @(
-          [int]$match.Groups['major'].Value,
-          [int]$match.Groups['minor'].Value,
-          [int]$match.Groups['patch'].Value,
+          0,
+          0,
+          1,
           $runNumber
         )
         if ($segments | Where-Object { $_ -lt 0 -or $_ -gt 65535 }) {
@@ -96,10 +93,10 @@ jobs:
           exit 1
         }
 
-        $assemblyVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).0.0"
-        $fileVersion = "$coreVersion.$runNumber"
-        $informationalVersion = "$coreVersion-dev.$runNumber+sha.$shortSha"
-        $msixVersion = $fileVersion
+        $assemblyVersion = "0.0.0.0"
+        $fileVersion = $devPackageVersion
+        $informationalVersion = "0.0.1-dev.$runNumber+sha.$shortSha"
+        $msixVersion = $devPackageVersion
 
         echo "VERSION=$version" >> $env:GITHUB_OUTPUT
         echo "ASSEMBLY_VERSION=$assemblyVersion" >> $env:GITHUB_OUTPUT
@@ -246,6 +243,7 @@ jobs:
           | **Build** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
           > Unsigned package by channel policy. Verify `SHA256SUMS.txt` and GitHub Artifact Attestation (`gh attestation verify`) before use.
+          > Dev package version uses the reserved preview line `0.0.1.B`.
           > ⚠️ **Development build** - use for testing only
         files: |
           output/**/*.msixbundle

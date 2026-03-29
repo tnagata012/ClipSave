@@ -73,6 +73,17 @@ public class AboutViewModelTests
     }
 
     [Fact]
+    public void InformationalVersion_KeepsReleaseBuildSuffix_WhenShaMetadataIsNormalized()
+    {
+        // Act
+        var normalized = AboutViewModel.NormalizeInformationalVersion(
+            "1.2.3-build.57+sha.61D6ADC83812C4CF0882B323502B4A6DC64DF2F7");
+
+        // Assert
+        normalized.Should().Be("1.2.3-build.57+sha.61d6adc");
+    }
+
+    [Fact]
     public void InformationalVersion_Display_DoesNotAppendLocalBuildSuffix_ForLocalBuildMetadata()
     {
         // Arrange

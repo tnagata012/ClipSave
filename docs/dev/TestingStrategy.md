@@ -233,7 +233,7 @@ GitHub Actions では、アプリ本体をビルドする workflow でテスト�
 | `pr-check.yml`      | PR to `main` / `release/*` | `run-tests.ps1`（Debug） + `LocalizationResourceCompletenessTests` 先行実行 + `check-spec-coverage.ps1`（website-only PR では skip） |
 | `dev-build.yml`     | Push to `main`             | `run-tests.ps1`（Release）                                              |
 | `rc-build.yml`      | Push to `release/*`        | `run-tests.ps1`（Release）                                              |
-| `release-finalize.yml` | Tag push / Manual dispatch | `run-tests.ps1`（Release）                                              |
+| `release-finalize.yml` | Manual dispatch（`release/X.Y`） | `run-tests.ps1`（Release）                                              |
 
 ---
 

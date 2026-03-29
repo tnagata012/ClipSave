@@ -10,7 +10,7 @@
 #
 # Rules:
 # - Directory.Build.props: always X.Y.Z
-# - release/X.Y: X.Y.Z, and X.Y must match branch name
+# - release/X.Y: X.Y.0, and X.Y must match branch name
 # - Package.appxmanifest: always X.Y.Z.0
 # - CI-injected assembly metadata (InformationalVersion/FileVersion) is out of scope
 
@@ -143,8 +143,11 @@ if ($BranchName) {
             if ($branchMajor -ne $major -or $branchMinor -ne $minor) {
                 Fail "release branch name and file version mismatch. Branch=release/$branchMajor.$branchMinor, File=$coreVersion"
             }
+            if ($patch -ne 0) {
+                Fail "release branch repository version must stay X.Y.0. Branch=$BranchName, File=$coreVersion"
+            }
 
-            Write-Host "[OK] release branch validation passed" -ForegroundColor Green
+            Write-Host "[OK] release branch validation passed (base version X.Y.0)" -ForegroundColor Green
         } else {
             Write-Host "[WARN] Branch does not match main/release rules. Skipping branch-specific checks." -ForegroundColor Yellow
         }

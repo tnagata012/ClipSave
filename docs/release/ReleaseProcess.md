@@ -29,8 +29,8 @@
 flowchart LR
   main[main] -->|Dev Build| dev[dev-latest / dev-package-0.0.1.B]
   main -->|Prepare Release| release[release/X.Y]
-  release -->|RC Build| rc[rc-X.Y-latest / rc-package-X.Y.Z.B]
-  release -->|patch version PR| release
+  release -->|RC Build| rc[rc-X.Y-latest / rc-package-X.Y.0 / package X.Y.0.B]
+  release -->|stabilize/backport PR| release
   release -->|Release Finalize patch=Z| tag[tag X.Y.Z]
   tag --> archive[GitHub Release X.Y.Z / release-archive-X.Y.Z.B]
   tag --> store[store-package-X.Y.Z.B]
@@ -39,16 +39,14 @@ flowchart LR
 ## 基本モデル
 
 1. 開発の正本は常に `main` とする。
-2. `main` の repository version は固定で `0.0.1` とし、release 準備のたびに version bump しない。
-3. `release/X.Y` の repository version は `X.Y.Z` とし、`PATCH` がその系列の公開順序を表す。
+2. `main` の repository version は `0.0.1` とする。
+3. `release/X.Y` の repository version は常に `X.Y.0` とし、patch line `Z` は branch ではなく `Release Finalize` の手動入力で決める。
 4. 配布物の package / file version は 4 桁とし、4 桁目 `B` を build 番号として使う。
 5. Dev の配布版は MSIX 都合のため予約済み preview line `0.0.1.B` を使う。
-6. RC / Archive / Store の配布版は `X.Y.Z.B` を使い、`B` は `release/X.Y` ごとの `rc-build` カウンターを採用する。
+6. RC の配布版は `X.Y.0.B`、Archive / Store の配布版は `X.Y.Z.B` を使い、`B` は `release/X.Y` ごとの `rc-build` カウンターを採用する。
 7. `release/X.Y` を新しく作ると、その branch の `B` は 1 から数え直す。
-8. `B=0` は配布版として使わない。`.0` を確定版にする運用はやめる。
-9. version tag は引き続き `X.Y.Z` とし、GitHub Release `X.Y.Z` は patch line を表す。
-10. `Release Finalize` は branch 上の現在値を暗黙採用するのではなく、選択した `release/X.Y` と手動入力の `patch=Z` から `version=X.Y.Z` を解決し、`rc-X.Y-latest` の最新成功候補から `build=B` を自動採用して archive / Store package を揃える。
-11. `Prepare Release` による main bump PR と、patch 開始専用 workflow は廃止する。
+8. version tag は `X.Y.Z` とし、GitHub Release `X.Y.Z` は patch line を表す。
+9. `Release Finalize` は選択した `release/X.Y` と手動入力の `patch=Z` から `version=X.Y.Z` を解決し、`rc-X.Y-latest` の最新成功候補から `build=B` を採用して archive / Store package を揃える。
 
 ## ブランチモデル
 
@@ -95,27 +93,26 @@ flowchart LR
 ### 1. Prepare
 
 - `main` から `release/X.Y` を作成する。
-- `release/X.Y` 側だけを対象系列の `X.Y.Z` へ進める。
-- `main` は `0.0.1` のまま維持する。release 準備で main bump PR は作らない。
+- `release/X.Y` 側だけを対象系列の `X.Y.0` に設定する。
+- `main` は `0.0.1` を維持する。
 
 ### 2. Stabilize
 
 - `release/X.Y` では新機能開発を行わず、安定化と必要な修正だけを扱う。
 - 候補比較には `rc-X.Y-latest` と RC 成果物を使う。
-- RC の package version は `X.Y.Z.B` とし、`B` は同じ `release/X.Y` branch の中で build ごとに増える。
+- RC の package version は `X.Y.0.B` とし、`B` は同じ `release/X.Y` branch の中で build ごとに増える。
 - 新しい `release/X.Y` を切ると、その branch の `B` は 1 から始まる。
 
 ### 3. Finalize
 
-- 確定対象は、その時点の現行サポート patch line と、その patch line に対する最新成功 RC build `X.Y.Z.B` の組で決める。
-- `Release Finalize` は選択した `release/X.Y` と手動入力の `patch=Z` から `version` を解決し、Store 提出前は `rc-X.Y-latest` の最新成功候補を採用して tag / archive / Store package を揃える。
-- 4 桁目 `B=0` は無効とし、配布版には使わない。
+- 確定対象は、operator が選ぶ patch line `X.Y.Z` と、その時点の最新成功 RC build `X.Y.0.B` の組で決める。
+- `Release Finalize` は選択した `release/X.Y` と手動入力の `patch=Z` から `version=X.Y.Z` を解決し、Store 提出前は `rc-X.Y-latest` の最新成功候補 `X.Y.0.B` を採用して tag / archive / Store package `X.Y.Z.B` を揃える。
 - Store 提出前の手動再実行では、同じ patch line に対して `patch=Z` を指定し、その時点の最新成功 RC 候補を採用して archive / Store package を差し替えてよい。
 - Store 提出記録後は、その patch line の採用 commit を固定とする。
 
 ### 4. Distribute
 
-- Archive: GitHub Release `X.Y.Z` に、採用した最新成功 RC build の archive（`X.Y.Z.B`）を保持する。
+- Archive: GitHub Release `X.Y.Z` に、採用した最新成功 RC build を finalize した archive（`X.Y.Z.B`）を保持する。
 - Store: 一般ユーザー向けに出す版だけ、`Release Finalize` から Store package を生成する。
 - Store 公開の有無は finalized 判定に影響させないが、採用 commit 固定の境界は `Store Submission Log` 記録時点とする。
 
@@ -123,7 +120,7 @@ flowchart LR
 
 - ClipSave は latest-only 運用とし、能動サポート対象は常に最新 finalized 系列 1 つのみとする。
 - 現行系列である間だけ、patch release、Store 再提出、`Release Finalize` 実行 / 再実行を通常運用として行う。
-- PR / RC を workflow で一律停止しない。hard gate は Store package 生成時だけに置く。
+- Store package 生成時だけを hard gate とし、それ以外の PR / RC 運用は継続する。
 
 ### 6. End of support
 
@@ -135,7 +132,7 @@ flowchart LR
 
 - 切替基準は Store 公開有無ではなく Finalize 完了とする。
 - 新系列を archive-only で Finalize した場合でも、その時点で旧系列はサポート対象から外れる。
-- `Release Finalize` の実行対象も、現行サポート系列の current patch line のみに限定する。
+- `Release Finalize` の実行対象も、現行サポート系列に対する同一 finalized version の rerun または新しい patch line の確定に限定する。
 - 同一系列内でも Store package mode を許可するのは、最新 finalized patch line のみとする。
 
 ## Store チャネルへの進行条件
@@ -162,20 +159,19 @@ flowchart LR
 | 文脈 | repository 上の版数 | 配布時の package / file version | 用途 |
 | ---- | ---- | ---- | ---- |
 | `main` | `0.0.1` | `0.0.1.B` | Dev preview line |
-| `release/X.Y` | `X.Y.Z` | `X.Y.Z.B` | RC / Archive / Store |
+| `release/X.Y` | `X.Y.0` | RC=`X.Y.0.B` / Archive, Store=`X.Y.Z.B` | 現行系列サポート |
 
 補足:
 
 - `Directory.Build.props` の `Version` は repository 上では常に 3 桁とする。
 - `Package.appxmanifest` は repository 上では `Version.0` を保持する。
 - Dev / RC / Archive / Store の 4 桁目 `B` は CI / finalize 時に注入し、repository にはコミットしない。
-- `B` は正の整数とし、配布 build に `0` は使わない。
 - RC の `B` は branch ごとのカウンターであり、`release/0.1` と `release/0.2` では独立して数える。
 
 なぜこの運用にするか:
 
-- `main` を `0.0.1` に固定するのは、Dev を常に preview line として識別し、安定化対象の `release/X.Y` が持つ `X.Y.Z` と混同しないため。
-- Dev を `0.0.1.B`、RC / Archive / Store を `X.Y.Z.B` に分けるのは、Preview チャネルと release-line 候補を version line だけで見分けられるようにし、patch line ごとの採用判断を単純化するため。
+- `main` を `0.0.1` に固定するのは、Dev を常に preview line として識別し、安定化対象の `release/X.Y` が持つ `X.Y.0` base version や finalized version `X.Y.Z` と混同しないため。
+- Dev を `0.0.1.B`、RC を `X.Y.0.B`、Archive / Store を `X.Y.Z.B` に分けるのは、release branch の repository version を PR ごとに動かさず、Finalize だけが patch line を確定する責務分離にするため。
 - `AssemblyVersion` は CLR の互換性軸として固定寄りに扱い、配布 build の識別責務は `FileVersion` / package version / `InformationalVersion` に寄せる。Dev で `0.0.0.0`、release 系で `X.Y.0.0` を使うのはこのため。
 
 ### タグ種別
@@ -195,8 +191,8 @@ flowchart LR
 | 場面 | 判定情報 | ルール |
 | ---- | ---- | ---- |
 | Dev 配布物 | package / file version | `0.0.1.B` を使う |
-| RC / Archive / Store 配布物 | package / file version | `X.Y.Z.B` を使う |
-| 配布 build の有効性 | 4 桁目 `B` | `B > 0` 必須 |
+| RC 配布物 | package / file version | `X.Y.0.B` を使う |
+| Archive / Store 配布物 | package / file version | `X.Y.Z.B` を使う |
 | 配布物 | 配布チャネル | `rc-X.Y-latest` は最新候補、GitHub Release `X.Y.Z` は patch line 用の archive 窓口 |
 
 ### 検証ルール
@@ -206,7 +202,7 @@ flowchart LR
 1. `Directory.Build.props` が `X.Y.Z` 形式
 2. `Package.appxmanifest` が `X.Y.Z.0` 形式
 3. 両者の `X.Y.Z` が一致
-4. `release/X.Y` ではブランチ名と版数の `X.Y` が一致
+4. `release/X.Y` ではブランチ名と版数の `X.Y` が一致し、repository version の patch は常に `0`
 
 補足:
 
@@ -224,17 +220,16 @@ flowchart LR
 ### メジャー / マイナー開始
 
 - `Prepare Release` は explicit な `X.Y` を入力として `release/X.Y` を作成する。
-- `release/X.Y` 作成後も `main` は `0.0.1` のまま維持する。
-- main を次系列へ進めるための bump PR は作らない。
+- `release/X.Y` 作成後も `main` は `0.0.1` を維持する。
 
 ### パッチリリース
 
 - patch release は現行サポート系列でのみ行う。
-- 前回の patch line が `X.Y.Z` なら、次回は `X.Y.(Z+1)` とする。
-- `PATCH` を上げるのは `release/X.Y` 向けの通常 PR とし、専用の patch init workflow は使わない。
-- `PATCH` 更新 PR がマージされた後、RC Build が `X.Y.(Z+1).B` を発行する。
+- patch release 用 PR でも `release/X.Y` の repository version は `X.Y.0` のまま維持する。
+- 修正は `main` に入れてから必要分を `release/X.Y` へ backport し、version files は変えない。
+- RC Build は常に branch base version `X.Y.0.B` を発行する。
 - `B` はその `release/X.Y` branch で継続し、新しい release branch を切るとリセットされる。
-- finalize では、その時点の `release/X.Y` が持つ patch line に対して、`rc-X.Y-latest` の最新成功候補を自動採用する。
+- finalize では、operator が選ぶ `patch=Z` に対して、`rc-X.Y-latest` の最新成功候補を自動採用する。
 
 ### Dev Build
 
@@ -246,9 +241,9 @@ flowchart LR
 Dev / RC / Archive は Store 版と別の unsigned 用 Identity（`Identity Name` / `Publisher`）を採用する。
 
 - unsigned 用 Identity は `ClipSave.Preview` とし、Publisher には Unsigned marker を含める。詳細な manifest 値は `scripts/set-package-manifest.ps1` を正本とする。
-- Store 提出物は従来どおり `tnagata012.ClipSave` / `CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959` を使う。
-- Dev は `0.0.1.B`、RC / Archive は `X.Y.Z.B` を使うため、channel をまたぐ切り替えでは上書き導入できないことがある。
-- RC 候補から同じ build を採用した Archive へ切り替える場合は、同一 package version のためアンインストールが必要になることがある。
+- Store 提出物は `tnagata012.ClipSave` / `CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959` を使う。
+- Dev は `0.0.1.B`、RC は `X.Y.0.B`、Archive は `X.Y.Z.B` を使うため、channel をまたぐ切り替えでは上書き導入できないことがある。
+- RC 候補から同じ build を採用した Archive へ切り替える場合、初回 `X.Y.0` finalize では同一 package version のためアンインストールが必要になることがある。`Z>0` の patch finalize では通常は archive の方が新しい version になる。
 
 ## 文書の責務分担
 

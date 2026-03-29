@@ -172,6 +172,12 @@ flowchart LR
 - `B` は正の整数とし、配布 build に `0` は使わない。
 - RC の `B` は branch ごとのカウンターであり、`release/0.1` と `release/0.2` では独立して数える。
 
+なぜこの運用にするか:
+
+- `main` を `0.0.1` に固定するのは、Dev を常に preview line として識別し、安定化対象の `release/X.Y` が持つ `X.Y.Z` と混同しないため。
+- Dev を `0.0.1.B`、RC / Archive / Store を `X.Y.Z.B` に分けるのは、Preview チャネルと release-line 候補を version line だけで見分けられるようにし、patch line ごとの採用判断を単純化するため。
+- `AssemblyVersion` は CLR の互換性軸として固定寄りに扱い、配布 build の識別責務は `FileVersion` / package version / `InformationalVersion` に寄せる。Dev で `0.0.0.0`、release 系で `X.Y.0.0` を使うのはこのため。
+
 ### タグ種別
 
 | 種別 | 形式 | 更新可否 | 用途 |

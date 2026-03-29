@@ -31,6 +31,8 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 - Dev 配布版の package version は `0.0.1.B`、RC / Archive / Store 配布版は `X.Y.Z.B` を使う。
 - RC の `B` は `release/X.Y` branch ごとのカウンターで、新しい release branch を切ると 1 から始まる。
 - `B=0` は配布版に使わない。
+- `main=0.0.1` を preview line として固定し、release branch の `X.Y.Z` と配布 version line を分けることで、Dev と RC / Archive / Store の役割を見分けやすくする。
+- `AssemblyVersion` は配布 build 識別子ではなく互換性用に扱い、実際の配布物識別は `FileVersion` / package version / `InformationalVersion` で行う。
 - `dev-latest` / `rc-X.Y-latest` は floating tag として、docs-only を含む各 branch の最新 commit に追随させる。
 - `rc-X.Y-latest` の GitHub Release は候補版として常に `prerelease` 表示にする。
 - `Release Finalize` は現行サポート系列の current patch line に対してだけ実行し、過去 patch line や旧系列の補修には使わない。

@@ -2,6 +2,7 @@
 *.suo
 *.user
 *.userosscache
+*.lscache
 *.sln.docstates
 *.userprefs
 bin/

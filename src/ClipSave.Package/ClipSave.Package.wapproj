@@ -108,6 +108,9 @@
     <Content Include="Images\Wide310x150Logo*.png" />
     <None Include="Package.StoreAssociation.xml" />
   </ItemGroup>
+  <ItemGroup>
+    <PRIResource Include="Strings\**\*.resw" />
+  </ItemGroup>
   <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.targets" />
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" PrivateAssets="all" />

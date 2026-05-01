@@ -63,6 +63,47 @@ public class StartupAndLanguageIntegrationTests : IDisposable
     }
 
     [Fact]
+    public void PackageManifest_UsesGeneratedLanguageResources()
+    {
+        var manifestPath = GetProjectPath("src", "ClipSave.Package", "Package.appxmanifest");
+        var document = XDocument.Load(manifestPath);
+        XNamespace appx = "http://schemas.microsoft.com/appx/manifest/foundation/windows10";
+        XNamespace uap = "http://schemas.microsoft.com/appx/manifest/uap/windows10";
+        XNamespace desktop = "http://schemas.microsoft.com/appx/manifest/desktop/windows10";
+
+        var resource = document.Root!
+            .Element(appx + "Resources")!
+            .Elements(appx + "Resource")
+            .Single();
+        resource.Attribute("Language")?.Value.Should().Be("x-generate");
+
+        document.Root.Element(appx + "Properties")!
+            .Element(appx + "DisplayName")!
+            .Value.Should().StartWith("ms-resource:");
+        document.Descendants(uap + "VisualElements").Single()
+            .Attribute("DisplayName")?.Value.Should().StartWith("ms-resource:");
+        document.Descendants(uap + "VisualElements").Single()
+            .Attribute("Description")?.Value.Should().StartWith("ms-resource:");
+        document.Descendants(desktop + "StartupTask").Single()
+            .Attribute("DisplayName")?.Value.Should().StartWith("ms-resource:");
+    }
+
+    [Fact]
+    public void PackageProject_IncludesReswFilesAsPriResources()
+    {
+        var projectPath = GetProjectPath("src", "ClipSave.Package", "ClipSave.Package.wapproj");
+        var document = XDocument.Load(projectPath);
+        XNamespace msbuild = "http://schemas.microsoft.com/developer/msbuild/2003";
+
+        var priResourceIncludes = document.Descendants(msbuild + "PRIResource")
+            .Select(element => element.Attribute("Include")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+
+        priResourceIncludes.Should().Contain("Strings\\**\\*.resw");
+    }
+
+    [Fact]
     [Spec("SPEC-041-002")]
     [Spec("SPEC-050-002")]
     public void SettingsWindow_DoesNotExposeStartupOrGlobalNotificationToggle()

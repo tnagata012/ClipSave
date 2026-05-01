@@ -25,30 +25,30 @@ $profiles = @{
         # Local signed deployment/debugging profile.
         Name = "ClipSave.Preview"
         Publisher = "CN=ClipSavePreview"
-        PackageDisplayName = "ClipSave"
-        VisualDisplayName = "ClipSave Preview"
-        Description = "ClipSave Preview"
-        PublisherDisplayName = "tnagata012"
-        StartupTaskDisplayName = "ClipSave Preview"
+        PackageDisplayName = "ms-resource:PackageDisplayName"
+        VisualDisplayName = "ms-resource:PreviewVisualDisplayName"
+        Description = "ms-resource:PreviewDescription"
+        PublisherDisplayName = "ms-resource:PublisherDisplayName"
+        StartupTaskDisplayName = "ms-resource:PreviewStartupTaskDisplayName"
     }
     unsigned = @{
         # Unsigned artifact profile for Dev / RC / Archive channels.
         Name = "ClipSave.Preview"
         Publisher = "CN=ClipSavePreview, OID.2.25.311729368913984317654407730594956997722=1"
-        PackageDisplayName = "ClipSave"
-        VisualDisplayName = "ClipSave Preview"
-        Description = "ClipSave Preview"
-        PublisherDisplayName = "tnagata012"
-        StartupTaskDisplayName = "ClipSave Preview"
+        PackageDisplayName = "ms-resource:PackageDisplayName"
+        VisualDisplayName = "ms-resource:PreviewVisualDisplayName"
+        Description = "ms-resource:PreviewDescription"
+        PublisherDisplayName = "ms-resource:PublisherDisplayName"
+        StartupTaskDisplayName = "ms-resource:PreviewStartupTaskDisplayName"
     }
     store = @{
         Name = "tnagata012.ClipSave"
         Publisher = "CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959"
-        PackageDisplayName = "ClipSave"
-        VisualDisplayName = "ClipSave"
-        Description = "ClipSave"
-        PublisherDisplayName = "tnagata012"
-        StartupTaskDisplayName = "ClipSave"
+        PackageDisplayName = "ms-resource:PackageDisplayName"
+        VisualDisplayName = "ms-resource:StoreVisualDisplayName"
+        Description = "ms-resource:StoreDescription"
+        PublisherDisplayName = "ms-resource:PublisherDisplayName"
+        StartupTaskDisplayName = "ms-resource:StoreStartupTaskDisplayName"
     }
 }
 

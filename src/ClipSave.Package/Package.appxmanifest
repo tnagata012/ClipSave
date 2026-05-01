@@ -13,8 +13,8 @@
     Version="0.1.0.0" />
 
   <Properties>
-    <DisplayName>ClipSave</DisplayName>
-    <PublisherDisplayName>tnagata012</PublisherDisplayName>
+    <DisplayName>ms-resource:PackageDisplayName</DisplayName>
+    <PublisherDisplayName>ms-resource:PublisherDisplayName</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
 
@@ -24,8 +24,7 @@
   </Dependencies>
 
   <Resources>
-    <Resource Language="en"/>
-    <Resource Language="ja"/>
+    <Resource Language="x-generate" />
   </Resources>
 
   <Applications>
@@ -33,8 +32,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="ClipSave Preview"
-        Description="ClipSave Preview"
+        DisplayName="ms-resource:PreviewVisualDisplayName"
+        Description="ms-resource:PreviewDescription"
         BackgroundColor="transparent"
         Square150x150Logo="Images\Square150x150Logo.png"
         Square44x44Logo="Images\Square44x44Logo.png">
@@ -47,7 +46,7 @@
                            EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="ClipSaveStartupTask"
                                Enabled="true"
-                               DisplayName="ClipSave Preview" />
+                               DisplayName="ms-resource:PreviewStartupTaskDisplayName" />
         </desktop:Extension>
       </Extensions>
     </Application>

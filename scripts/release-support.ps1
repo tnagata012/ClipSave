@@ -55,6 +55,52 @@ function Get-MarkdownSection {
     return $match.Groups["content"].Value.Trim()
 }
 
+function Get-MarkdownTableValue {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Section,
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Section) -or [string]::IsNullOrWhiteSpace($Label)) {
+        return $null
+    }
+
+    $pattern = '(?im)^\s*\|\s*\*\*' + [regex]::Escape($Label) + '\*\*\s*\|\s*(?<value>.+?)\s*\|'
+    $match = [regex]::Match($Section, $pattern)
+    if (-not $match.Success) {
+        return $null
+    }
+
+    $value = $match.Groups['value'].Value.Trim()
+    if ($value.StartsWith('`') -and $value.EndsWith('`') -and $value.Length -ge 2) {
+        $value = $value.Substring(1, $value.Length - 2).Trim()
+    }
+
+    return $value
+}
+
+function Get-MarkdownSectionTableValue {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Body,
+        [Parameter(Mandatory = $true)]
+        [string]$Heading,
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    $section = Get-MarkdownSection -Body $Body -Heading $Heading
+    if ([string]::IsNullOrWhiteSpace($section)) {
+        return $null
+    }
+
+    return Get-MarkdownTableValue -Section $section -Label $Label
+}
+
 function Get-StoreSubmissionLogState {
     [CmdletBinding()]
     param(
@@ -128,6 +174,149 @@ function Get-ReleaseArchiveCommitFromBody {
     }
 
     return $commitMatch.Groups['commit'].Value.Trim()
+}
+
+function Get-ReleaseArchivePackageVersionFromBody {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Body
+    )
+
+    return Get-MarkdownSectionTableValue `
+        -Body $Body `
+        -Heading "Release Archive (Unsigned)" `
+        -Label "Package Version"
+}
+
+function Get-RcBuildVersionFromBody {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Body
+    )
+
+    return Get-MarkdownSectionTableValue `
+        -Body $Body `
+        -Heading "RC Build (Unsigned)" `
+        -Label "Version"
+}
+
+function Get-RcBuildPackageVersionFromBody {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Body
+    )
+
+    return Get-MarkdownSectionTableValue `
+        -Body $Body `
+        -Heading "RC Build (Unsigned)" `
+        -Label "Package Version"
+}
+
+function Get-RcBuildCommitFromBody {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Body
+    )
+
+    $section = Get-MarkdownSection -Body $Body -Heading "RC Build (Unsigned)"
+    if ([string]::IsNullOrWhiteSpace($section)) {
+        return $null
+    }
+
+    $commitMatch = [regex]::Match($section, '(?im)^\s*\|\s*\*\*Commit\*\*\s*\|.*?(?<commit>[0-9a-f]{40}).*$')
+    if (-not $commitMatch.Success) {
+        return $null
+    }
+
+    return $commitMatch.Groups['commit'].Value.Trim()
+}
+
+function Get-RcChannelState {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository,
+        [Parameter(Mandatory = $true)]
+        [string]$ReleaseBranch,
+        [switch]$AllowMissing = $false
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Repository) -or $Repository -notmatch '^[^/\s]+/[^/\s]+$') {
+        throw "Repository must be in 'owner/name' format. Actual: '$Repository'"
+    }
+    if ([string]::IsNullOrWhiteSpace($ReleaseBranch)) {
+        throw "ReleaseBranch must use 'release/X.Y' format. Actual: '$ReleaseBranch'"
+    }
+    $branchMatch = [regex]::Match($ReleaseBranch.Trim(), '^release/(?<major>\d+)\.(?<minor>\d+)$')
+    if (-not $branchMatch.Success) {
+        throw "ReleaseBranch must use 'release/X.Y' format. Actual: '$ReleaseBranch'"
+    }
+
+    $ghAvailable = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $ghAvailable) {
+        throw "GitHub CLI 'gh' is required to query the RC channel."
+    }
+
+    $series = "$($branchMatch.Groups['major'].Value).$($branchMatch.Groups['minor'].Value)"
+    $tagName = "rc-$series-latest"
+    $releaseJson = gh release view $tagName --repo $Repository --json tagName,isDraft,body 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseJson)) {
+        if ($AllowMissing) {
+            return [PSCustomObject]@{
+                Exists          = $false
+                TagName         = $tagName
+                ReleaseBranch   = $ReleaseBranch.Trim()
+                Version         = $null
+                PackageVersion  = $null
+                Build           = $null
+                Commit          = $null
+                IsDraft         = $false
+                Body            = ""
+            }
+        }
+
+        throw "RC channel '$tagName' was not found in '$Repository'. Run RC Build for '$ReleaseBranch' first."
+    }
+
+    try {
+        $release = $releaseJson | ConvertFrom-Json -Depth 100
+    }
+    catch {
+        throw "Failed to parse RC channel metadata for '$tagName' in '$Repository'."
+    }
+
+    $body = ""
+    if ($release.body) {
+        $body = [string]$release.body
+    }
+
+    $version = Get-RcBuildVersionFromBody -Body $body
+    $packageVersion = Get-RcBuildPackageVersionFromBody -Body $body
+    $commit = Get-RcBuildCommitFromBody -Body $body
+    $build = $null
+
+    if (-not [string]::IsNullOrWhiteSpace($packageVersion)) {
+        $buildMatch = [regex]::Match($packageVersion, '^\d+\.\d+\.\d+\.(?<build>\d+)$')
+        if ($buildMatch.Success) {
+            $build = [int]$buildMatch.Groups['build'].Value
+        }
+    }
+
+    return [PSCustomObject]@{
+        Exists          = $true
+        TagName         = [string]$release.tagName
+        ReleaseBranch   = $ReleaseBranch.Trim()
+        Version         = $version
+        PackageVersion  = $packageVersion
+        Build           = $build
+        Commit          = $commit
+        IsDraft         = ($release.isDraft -eq $true)
+        Body            = $body
+    }
 }
 
 function Get-GitHubIssues {
@@ -349,6 +538,7 @@ function Get-ReleaseFinalizationState {
                 HasArchiveAssets       = $false
                 Body                   = ""
                 ArchiveCommit          = $null
+                ArchivePackageVersion  = $null
                 HasStoreSubmission     = $false
                 StoreSubmissionCount   = 0
                 StoreSubmissionCommit  = $null
@@ -375,6 +565,7 @@ function Get-ReleaseFinalizationState {
     $assetSummary = Get-ReleaseAssetSummary -Assets $release.assets
     $storeSubmission = Get-StoreSubmissionLogState -Body $body
     $archiveCommit = Get-ReleaseArchiveCommitFromBody -Body $body
+    $archivePackageVersion = Get-ReleaseArchivePackageVersionFromBody -Body $body
 
     return [PSCustomObject]@{
         Exists                 = $true
@@ -386,6 +577,7 @@ function Get-ReleaseFinalizationState {
         HasArchiveAssets       = $assetSummary.HasArchiveAssets
         Body                   = $body
         ArchiveCommit          = $archiveCommit
+        ArchivePackageVersion  = $archivePackageVersion
         HasStoreSubmission     = $storeSubmission.HasSubmission
         StoreSubmissionCount   = $storeSubmission.SubmissionCount
         StoreSubmissionCommit  = $storeSubmission.LatestCommit
@@ -446,7 +638,7 @@ function Assert-StoreSubmissionRecorded {
         throw "GitHub Release '$Version' does not have the finalized archive assets yet. Expected exactly one .msixbundle and SHA256SUMS.txt. Assets: $assetList"
     }
     if (-not $state.HasStoreSubmission) {
-        throw "GitHub Release '$Version' does not have a Store Submission Log entry yet. Record the Partner Center submission before starting the next patch cycle."
+        throw "GitHub Release '$Version' does not have a Store Submission Log entry yet. Record the Partner Center submission before selecting a newer patch line."
     }
     if (-not $state.StoreSubmissionCommit) {
         throw "GitHub Release '$Version' has a Store Submission Log entry but no parsable commit. Fix the Store Submission Log before continuing."
@@ -603,8 +795,7 @@ function Get-BlockingFilesAheadOfFinalizedTag {
         [Parameter(Mandatory = $true)]
         [string]$TagCommit,
         [Parameter(Mandatory = $true)]
-        [string]$HeadCommit,
-        [switch]$AllowReleaseFinalizeTooling = $false
+        [string]$HeadCommit
     )
 
     if ([string]::IsNullOrWhiteSpace($TagCommit) -or $TagCommit -notmatch '^[0-9a-f]{40}$') {
@@ -641,18 +832,11 @@ function Get-BlockingFilesAheadOfFinalizedTag {
         '^\.github/workflows/deploy-pages\.yml$',
         '^\.github/workflows/release-finalize\.yml$',
         '^scripts/build-store-package\.ps1$',
+        '^scripts/release-support\.ps1$',
         '^scripts/show-version-report\.ps1$',
         '^scripts/store-checklist\.ps1$',
         '^[^/]+\.md$'
     )
-
-    if ($AllowReleaseFinalizeTooling) {
-        $allowedPatterns += @(
-            '^\.github/workflows/prepare-patch-release\.yml$',
-            '^scripts/create-patch-release-branch\.ps1$',
-            '^scripts/release-support\.ps1$'
-        )
-    }
 
     $blockingFiles = @()
     foreach ($changedFile in $changedFiles) {
@@ -718,5 +902,61 @@ function Assert-LatestFinalizedVersion {
         LatestVersion           = $latestVersion
         MissingFinalizedRelease = $false
         Status                  = "latest_finalized_version"
+    }
+}
+
+function Assert-ReleaseFinalizeTargetVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Repository,
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [string]$ReleaseBranch = $null,
+        [switch]$Quiet = $false,
+        [switch]$AllowMissingFinalizedRelease = $false
+    )
+
+    $target = Resolve-ReleaseSeriesTarget -Version $Version -ReleaseBranch $ReleaseBranch
+    $latestVersion = Get-LatestFinalizedReleaseVersion -Repository $Repository -AllowMissing:$AllowMissingFinalizedRelease
+
+    if ([string]::IsNullOrWhiteSpace($latestVersion)) {
+        if (-not $Quiet) {
+            Write-Host "[OK] No finalized GitHub Releases exist yet. Allowing Release Finalize for $Version." -ForegroundColor Green
+        }
+
+        return [PSCustomObject]@{
+            TargetSeries            = $target.Series
+            TargetLabel             = $target.Label
+            TargetVersion           = $Version.Trim()
+            LatestVersion           = $null
+            MissingFinalizedRelease = $true
+            Status                  = "missing_finalized_release"
+        }
+    }
+
+    $targetVersion = $Version.Trim()
+    $targetSemVer = [Version]$targetVersion
+    $latestSemVer = [Version]$latestVersion
+
+    if ($targetSemVer -lt $latestSemVer) {
+        throw "Target version '$targetVersion' is older than the latest finalized version '$latestVersion'. Release Finalize cannot target an older patch line."
+    }
+
+    if (-not $Quiet) {
+        if ($targetVersion -eq $latestVersion) {
+            Write-Host "[OK] $targetVersion matches the latest finalized version and can be rerun." -ForegroundColor Green
+        } else {
+            Write-Host "[OK] $targetVersion is newer than the latest finalized version '$latestVersion' and can become a new finalized patch line." -ForegroundColor Green
+        }
+    }
+
+    return [PSCustomObject]@{
+        TargetSeries            = $target.Series
+        TargetLabel             = $target.Label
+        TargetVersion           = $targetVersion
+        LatestVersion           = $latestVersion
+        MissingFinalizedRelease = $false
+        Status                  = "release_finalize_target_version"
     }
 }

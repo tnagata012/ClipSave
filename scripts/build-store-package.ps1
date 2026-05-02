@@ -7,19 +7,25 @@
     Builds a Store upload package (.msixupload) locally for preflight/debugging.
     Final submission packages must be produced by the Release Finalize workflow
     in Store package mode from a release/X.Y run that resolves and checks out
-    the fixed X.Y.Z tag to preserve reproducibility.
+    the operator-selected X.Y.Z tag to preserve reproducibility.
 
 .PARAMETER Version
-    Version to build (e.g., "1.0.0"). If not specified, reads from Directory.Build.props
+    Finalized version to build (e.g., "1.0.3"). If not specified, uses the
+    release branch base version from Directory.Build.props (X.Y.0).
+
+.PARAMETER Build
+    Build number to append as the 4th segment (e.g., "57"). Defaults to 1 for local preflight.
 
 .EXAMPLE
     .\build-store-package.ps1
-    .\build-store-package.ps1 -Version "1.2.0"
+    .\build-store-package.ps1 -Version "1.2.0" -Build 57
 #>
 
 param(
     [Parameter(Mandatory=$false)]
-    [string]$Version
+    [string]$Version,
+    [Parameter(Mandatory=$false)]
+    [int]$Build = 1
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,17 +66,39 @@ try {
         exit 1
     }
 
-    # Get version from Directory.Build.props
+    # Get branch base version from Directory.Build.props
     [xml]$props = Get-Content "$projectRoot\Directory.Build.props"
-    $fileVersion = $props.Project.PropertyGroup.Version
-
-    # Use file version when not specified, or validate provided version
-    if (-not $Version) {
-        $Version = $fileVersion
-        Write-Host "Using version from Directory.Build.props: $Version" -ForegroundColor Cyan
-    } elseif ($Version -ne $fileVersion) {
-        Write-Error "Version mismatch: Directory.Build.props has $fileVersion but -Version is $Version"
+    $repositoryVersion = ([string]$props.Project.PropertyGroup.Version).Trim()
+    $branchMatch = [regex]::Match($currentBranch, '^release/(?<major>\d+)\.(?<minor>\d+)$')
+    if (-not $branchMatch.Success) {
+        Write-Error "Current branch is '$currentBranch'. Switch to a release branch (release/X.Y) before building Store package."
         exit 1
+    }
+
+    $branchBaseVersion = "$($branchMatch.Groups['major'].Value).$($branchMatch.Groups['minor'].Value).0"
+    if ($repositoryVersion -ne $branchBaseVersion) {
+        Write-Error "Release branch '$currentBranch' must keep repository version '$branchBaseVersion'. Actual: '$repositoryVersion'"
+        exit 1
+    }
+
+    # Use branch base version when not specified, or validate provided finalized version
+    if (-not $Version) {
+        $Version = $repositoryVersion
+        Write-Host "Using release branch base version from Directory.Build.props: $Version" -ForegroundColor Cyan
+        Write-Warning "release/X.Y keeps repository version X.Y.0. For patch releases beyond the initial X.Y.0 line, pass -Version X.Y.Z explicitly."
+    } else {
+        $requestedVersionMatch = [regex]::Match($Version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$')
+        if (-not $requestedVersionMatch.Success) {
+            Write-Error "Invalid version format: $Version (expected X.Y.Z)"
+            exit 1
+        }
+
+        $requestedSeries = "$($requestedVersionMatch.Groups['major'].Value).$($requestedVersionMatch.Groups['minor'].Value)"
+        $branchSeries = "$($branchMatch.Groups['major'].Value).$($branchMatch.Groups['minor'].Value)"
+        if ($requestedSeries -ne $branchSeries) {
+            Write-Error "Requested version '$Version' does not belong to current release branch '$currentBranch'."
+            exit 1
+        }
     }
 
     # Validate version format
@@ -80,11 +108,12 @@ try {
     }
 
     $versionMatch = [regex]::Match($Version, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$')
+
     $segments = @(
         [int]$versionMatch.Groups['major'].Value,
         [int]$versionMatch.Groups['minor'].Value,
         [int]$versionMatch.Groups['patch'].Value,
-        0
+        $Build
     )
     if ($segments | Where-Object { $_ -lt 0 -or $_ -gt 65535 }) {
         Write-Error "MSIX version segments must be within 0..65535. Resolved segments: $($segments -join '.')"
@@ -98,20 +127,21 @@ try {
     }
 
     $assemblyVersion = "$($versionMatch.Groups['major'].Value).$($versionMatch.Groups['minor'].Value).0.0"
-    $fileVersionValue = "$Version.0"
-    $informationalVersion = "$Version+sha.$shortSha"
-    $msixVersion = "$Version.0"
+    $fileVersionValue = "$Version.$Build"
+    $informationalVersion = "$Version-build.$Build+sha.$shortSha"
+    $msixVersion = "$Version.$Build"
 
     $tagsOnHead = @(
         git tag --points-at HEAD 2>$null |
         Where-Object { $_ -and $_.Trim() -ne "" }
     )
     if ($tagsOnHead -notcontains $Version) {
-        Write-Warning "Current HEAD is not tagged '$Version'. Final Store submission must use Release Finalize from $currentBranch; the workflow resolves version '$Version', can create the tag when missing, and builds from refs/tags/$Version."
+        Write-Warning "Current HEAD is not tagged '$Version'. Final Store submission must use Release Finalize from $currentBranch with explicit patch input. The workflow adopts the latest successful RC candidate and uses create_version_tag=true when the tag must move."
     }
 
-    Write-Host "`n=== Building Store Package for ClipSave v$Version ===" -ForegroundColor Green
+    Write-Host "`n=== Building Store Package for ClipSave v$Version (build $Build) ===" -ForegroundColor Green
     Write-Host "Branch: $currentBranch" -ForegroundColor Cyan
+    Write-Host "Release branch base version: $repositoryVersion" -ForegroundColor Cyan
     Write-Host "InformationalVersion: $informationalVersion" -ForegroundColor Cyan
     Write-Warning "This script is for local preflight only. Final submission packages must come from the Release Finalize workflow in Store package mode on the release branch."
     $msbuildPath = Resolve-MSBuildPath
@@ -251,8 +281,8 @@ try {
 
     Write-Host "`n=== Next Steps ===" -ForegroundColor Green
     Write-Host "1. Use this local package only for preflight/debugging"
-    Write-Host "2. For final submission, run Release Finalize from $currentBranch (build_store_package defaults to true; leave create_version_tag=true when '$Version' is not tagged yet)"
-    Write-Host "3. Confirm workflow summary shows refs/tags/$Version, Store Package Mode=built, and the expected commit SHA"
+    Write-Host "2. For final submission, run Release Finalize from $currentBranch with explicit patch=$($versionMatch.Groups['patch'].Value) (the branch stays $repositoryVersion and the latest successful RC candidate is adopted automatically)"
+    Write-Host "3. Confirm workflow summary shows refs/tags/$Version, Package Version=$msixVersion, Store Package Mode=built, and the expected commit SHA"
     Write-Host "4. Upload the workflow artifact .msixupload in Partner Center"
 
     Write-Host "`nTip: Run .\scripts\store-checklist.ps1 to verify pre-submission requirements" -ForegroundColor Yellow

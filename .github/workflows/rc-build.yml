@@ -3,14 +3,10 @@ name: RC Build
 on:
   push:
     branches: ['release/*']
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'site/**'
-      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: write
   id-token: write
   attestations: write
@@ -69,7 +65,60 @@ jobs:
     - name: Resolve RC build versions
       id: version
       shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
+        function Get-BranchBuildNumber([string]$Repository, [string]$Workflow, [string]$BranchName, [Int64]$CurrentRunId) {
+          $maxAttempts = 5
+          $encodedBranch = [Uri]::EscapeDataString($BranchName)
+
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            $runJson = gh api --paginate --slurp "repos/$Repository/actions/workflows/$Workflow/runs?branch=$encodedBranch&per_page=100" 2>$null
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to query prior RC Build runs for branch '$BranchName'."
+            }
+
+            try {
+              $runPages = @($runJson | ConvertFrom-Json -Depth 100)
+            } catch {
+              throw "Failed to parse RC Build run list for branch '$BranchName'."
+            }
+
+            $runs = @()
+            foreach ($page in $runPages) {
+              if ($null -eq $page -or $null -eq $page.workflow_runs) {
+                continue
+              }
+
+              foreach ($run in @($page.workflow_runs)) {
+                if ($null -eq $run -or $null -eq $run.id) {
+                  continue
+                }
+
+                $runs += $run
+              }
+            }
+
+            $orderedIds = @(
+              $runs |
+                ForEach-Object { [Int64]$_.id } |
+                Sort-Object
+            )
+
+            $index = [array]::IndexOf($orderedIds, $CurrentRunId)
+            if ($index -ge 0) {
+              return ($index + 1)
+            }
+
+            if ($attempt -lt $maxAttempts) {
+              Start-Sleep -Seconds 2
+            }
+          }
+
+          throw "Current RC Build run '$CurrentRunId' was not visible in the branch-scoped run list for '$BranchName'."
+        }
+
+        $repo = "${{ github.repository }}"
         $branch = "${{ github.ref_name }}"
         [xml]$props = Get-Content Directory.Build.props
         $version = $props.Project.PropertyGroup.Version
@@ -86,12 +135,17 @@ jobs:
         $coreVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
         $releaseLine = "$($branchMatch.Groups['major'].Value).$($branchMatch.Groups['minor'].Value)"
         $rcChannelTag = "rc-$releaseLine-latest"
+        $branchBuildNumber = Get-BranchBuildNumber `
+          -Repository $repo `
+          -Workflow "rc-build.yml" `
+          -BranchName $branch `
+          -CurrentRunId ([Int64]"${{ github.run_id }}")
         $shortSha = "${{ github.sha }}".Substring(0, 7)
         $segments = @(
           [int]$match.Groups['major'].Value,
           [int]$match.Groups['minor'].Value,
           [int]$match.Groups['patch'].Value,
-          0
+          $branchBuildNumber
         )
         if ($segments | Where-Object { $_ -lt 0 -or $_ -gt 65535 }) {
           Write-Error "MSIX version segments must be within 0..65535. Resolved segments: $($segments -join '.')"
@@ -99,9 +153,9 @@ jobs:
         }
 
         $assemblyVersion = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).0.0"
-        $fileVersion = "$coreVersion.0"
-        $informationalVersion = "$coreVersion+sha.$shortSha"
-        $msixVersion = "$coreVersion.0"
+        $fileVersion = "$coreVersion.$branchBuildNumber"
+        $informationalVersion = "$coreVersion-rc.$branchBuildNumber+sha.$shortSha"
+        $msixVersion = "$coreVersion.$branchBuildNumber"
 
         echo "VERSION=$version" >> $env:GITHUB_OUTPUT
         echo "ASSEMBLY_VERSION=$assemblyVersion" >> $env:GITHUB_OUTPUT
@@ -109,11 +163,12 @@ jobs:
         echo "INFORMATIONAL_VERSION=$informationalVersion" >> $env:GITHUB_OUTPUT
         echo "MSIX_VERSION=$msixVersion" >> $env:GITHUB_OUTPUT
         echo "RC_CHANNEL_TAG=$rcChannelTag" >> $env:GITHUB_OUTPUT
+        echo "BUILD_NUMBER=$branchBuildNumber" >> $env:GITHUB_OUTPUT
         echo "Version: $version"
         echo "AssemblyVersion: $assemblyVersion"
         echo "FileVersion: $fileVersion"
         echo "InformationalVersion: $informationalVersion"
-        echo "MSIX version: $msixVersion"
+        echo "MSIX version: $msixVersion (Branch build: $branchBuildNumber)"
         echo "RC channel tag: $rcChannelTag"
 
     - name: Validate version
@@ -255,6 +310,9 @@ jobs:
 
           > Unsigned package by channel policy. Verify `SHA256SUMS.txt` and GitHub Artifact Attestation (`gh attestation verify`) before use.
           > This floating release tag always points to the latest candidate for `${{ github.ref_name }}` and can be replaced by a newer build.
+          > RC package version uses the release-branch base version `X.Y.0.B`, and the build segment tracks the branch-scoped `rc-build` counter.
+          > `Release Finalize` keeps the source build number `B` but rewrites the patch segment to the operator-selected finalized version `X.Y.Z.B`.
+          > The `B` counter resets when a new `release/X.Y` branch starts.
         files: |
           output/**/*.msixbundle
           output/SHA256SUMS.txt

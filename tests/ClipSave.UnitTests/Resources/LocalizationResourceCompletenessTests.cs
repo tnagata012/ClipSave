@@ -62,6 +62,19 @@ public class LocalizationResourceCompletenessTests
         missingKeys.Should().BeEmpty("All statically referenced localization keys must exist in Strings.resx.");
     }
 
+    [Fact]
+    public void PackageManifestResw_HasSameKeys_ForAllPackageLanguages()
+    {
+        var englishResources = LoadResources(GetPackageReswPath("en"));
+        var japaneseResources = LoadResources(GetPackageReswPath("ja"));
+
+        var missingInJapanese = englishResources.Keys.Except(japaneseResources.Keys).OrderBy(key => key).ToArray();
+        var extraInJapanese = japaneseResources.Keys.Except(englishResources.Keys).OrderBy(key => key).ToArray();
+
+        missingInJapanese.Should().BeEmpty("Japanese package resources must define all manifest keys.");
+        extraInJapanese.Should().BeEmpty("Japanese package resources must not contain unknown manifest keys.");
+    }
+
     private static Dictionary<string, string> LoadResources(string resxPath)
     {
         var document = XDocument.Load(resxPath);
@@ -132,5 +145,10 @@ public class LocalizationResourceCompletenessTests
     private static string GetJapaneseResxPath()
     {
         return Path.Combine(TestPaths.SourceRoot, "Resources", "Strings.ja.resx");
+    }
+
+    private static string GetPackageReswPath(string language)
+    {
+        return Path.Combine(TestPaths.PackageRoot, "Strings", language, "Resources.resw");
     }
 }

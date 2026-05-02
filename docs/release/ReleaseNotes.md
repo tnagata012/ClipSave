@@ -67,24 +67,26 @@ Issue title: `Release Notes: Unreleased`
 
 ### release line 運用中
 
-1. `main` 側の user-facing change は引き続き `Release Notes: Unreleased` を更新する。
+1. `main` 側の user-facing change は `Release Notes: Unreleased` を更新する。
 2. `release/X.Y` 側の安定化 PR / backport PR は、必要に応じて `Release Notes: X.Y` を更新する。
 3. `Release Notes: X.Y` は、その系列で次に出す版の候補を保持する。
 
-### tag 前
+### Release Finalize 前
 
 1. `Release Notes: X.Y` Issue を見直し、今回の出荷内容として読めることを確認する。
 2. 必要なら merged PR や関連 Issue を見て bullet を補い、ユーザー向け文面に磨く。
 
 ### Release Finalize と再実行
 
-1. tag `X.Y.Z` を push したら `Release Finalize` が GitHub Release `X.Y.Z` を更新する。
-2. GitHub Release 本文には `Release Notes: X.Y` への参照が入る。
-3. issue が未整備のままでも release 自体は作成されるが、Store 前確認では未整備として扱う。
-4. Store 提出前に `Release Finalize` を `release/X.Y` から手動再実行すると、`X.Y.Z` が現在 HEAD へ付け直され、GitHub Release の archive も更新されることがある。
-5. Store 提出後は `Store Submission Log` の記録をもって `X.Y.Z` が固定化されるため、再実行しても tag は動かさない。
-6. issue 本文を更新しただけなら rerun は不要。再実行は GitHub Release 側の更新や archive 補完が必要な場合だけでよい。
-7. GitHub Release 本文は、配布案内を主としたシンプルな構成を保つ。
+1. `Release Finalize` は現行サポート系列の `release/X.Y` から、手動入力の `patch=Z` を使って `version=X.Y.Z` を解決して実行する。
+2. `Release Finalize` を `release/X.Y` から実行すると、GitHub Release `X.Y.Z` が更新される。
+3. GitHub Release 本文には `Release Notes: X.Y` への参照が入る。
+4. issue が未整備のままでも release 自体は作成されるが、Store 前確認では未整備として扱う。
+5. Store 提出前に `Release Finalize` を `release/X.Y` から手動再実行する場合は、同じ patch line に対して対象の `patch=Z` を指定する。build は `rc-X.Y-latest` の最新成功候補から自動解決される。
+6. GitHub Release `X.Y.Z` は patch line を表し、selected RC source package は `X.Y.0.B` のままでも、archive / Store package は finalized version `X.Y.Z.B` に揃える。
+7. Store 提出後は `Store Submission Log` の記録をもって採用 commit が固定化されるため、再実行しても採用 build は勝手に差し替えない。
+8. issue 本文を更新しただけなら rerun は不要。再実行は GitHub Release 側の更新や archive 補完が必要な場合だけでよい。
+9. GitHub Release 本文は、配布案内を主としたシンプルな構成を保つ。
 
 ## 記載スタイル
 

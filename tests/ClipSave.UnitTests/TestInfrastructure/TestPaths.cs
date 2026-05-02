@@ -13,4 +13,6 @@ internal static class TestPaths
         ".."));
 
     public static string SourceRoot { get; } = Path.Combine(RepositoryRoot, "src", "ClipSave");
+
+    public static string PackageRoot { get; } = Path.Combine(RepositoryRoot, "src", "ClipSave.Package");
 }

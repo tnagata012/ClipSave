@@ -58,8 +58,9 @@ python -m http.server 4173 --directory site
 
 ### リンク管理
 
-- `GitHub` / `Releases` / `LICENSE` へのリンクは変更時に必ず動作確認する
+- `Microsoft Store` / `GitHub` / `LICENSE` へのリンクは変更時に必ず動作確認する
 - 外部リンクには `target="_blank"` と `rel="noopener noreferrer"` を付与する
+- ヘッダーの「ダウンロード」ボタンは `href` が Store URL（`https://apps.microsoft.com/detail/9NC18Q1NM59P`）であること（ページ内アンカーに戻さない）
 - フッターの著作年やメンテナー表記は `README.md` / `LICENSE` / `CONTRIBUTING.md` と整合させる
 
 ### アクセシビリティ
@@ -71,7 +72,13 @@ python -m http.server 4173 --directory site
 ### OGP / メタ情報
 
 - `og:title`・`og:description`・`twitter:card` を `<head>` に定義済み
-- タイトルや説明文を変更した場合は OGP メタも同時に更新する
+- `<link rel="canonical">` を設定済み（`https://tnagata012.github.io/ClipSave/`）
+- タイトルや説明文を変更した場合は OGP メタと canonical も同時に更新する
+
+### 構造化データ
+
+- `SoftwareApplication` スキーマ（JSON-LD）を `<head>` に定義済み
+- バージョンアップ時は `softwareVersion` フィールドを更新する
 
 ## 変更時チェック
 
@@ -83,7 +90,8 @@ python -m http.server 4173 --directory site
 | 操作 | アンカーリンク（`#features` など）が動作する |
 | 操作 | Back to top ボタンがスクロール後に表示される |
 | 操作 | FAQ の `<details>` が開閉できる |
-| 導線 | ダウンロード導線（Hero・ナビ・CTA）が機能する |
+| 導線 | ヘッダー「ダウンロード」が Microsoft Store を新タブで開く |
+| 導線 | Hero・CTA のダウンロードボタンが Microsoft Store を新タブで開く |
 | a11y | スキップリンクが Tab で表示される |
 | a11y | ナビのアクティブハイライトがスクロールに追従する |
 

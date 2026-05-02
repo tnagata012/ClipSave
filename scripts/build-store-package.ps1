@@ -14,7 +14,9 @@
     release branch base version from Directory.Build.props (X.Y.0).
 
 .PARAMETER Build
-    Build number to append as the 4th segment (e.g., "57"). Defaults to 1 for local preflight.
+    Build number to use for file/informational versions (e.g., "57").
+    Store package identity always uses X.Y.Z.0 because Partner Center rejects
+    non-zero package revision segments.
 
 .EXAMPLE
     .\build-store-package.ps1
@@ -129,7 +131,6 @@ try {
     $assemblyVersion = "$($versionMatch.Groups['major'].Value).$($versionMatch.Groups['minor'].Value).0.0"
     $fileVersionValue = "$Version.$Build"
     $informationalVersion = "$Version-build.$Build+sha.$shortSha"
-    $msixVersion = "$Version.$Build"
 
     $tagsOnHead = @(
         git tag --points-at HEAD 2>$null |
@@ -143,6 +144,8 @@ try {
     Write-Host "Branch: $currentBranch" -ForegroundColor Cyan
     Write-Host "Release branch base version: $repositoryVersion" -ForegroundColor Cyan
     Write-Host "InformationalVersion: $informationalVersion" -ForegroundColor Cyan
+    Write-Host "FileVersion: $fileVersionValue" -ForegroundColor Cyan
+    Write-Host "Store package version: $Version.0" -ForegroundColor Cyan
     Write-Warning "This script is for local preflight only. Final submission packages must come from the Release Finalize workflow in Store package mode on the release branch."
     $msbuildPath = Resolve-MSBuildPath
     Write-Host "MSBuild: $msbuildPath" -ForegroundColor Cyan
@@ -203,7 +206,8 @@ try {
     Write-Host "`nPreparing Store Package.appxmanifest..." -ForegroundColor Yellow
     $manifestBackupPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ClipSave.Package.appxmanifest.{0}.bak" -f [guid]::NewGuid())
     Copy-Item $manifestPath $manifestBackupPath -Force
-    & "$projectRoot\scripts\set-package-manifest.ps1" -ProjectRoot $projectRoot -Profile store -Version $msixVersion
+    $storeMsixVersion = "$Version.0"
+    & "$projectRoot\scripts\set-package-manifest.ps1" -ProjectRoot $projectRoot -Profile store -Version $storeMsixVersion
     Write-Host "Prepared Package.appxmanifest for Store profile" -ForegroundColor Cyan
 
     Write-Host "`nCleaning package intermediates..." -ForegroundColor Yellow
@@ -234,9 +238,9 @@ try {
         /p:UapAppxPackageBuildMode=StoreUpload `
         /p:AppxBundle=Always `
         /p:AppxPackageDir="$outputDir\" `
-        /p:AppxPackageVersion=$msixVersion `
-        /p:AppxBundleManifestVersion=$msixVersion `
-        /p:AppxManifestIdentityVersion=$msixVersion `
+        /p:AppxPackageVersion=$storeMsixVersion `
+        /p:AppxBundleManifestVersion=$storeMsixVersion `
+        /p:AppxManifestIdentityVersion=$storeMsixVersion `
         /p:AppxPackageSigningEnabled=false `
         /verbosity:minimal
 
@@ -258,9 +262,9 @@ try {
         exit 1
     }
     $msixUpload = $uploads[0]
-    $expectedPattern = "_$([regex]::Escape($msixVersion))_"
+    $expectedPattern = "_$([regex]::Escape($storeMsixVersion))_"
     if ($msixUpload.Name -notmatch $expectedPattern) {
-        Write-Error "Store upload filename does not contain expected version '$msixVersion'. Found: $($msixUpload.Name)"
+        Write-Error "Store upload filename does not contain expected version '$storeMsixVersion'. Found: $($msixUpload.Name)"
         exit 1
     }
 
@@ -268,7 +272,8 @@ try {
         -PackagePath $msixUpload.FullName `
         -ExpectedName "tnagata012.ClipSave" `
         -ExpectedPublisher "CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959" `
-        -ExpectedVersion $msixVersion
+        -ExpectedVersion $storeMsixVersion `
+        -ExpectedPublisherDisplayName "tnagata012"
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Store package identity validation failed"
         exit 1
@@ -282,7 +287,7 @@ try {
     Write-Host "`n=== Next Steps ===" -ForegroundColor Green
     Write-Host "1. Use this local package only for preflight/debugging"
     Write-Host "2. For final submission, run Release Finalize from $currentBranch with explicit patch=$($versionMatch.Groups['patch'].Value) (the branch stays $repositoryVersion and the latest successful RC candidate is adopted automatically)"
-    Write-Host "3. Confirm workflow summary shows refs/tags/$Version, Package Version=$msixVersion, Store Package Mode=built, and the expected commit SHA"
+    Write-Host "3. Confirm workflow summary shows refs/tags/$Version, Store Package Version=$storeMsixVersion, Store Package Mode=built, and the expected commit SHA"
     Write-Host "4. Upload the workflow artifact .msixupload in Partner Center"
 
     Write-Host "`nTip: Run .\scripts\store-checklist.ps1 to verify pre-submission requirements" -ForegroundColor Yellow

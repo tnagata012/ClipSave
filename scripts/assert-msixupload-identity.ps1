@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     Opens a .msixupload, reads the bundled Appx bundle manifest and each
-    packaged app manifest, and verifies that Name / Publisher / Version match
-    the expected Store identity.
+    packaged app manifest, and verifies that Name / Publisher / Version /
+    PublisherDisplayName match the expected Store identity.
 #>
 
 param(
@@ -20,7 +20,10 @@ param(
     [string]$ExpectedPublisher,
 
     [Parameter(Mandatory = $true)]
-    [string]$ExpectedVersion
+    [string]$ExpectedVersion,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ExpectedPublisherDisplayName
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +31,10 @@ $ErrorActionPreference = "Stop"
 function Fail([string]$Message) {
     Write-Host "`n[ERROR] $Message" -ForegroundColor Red
     exit 1
+}
+
+if ($ExpectedVersion -notmatch '^\d+\.\d+\.\d+\.0$') {
+    Fail "Store upload package Version must use a zero revision segment (X.Y.Z.0). ExpectedVersion was '$ExpectedVersion'."
 }
 
 function Get-XmlFromZipEntry {
@@ -134,11 +141,14 @@ function Get-AppPackageIdentities {
                 throw "Package identity was not found in payload '$($packageEntry.FullName)'."
             }
 
+            $publisherDisplayNameNode = $manifest.SelectSingleNode("/appx:Package/appx:Properties/appx:PublisherDisplayName", $ns)
+
             $identities += [PSCustomObject]@{
-                Path      = $packageEntry.FullName
-                Name      = [string]$identity.Name
-                Publisher = [string]$identity.Publisher
-                Version   = [string]$identity.Version
+                Path                 = $packageEntry.FullName
+                Name                 = [string]$identity.Name
+                Publisher            = [string]$identity.Publisher
+                Version              = [string]$identity.Version
+                PublisherDisplayName = if ($publisherDisplayNameNode) { [string]$publisherDisplayNameNode.InnerText } else { "" }
             }
         }
         finally {
@@ -206,8 +216,23 @@ if ($payloadMismatch) {
     Fail "Payload identity mismatch detected. Expected Name='$ExpectedName', Publisher='$ExpectedPublisher', Version='$ExpectedVersion'. Actual: $($details -join '; ')"
 }
 
+if ($ExpectedPublisherDisplayName) {
+    $publisherDisplayNameMismatch = $payloadIdentities | Where-Object {
+        $_.PublisherDisplayName -ne $ExpectedPublisherDisplayName
+    }
+    if ($publisherDisplayNameMismatch) {
+        $details = $publisherDisplayNameMismatch | ForEach-Object {
+            "'$($_.Path)' => PublisherDisplayName='$($_.PublisherDisplayName)'"
+        }
+        Fail "Payload PublisherDisplayName mismatch detected. Expected '$ExpectedPublisherDisplayName'. Actual: $($details -join '; ')"
+    }
+}
+
 Write-Host "[OK] Store upload identity validated:" -ForegroundColor Green
 Write-Host "  Bundle Name      : $($bundleIdentity.Name)" -ForegroundColor White
 Write-Host "  Bundle Publisher : $($bundleIdentity.Publisher)" -ForegroundColor White
 Write-Host "  Bundle Version   : $($bundleIdentity.Version)" -ForegroundColor White
 Write-Host "  Payload Count    : $($payloadIdentities.Count)" -ForegroundColor White
+if ($ExpectedPublisherDisplayName) {
+    Write-Host "  Publisher Display Name : $ExpectedPublisherDisplayName" -ForegroundColor White
+}

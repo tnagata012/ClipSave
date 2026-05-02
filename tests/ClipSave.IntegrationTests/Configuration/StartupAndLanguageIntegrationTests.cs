@@ -4,6 +4,7 @@ using ClipSave.Services;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows.Threading;
@@ -101,6 +102,66 @@ public class StartupAndLanguageIntegrationTests : IDisposable
             .ToArray();
 
         priResourceIncludes.Should().Contain("Strings\\**\\*.resw");
+    }
+
+    [Fact]
+    public void SetPackageManifest_StoreProfile_UsesStoreSafePublisherAndRevision()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"ClipSave_ManifestProfile_{Guid.NewGuid():N}");
+        var packageDirectory = Path.Combine(tempRoot, "src", "ClipSave.Package");
+        Directory.CreateDirectory(packageDirectory);
+
+        try
+        {
+            var manifestPath = Path.Combine(packageDirectory, "Package.appxmanifest");
+            File.Copy(GetProjectPath("src", "ClipSave.Package", "Package.appxmanifest"), manifestPath);
+
+            var scriptPath = GetProjectPath("scripts", "set-package-manifest.ps1");
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "pwsh",
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            };
+            startInfo.ArgumentList.Add("-NoProfile");
+            startInfo.ArgumentList.Add("-File");
+            startInfo.ArgumentList.Add(scriptPath);
+            startInfo.ArgumentList.Add("-ProjectRoot");
+            startInfo.ArgumentList.Add(tempRoot);
+            startInfo.ArgumentList.Add("-Profile");
+            startInfo.ArgumentList.Add("store");
+            startInfo.ArgumentList.Add("-Version");
+            startInfo.ArgumentList.Add("0.1.1.0");
+
+            using var process = Process.Start(startInfo);
+            process.Should().NotBeNull();
+            var standardOutput = process!.StandardOutput.ReadToEnd();
+            var standardError = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            process.ExitCode.Should().Be(0, "stdout: {0}; stderr: {1}", standardOutput, standardError);
+
+            var document = XDocument.Load(manifestPath);
+            XNamespace appx = "http://schemas.microsoft.com/appx/manifest/foundation/windows10";
+
+            document.Root!.Element(appx + "Properties")!
+                .Element(appx + "PublisherDisplayName")!
+                .Value.Should().Be("tnagata012");
+            document.Root.Element(appx + "Properties")!
+                .Element(appx + "DisplayName")!
+                .Value.Should().Be("ms-resource:PackageDisplayName");
+            document.Root.Element(appx + "Identity")!
+                .Attribute("Version")!
+                .Value.Should().Be("0.1.1.0");
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
     }
 
     [Fact]

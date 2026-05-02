@@ -6,7 +6,7 @@
 
 1. `Release Notes: Unreleased` と `Release Notes: X.Y` に分けた方が、作業中ドラフトと release line ごとの公開ノートを分離しやすい。
 2. GitHub Release 本文は配布アーカイブの案内に寄せ、公開向け変更履歴の正本は issue 参照に寄せた方が運用が軽い。
-3. repo 内ファイルと GitHub Release 本文を二重更新すると、patch release や backport で転記漏れが起きやすい。
+3. repo 内ファイルと GitHub Release 本文を二重更新すると、patch release や release 取り込みで転記漏れが起きやすい。
 4. PR、release 準備、Store 前確認が同じ issue title を参照できる。
 
 ## 基本ルール
@@ -48,7 +48,7 @@ Issue title: `Release Notes: Unreleased`
 
 1. `main` 向けの user-facing PR は、`Release Notes: Unreleased` を更新する。
 2. `release/X.Y` 向けの user-facing PR は、当該 `Release Notes: X.Y` を更新する。
-3. `main` で user-facing change を入れ、その後 `release/X.Y` へ backport した場合は、release 側 PR で `Release Notes: X.Y` も更新する。
+3. `main` で user-facing change を入れ、その後 `release/X.Y` へ取り込んだ場合は、release 側 PR で `Release Notes: X.Y` も更新する。
 4. docs / CI / internal-only な PR は、release-notes issue を更新しない。
 5. PR テンプレの `Release Notes` チェックは、更新済みか不要かだけを示す。
 
@@ -68,7 +68,7 @@ Issue title: `Release Notes: Unreleased`
 ### release line 運用中
 
 1. `main` 側の user-facing change は `Release Notes: Unreleased` を更新する。
-2. `release/X.Y` 側の安定化 PR / backport PR は、必要に応じて `Release Notes: X.Y` を更新する。
+2. `release/X.Y` 側の安定化 PR / 取り込み PR は、必要に応じて `Release Notes: X.Y` を更新する。
 3. `Release Notes: X.Y` は、その系列で次に出す版の候補を保持する。
 
 ### Release Finalize 前
@@ -83,7 +83,7 @@ Issue title: `Release Notes: Unreleased`
 3. GitHub Release 本文には `Release Notes: X.Y` への参照が入る。
 4. issue が未整備のままでも release 自体は作成されるが、Store 前確認では未整備として扱う。
 5. Store 提出前に `Release Finalize` を `release/X.Y` から手動再実行する場合は、同じ patch line に対して対象の `patch=Z` を指定する。build は `rc-X.Y-latest` の最新成功候補から自動解決される。
-6. GitHub Release `X.Y.Z` は patch line を表し、selected RC source package は `X.Y.0.B` のままでも、archive / Store package は finalized version `X.Y.Z.B` に揃える。
+6. GitHub Release `X.Y.Z` は patch line を表し、selected RC source package は `X.Y.0.B` のままでも、archive package は `X.Y.Z.B`、Store package の MSIX identity は `X.Y.Z.0` に揃える。
 7. Store 提出後は `Store Submission Log` の記録をもって採用 commit が固定化されるため、再実行しても採用 build は勝手に差し替えない。
 8. issue 本文を更新しただけなら rerun は不要。再実行は GitHub Release 側の更新や archive 補完が必要な場合だけでよい。
 9. GitHub Release 本文は、配布案内を主としたシンプルな構成を保つ。

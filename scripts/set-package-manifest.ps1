@@ -47,7 +47,7 @@ $profiles = @{
         PackageDisplayName = "ms-resource:PackageDisplayName"
         VisualDisplayName = "ms-resource:StoreVisualDisplayName"
         Description = "ms-resource:StoreDescription"
-        PublisherDisplayName = "ms-resource:PublisherDisplayName"
+        PublisherDisplayName = "tnagata012"
         StartupTaskDisplayName = "ms-resource:StoreStartupTaskDisplayName"
     }
 }

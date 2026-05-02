@@ -27,7 +27,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 補足:
 
 - patch line `Z` は `Release Finalize` で決め、修正 PR は `release/X.Y` へ反映する。
-- Dev 配布版の package version は `0.0.1.B`、RC は `X.Y.0.B`、Archive / Store は `X.Y.Z.B` を使う。
+- Dev 配布版の package version は `0.0.1.B`、RC は `X.Y.0.B`、Archive は `X.Y.Z.B` を使う。Store upload package の MSIX identity version は Partner Center の制約に合わせて `X.Y.Z.0` とし、`FileVersion` / `InformationalVersion` で採用 build `B` を追跡する。
 - RC の `B` は `release/X.Y` branch ごとのカウンターで、新しい release branch を切ると 1 から始まる。
 - `main=0.0.1` を preview line として固定し、release branch の `X.Y.0` base version と finalized version line `X.Y.Z` を分けることで、Dev と RC / Archive / Store の役割を見分けやすくする。
 - `AssemblyVersion` は配布 build 識別子ではなく互換性用に扱い、実際の配布物識別は `FileVersion` / package version / `InformationalVersion` で行う。
@@ -51,7 +51,7 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 | Dev | `dev-latest` / `dev-package-*` + `SHA256SUMS.txt` | 検証配布（未署名、package version=`0.0.1.B`） |
 | RC | `rc-X.Y-latest` / `rc-package-*` + `SHA256SUMS.txt` | 公開候補比較（未署名、package version=`X.Y.0.B`） |
 | Archive | GitHub Release `X.Y.Z` / `release-archive-*` + `SHA256SUMS.txt` | 確定 build の固定配布 / 再検証（未署名、package version=`X.Y.Z.B`） |
-| Store | `store-package-*`（`.msixupload`） | Partner Center 提出 |
+| Store | `store-package-*`（`.msixupload`） | Partner Center 提出（MSIX identity version=`X.Y.Z.0`） |
 
 ## 実運用手順
 
@@ -86,12 +86,12 @@ Partner Center / listing の実務手順は [StoreSubmission](../distribution/st
 対象は [ReleaseProcess](ReleaseProcess.md) で定義した現行サポート系列のみとする。
 
 1. 不具合修正を `main` へ PR で反映する。
-2. `release/X.Y` をベースにした `fix/*` backport ブランチで必要コミットを `cherry-pick -x` し、PR で `release/X.Y` へ反映する。
+2. `release/X.Y` をベースにした `fix/*` 取り込みブランチで必要コミットを `cherry-pick -x` し、PR で `release/X.Y` へ反映する。
 3. `release/X.Y` の repository version は `X.Y.0` とする。
 4. `rc-X.Y-latest` と必要な RC 成果物を確認し、採用したい候補が latest RC として見えていることを確認する。
 5. `Release Finalize` 前に `Release Notes: X.Y` Issue を見直し、今回の patch 版として読めるよう公開向け文面を整える。
 6. `Release Finalize` を `release/X.Y` から実行し、operator が採番した対象 `patch=Z` を指定する。
-7. GitHub Release `X.Y.Z` に archive 成果物が保存され、workflow summary で source package version が `X.Y.0.B`、final package version が `X.Y.Z.B` になっていることを確認する。
+7. GitHub Release `X.Y.Z` に archive 成果物が保存され、workflow summary で source package version が `X.Y.0.B`、archive package version が `X.Y.Z.B`、Store package version が `X.Y.Z.0` になっていることを確認する。
 8. Store 提出前に追加修正が必要になった場合は、release branch を更新して RC Build を通し、同じ patch line `X.Y.Z` に対して `Release Finalize` を再実行する。
 9. Store へ進める条件を満たす場合のみ、Store package を生成して提出する。
 

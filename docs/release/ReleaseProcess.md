@@ -30,10 +30,10 @@ flowchart LR
   main[main] -->|Dev Build| dev[dev-latest / dev-package-0.0.1.B]
   main -->|Prepare Release| release[release/X.Y]
   release -->|RC Build| rc[rc-X.Y-latest / rc-package-X.Y.0 / package X.Y.0.B]
-  release -->|stabilize/backport PR| release
+  release -->|stabilize/release PR| release
   release -->|Release Finalize patch=Z| tag[tag X.Y.Z]
   tag --> archive[GitHub Release X.Y.Z / release-archive-X.Y.Z.B]
-  tag --> store[store-package-X.Y.Z.B]
+  tag --> store[store-package-X.Y.Z / Store MSIX X.Y.Z.0]
 ```
 
 ## 基本モデル
@@ -41,12 +41,12 @@ flowchart LR
 1. 開発の正本は常に `main` とする。
 2. `main` の repository version は `0.0.1` とする。
 3. `release/X.Y` の repository version は常に `X.Y.0` とし、patch line `Z` は branch ではなく `Release Finalize` の手動入力で決める。
-4. 配布物の package / file version は 4 桁とし、4 桁目 `B` を build 番号として使う。
+4. Dev / RC / Archive の package version と全チャネルの file version は 4 桁とし、4 桁目 `B` を build 番号として使う。
 5. Dev の配布版は MSIX 都合のため予約済み preview line `0.0.1.B` を使う。
-6. RC の配布版は `X.Y.0.B`、Archive / Store の配布版は `X.Y.Z.B` を使い、`B` は `release/X.Y` ごとの `rc-build` カウンターを採用する。
+6. RC の配布版は `X.Y.0.B`、Archive の配布版は `X.Y.Z.B` を使い、`B` は `release/X.Y` ごとの `rc-build` カウンターを採用する。Store upload package の MSIX identity version は Partner Center の制約に合わせて `X.Y.Z.0` とし、`FileVersion` / `InformationalVersion` で `B` を追跡する。
 7. `release/X.Y` を新しく作ると、その branch の `B` は 1 から数え直す。
 8. version tag は `X.Y.Z` とし、GitHub Release `X.Y.Z` は patch line を表す。
-9. `Release Finalize` は選択した `release/X.Y` と手動入力の `patch=Z` から `version=X.Y.Z` を解決し、`rc-X.Y-latest` の最新成功候補から `build=B` を採用して archive / Store package を揃える。
+9. `Release Finalize` は選択した `release/X.Y` と手動入力の `patch=Z` から `version=X.Y.Z` を解決し、`rc-X.Y-latest` の最新成功候補から `build=B` を採用して archive と Store package を揃える。
 
 ## ブランチモデル
 
@@ -57,7 +57,7 @@ flowchart LR
 | `main` | 永続 | 次期開発の幹 |
 | `release/X.Y` | 中長期 | 公開安定化、現行系列サポート |
 | `feature/*` | 短命 | 機能追加 |
-| `fix/*` | 短命 | 不具合修正、backport |
+| `fix/*` | 短命 | 不具合修正、release 取り込み |
 | `docs/*` | 短命 | ドキュメント更新 |
 | `chore/*` | 短命 | 運用、自動化、雑務 |
 
@@ -70,17 +70,17 @@ flowchart LR
 ### 統合ルール
 
 1. 作業ブランチは `main` または対象 `release/X.Y` から作成し、PR で統合する。
-2. 修正の正本は常に `main` とし、release 側は必要分のみ backport する。
+2. 修正の正本は常に `main` とし、release 側は必要分のみ取り込む。
 3. `release/X.Y` から `main` へマージしない。
 4. `main` / `release/X.Y` への直 push は行わない。
 5. 緊急修正も `hotfix/*` ではなく、通常の patch release 手順で扱う。
 
-### backport 競合解消方針
+### release 取り込み競合解消方針
 
-1. `release/X.Y` から backport 用ブランチ（例: `fix/release-X.Y-backport-<id>`）を作成する。
+1. `release/X.Y` から取り込み用ブランチ（例: `fix/release-X.Y-<id>`）を作成する。
 2. `cherry-pick` の競合は release 系列の互換性を優先して解消する。
 3. 競合解消内容と理由を PR に明記する。
-4. release 側だけの場当たり修正を避け、必要なら `main` に先行調整を入れてから再 backport する。
+4. release 側だけの場当たり修正を避け、必要なら `main` に先行調整を入れてから再度 `release/X.Y` へ取り込む。
 
 ### GitHub での強制
 
@@ -106,14 +106,14 @@ flowchart LR
 ### 3. Finalize
 
 - 確定対象は、operator が選ぶ patch line `X.Y.Z` と、その時点の最新成功 RC build `X.Y.0.B` の組で決める。
-- `Release Finalize` は選択した `release/X.Y` と手動入力の `patch=Z` から `version=X.Y.Z` を解決し、Store 提出前は `rc-X.Y-latest` の最新成功候補 `X.Y.0.B` を採用して tag / archive / Store package `X.Y.Z.B` を揃える。
+- `Release Finalize` は選択した `release/X.Y` と手動入力の `patch=Z` から `version=X.Y.Z` を解決し、Store 提出前は `rc-X.Y-latest` の最新成功候補 `X.Y.0.B` を採用して tag / archive package `X.Y.Z.B` / Store package `X.Y.Z.0` を揃える。
 - Store 提出前の手動再実行では、同じ patch line に対して `patch=Z` を指定し、その時点の最新成功 RC 候補を採用して archive / Store package を差し替えてよい。
 - Store 提出記録後は、その patch line の採用 commit を固定とする。
 
 ### 4. Distribute
 
 - Archive: GitHub Release `X.Y.Z` に、採用した最新成功 RC build を finalize した archive（`X.Y.Z.B`）を保持する。
-- Store: 一般ユーザー向けに出す版だけ、`Release Finalize` から Store package を生成する。
+- Store: 一般ユーザー向けに出す版だけ、`Release Finalize` から Store package を生成する。Store MSIX identity version は `X.Y.Z.0` とし、採用 build は `FileVersion` / `InformationalVersion` と workflow summary で確認する。
 - Store 公開の有無は finalized 判定に影響させないが、採用 commit 固定の境界は `Store Submission Log` 記録時点とする。
 
 ### 5. Support
@@ -138,7 +138,7 @@ flowchart LR
 ## Store チャネルへの進行条件
 
 1. Store 提出へ進めるのは、repository 全体の最新 finalized patch line で、かつ一般ユーザー向けに出す版のみとする。
-2. 対象の patch line は version tag `X.Y.Z` を正本とし、実際の package version は `X.Y.Z.B` とする。
+2. 対象の patch line は version tag `X.Y.Z` を正本とし、Archive package version は `X.Y.Z.B`、Store MSIX identity version は `X.Y.Z.0` とする。
 3. Store package の生成は `Release Finalize` から行う。
 4. Partner Center へ提出したら GitHub Release 本文の `Store Submission Log` に submission ID と commit を記録し、その時点で採用 commit を固定する。
 5. `store-package-*` を取得できた時点で、release 側の handoff 自体は完了としてよい。
@@ -159,19 +159,19 @@ flowchart LR
 | 文脈 | repository 上の版数 | 配布時の package / file version | 用途 |
 | ---- | ---- | ---- | ---- |
 | `main` | `0.0.1` | `0.0.1.B` | Dev preview line |
-| `release/X.Y` | `X.Y.0` | RC=`X.Y.0.B` / Archive, Store=`X.Y.Z.B` | 現行系列サポート |
+| `release/X.Y` | `X.Y.0` | RC=`X.Y.0.B` / Archive=`X.Y.Z.B` / Store MSIX=`X.Y.Z.0` | 現行系列サポート |
 
 補足:
 
 - `Directory.Build.props` の `Version` は repository 上では常に 3 桁とする。
 - `Package.appxmanifest` は repository 上では `Version.0` を保持する。
-- Dev / RC / Archive / Store の 4 桁目 `B` は CI / finalize 時に注入し、repository にはコミットしない。
+- Dev / RC / Archive の package version と全チャネルの file version の 4 桁目 `B` は CI / finalize 時に注入し、repository にはコミットしない。Store MSIX identity の 4 桁目は常に `0` にする。
 - RC の `B` は branch ごとのカウンターであり、`release/0.1` と `release/0.2` では独立して数える。
 
 なぜこの運用にするか:
 
 - `main` を `0.0.1` に固定するのは、Dev を常に preview line として識別し、安定化対象の `release/X.Y` が持つ `X.Y.0` base version や finalized version `X.Y.Z` と混同しないため。
-- Dev を `0.0.1.B`、RC を `X.Y.0.B`、Archive / Store を `X.Y.Z.B` に分けるのは、release branch の repository version を PR ごとに動かさず、Finalize だけが patch line を確定する責務分離にするため。
+- Dev を `0.0.1.B`、RC を `X.Y.0.B`、Archive を `X.Y.Z.B`、Store MSIX identity を `X.Y.Z.0` に分けるのは、release branch の repository version を PR ごとに動かさず、Finalize だけが patch line を確定する責務分離にするため。
 - `AssemblyVersion` は CLR の互換性軸として固定寄りに扱い、配布 build の識別責務は `FileVersion` / package version / `InformationalVersion` に寄せる。Dev で `0.0.0.0`、release 系で `X.Y.0.0` を使うのはこのため。
 
 ### タグ種別
@@ -192,7 +192,8 @@ flowchart LR
 | ---- | ---- | ---- |
 | Dev 配布物 | package / file version | `0.0.1.B` を使う |
 | RC 配布物 | package / file version | `X.Y.0.B` を使う |
-| Archive / Store 配布物 | package / file version | `X.Y.Z.B` を使う |
+| Archive 配布物 | package / file version | `X.Y.Z.B` を使う |
+| Store 配布物 | package identity / file version | MSIX identity は `X.Y.Z.0`、file version は `X.Y.Z.B` を使う |
 | 配布物 | 配布チャネル | `rc-X.Y-latest` は最新候補、GitHub Release `X.Y.Z` は patch line 用の archive 窓口 |
 
 ### 検証ルール
@@ -226,7 +227,7 @@ flowchart LR
 
 - patch release は現行サポート系列でのみ行う。
 - patch release 用 PR でも `release/X.Y` の repository version は `X.Y.0` のまま維持する。
-- 修正は `main` に入れてから必要分を `release/X.Y` へ backport し、version files は変えない。
+- 修正は `main` に入れてから必要分を `release/X.Y` へ取り込み、version files は変えない。
 - RC Build は常に branch base version `X.Y.0.B` を発行する。
 - `B` はその `release/X.Y` branch で継続し、新しい release branch を切るとリセットされる。
 - finalize では、operator が選ぶ `patch=Z` に対して、`rc-X.Y-latest` の最新成功候補を自動採用する。

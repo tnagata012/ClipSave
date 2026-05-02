@@ -667,6 +667,7 @@ jobs:
         $fileVersion = "$coreVersion.$build"
         $informationalVersion = "$coreVersion-build.$build+sha.$shortSha"
         $msixVersion = "$coreVersion.$build"
+        $storeMsixVersion = "$coreVersion.0"
 
         echo "VERSION=$version" >> $env:GITHUB_OUTPUT
         echo "BUILD=$build" >> $env:GITHUB_OUTPUT
@@ -675,11 +676,13 @@ jobs:
         echo "INFORMATIONAL_VERSION=$informationalVersion" >> $env:GITHUB_OUTPUT
         echo "COMMIT_SHA=$commitSha" >> $env:GITHUB_OUTPUT
         echo "MSIX_VERSION=$msixVersion" >> $env:GITHUB_OUTPUT
+        echo "STORE_MSIX_VERSION=$storeMsixVersion" >> $env:GITHUB_OUTPUT
         echo "Version: $version"
         echo "AssemblyVersion: $assemblyVersion"
         echo "FileVersion: $fileVersion"
         echo "InformationalVersion: $informationalVersion"
-        echo "MSIX version: $msixVersion"
+        echo "Archive MSIX version: $msixVersion"
+        echo "Store MSIX version: $storeMsixVersion"
 
     - name: Restore
       if: ${{ steps.archive_mode.outputs.SHOULD_BUILD_BINARIES == 'true' }}
@@ -871,7 +874,7 @@ jobs:
         | **Commit** | [`{7}`]({8}/{9}/commit/{7}) |
         | **Build** | [#{10}]({8}/{9}/actions/runs/{11}) |
 
-        > `release/X.Y` keeps repository version `X.Y.0`, so the selected RC candidate may expose source package version `X.Y.0.B` even when the finalized archive package becomes `X.Y.Z.B`.
+        > `release/X.Y` keeps repository version `X.Y.0`, so the selected RC candidate may expose source package version `X.Y.0.B` even when the finalized archive package becomes `X.Y.Z.B`. Store upload packages use identity version `X.Y.Z.0`.
         > Before Store submission is recorded, rerunning `Release Finalize` from `release/X.Y` with the same `patch` adopts the latest successful RC candidate and may replace the selected build. After Store submission is recorded, the selected build is treated as fixed.
         '@ -f $version, $releaseBranch, $checkoutRef, "${{ steps.selected_source.outputs.SOURCE_PACKAGE_VERSION }}", $informationalVersion, $fileVersion, $msixVersion, $commitSha, $serverUrl, $repository, $runNumber, $runId
         }
@@ -943,7 +946,7 @@ jobs:
     - name: Prepare Store package manifest
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}
       shell: pwsh
-      run: ./tooling/scripts/set-package-manifest.ps1 -ProjectRoot "${{ github.workspace }}" -Profile store -Version "${{ steps.version.outputs.MSIX_VERSION }}"
+      run: ./tooling/scripts/set-package-manifest.ps1 -ProjectRoot "${{ github.workspace }}" -Profile store -Version "${{ steps.version.outputs.STORE_MSIX_VERSION }}"
 
     - name: Clean package intermediates before Store build
       if: ${{ steps.target.outputs.BUILD_STORE_PACKAGE == 'true' }}
@@ -969,9 +972,9 @@ jobs:
           /p:UapAppxPackageBuildMode=StoreUpload `
           /p:AppxBundle=Always `
           /p:AppxPackageDir="${{ github.workspace }}/StorePackage/" `
-          /p:AppxPackageVersion=${{ steps.version.outputs.MSIX_VERSION }} `
-          /p:AppxBundleManifestVersion=${{ steps.version.outputs.MSIX_VERSION }} `
-          /p:AppxManifestIdentityVersion=${{ steps.version.outputs.MSIX_VERSION }} `
+          /p:AppxPackageVersion=${{ steps.version.outputs.STORE_MSIX_VERSION }} `
+          /p:AppxBundleManifestVersion=${{ steps.version.outputs.STORE_MSIX_VERSION }} `
+          /p:AppxManifestIdentityVersion=${{ steps.version.outputs.STORE_MSIX_VERSION }} `
           /p:AppxPackageSigningEnabled=false
 
     - name: Validate Store package
@@ -979,7 +982,7 @@ jobs:
       shell: pwsh
       run: |
         $outputDir = "${{ github.workspace }}/StorePackage"
-        $expectedVersion = "${{ steps.version.outputs.MSIX_VERSION }}"
+        $expectedVersion = "${{ steps.version.outputs.STORE_MSIX_VERSION }}"
         $uploads = @(Get-ChildItem $outputDir -Recurse -File -Filter *.msixupload)
         if ($uploads.Count -eq 0) {
           throw "No .msixupload found under $outputDir"
@@ -999,7 +1002,8 @@ jobs:
           -PackagePath $upload.FullName `
           -ExpectedName "tnagata012.ClipSave" `
           -ExpectedPublisher "CN=6ECD54B7-8ED5-46BA-81AD-ECBC0E843959" `
-          -ExpectedVersion $expectedVersion
+          -ExpectedVersion $expectedVersion `
+          -ExpectedPublisherDisplayName "tnagata012"
 
         Write-Host "Store upload package validated: $($upload.Name)"
 
@@ -1083,7 +1087,8 @@ jobs:
         | Source Package Version | `{3}` |
         | InformationalVersion | `{4}` |
         | FileVersion | `{5}` |
-        | Package Version | `{6}` |
+        | Archive Package Version | `{6}` |
+        | Store Package Version | `{22}` |
         | Release Title | `{7}` |
         | Prerelease | `{8}` |
         | Release Notes | [`{9}`]({10}) |
@@ -1098,7 +1103,7 @@ jobs:
         | Commit SHA | `{17}` |
         | Build | [#{18}]({19}/{20}/actions/runs/{21}) |
 
-        `Release Notes` keeps a stable link to the release-line issue search, and `Operator Notes` / `Store Submission Log` are preserved across reruns. `release/X.Y` itself stays on repository version `X.Y.0`; `Release Finalize` alone rewrites the patch segment from the selected RC source package to the finalized archive/store package. Before Store submission is recorded, rerunning `Release Finalize` from `release/X.Y` for the same `patch` adopts the latest successful RC candidate and can replace the selected archive build. After Store submission is recorded, the selected build is fixed.
+        `Release Notes` keeps a stable link to the release-line issue search, and `Operator Notes` / `Store Submission Log` are preserved across reruns. `release/X.Y` itself stays on repository version `X.Y.0`; `Release Finalize` rewrites the patch segment from the selected RC source package to archive package `X.Y.Z.B` and Store package `X.Y.Z.0`. Before Store submission is recorded, rerunning `Release Finalize` from `release/X.Y` for the same `patch` adopts the latest successful RC candidate and can replace the selected archive build. After Store submission is recorded, the selected build is fixed.
         '@ -f `
           "${{ steps.version.outputs.VERSION }}", `
           "${{ steps.source.outputs.RELEASE_BRANCH }}", `
@@ -1121,5 +1126,6 @@ jobs:
           "${{ github.run_number }}", `
           "${{ github.server_url }}", `
           "${{ github.repository }}", `
-          "${{ github.run_id }}"
+          "${{ github.run_id }}", `
+          "${{ steps.version.outputs.STORE_MSIX_VERSION }}"
         $summary >> $env:GITHUB_STEP_SUMMARY

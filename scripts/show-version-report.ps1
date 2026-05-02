@@ -220,9 +220,9 @@ if ($ghAvailable) {
 
         if ($coreVersion) {
             if ($currentBranch -and $currentBranch -match '^release/\d+\.\d+$') {
-                Write-Host "  Store Hint   : run Release Finalize from $currentBranch with explicit patch=Z (the release branch stays $coreVersion and the selected archive/store package becomes X.Y.Z.B)" -ForegroundColor Cyan
+                Write-Host "  Store Hint   : run Release Finalize from $currentBranch with explicit patch=Z (release branch stays $coreVersion; archive package becomes X.Y.Z.B; Store package becomes X.Y.Z.0)" -ForegroundColor Cyan
             } else {
-                Write-Host "  Store Hint   : run Release Finalize from release/X.Y with explicit patch=Z (release branches stay X.Y.0 and the selected archive/store package becomes X.Y.Z.B)" -ForegroundColor Cyan
+                Write-Host "  Store Hint   : run Release Finalize from release/X.Y with explicit patch=Z (release branches stay X.Y.0; archive package becomes X.Y.Z.B; Store package becomes X.Y.Z.0)" -ForegroundColor Cyan
             }
             if ($resolvedReleaseTag) {
                 Write-Host "                 Candidate channel tag: $resolvedReleaseTag (adopt the intended RC build into the finalized archive)" -ForegroundColor Gray
